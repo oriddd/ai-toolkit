@@ -1,0 +1,29 @@
+package {{basePackage}}.exception;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+    @ExceptionHandler(NotFoundException.class)
+    public ProblemDetail onNotFound(NotFoundException e) { return build(HttpStatus.NOT_FOUND, e); }
+    @ExceptionHandler(ConflictException.class)
+    public ProblemDetail onConflict(ConflictException e) { return build(HttpStatus.CONFLICT, e); }
+    @ExceptionHandler(BadRequestException.class)
+    public ProblemDetail onBadRequest(BadRequestException e) { return build(HttpStatus.BAD_REQUEST, e); }
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail onForbidden(ForbiddenException e) { return build(HttpStatus.FORBIDDEN, e); }
+    @ExceptionHandler(Exception.class)
+    public ProblemDetail onUnexpected(Exception e) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
+        pd.setProperty("errorCode", "ERR-INTERNAL");
+        return pd;
+    }
+    private ProblemDetail build(HttpStatus status, BaseDomainException e) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, e.getMessage());
+        pd.setProperty("errorCode", e.getErrorCode());
+        return pd;
+    }
+}

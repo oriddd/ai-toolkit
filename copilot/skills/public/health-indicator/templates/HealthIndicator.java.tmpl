@@ -1,0 +1,42 @@
+package {{basePackage}}.health.indicator;
+
+import {{basePackage}}.constant.ConfigurationConstants;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Component("{{indicatorBeanName}}")
+public class {{Dep}}HealthIndicator extends AbstractReadinessIndicator {
+
+    private static final String SERVICE_NAME = "{{serviceDisplayName}}";
+
+    private final String baseUrl;
+    private final String readinessEndpoint;
+
+    @Autowired
+    public {{Dep}}HealthIndicator(final WebClient readinessWebClient,
+                                  @Value("${{configKey}}.base-url") final String baseUrl,
+                                  @Value("${{configKey}}.readiness-endpoint") final String readinessEndpoint) {
+        super(readinessWebClient);
+        this.baseUrl = baseUrl;
+        this.readinessEndpoint = readinessEndpoint;
+    }
+
+    @Override
+    String getServiceName() {
+        return SERVICE_NAME;
+    }
+
+    @Override
+    int getSuccessStatusCode() {
+        return {{successStatusCode}};
+    }
+
+    @Override
+    String getReadinessURI() {
+        return baseUrl + readinessEndpoint;
+    }
+}
+

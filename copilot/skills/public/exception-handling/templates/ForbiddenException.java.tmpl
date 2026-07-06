@@ -1,0 +1,5 @@
+package {{basePackage}}.exception;
+public class ForbiddenException extends BaseDomainException {
+    public ForbiddenException(String errorCode, String message) { super(errorCode, message); }
+    public ForbiddenException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

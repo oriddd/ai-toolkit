@@ -1,0 +1,11 @@
+package {{basePackage}}.client.cache;
+import {{basePackage}}.model.CacheEntry;
+import org.springframework.stereotype.Component;
+import java.time.Duration;
+/** Translates remote DTOs into the domain model — keeps DTO types out of services. */
+@Component
+public class CacheEntryAdapter {
+    public CacheEntry toDomain(CacheEntryResponse r) {
+        return new CacheEntry(r.key(), r.value(), Duration.ofMillis(r.ttlMillis()));
+    }
+}

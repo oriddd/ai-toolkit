@@ -1,0 +1,40 @@
+package {{basePackage}}.permission;
+
+import {{basePackage}}.exception.{{Domain}}ForbiddenException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+// Replace with your project's CallerContext enum (see SKILL.md)
+import {{basePackage}}.permission.CallerContext;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.List;
+
+@Component
+@Slf4j
+public class PermissionsHandler {
+
+    private final List<PermissionsCheckStrategy> permissionsCheckStrategies;
+
+    @Autowired
+    public PermissionsHandler(final List<PermissionsCheckStrategy> permissionsCheckStrategies) {
+        this.permissionsCheckStrategies = permissionsCheckStrategies;
+    }
+
+    public void handle(final String {{primaryId}}, final String {{secondaryId}})
+            throws {{Domain}}ForbiddenException {
+        final CallerContext currentContextType = callerContextResolver.resolve();
+        if (null == currentContextType) {
+            throw new {{Domain}}ForbiddenException(ExceptionMessages.JWT_CONTEXT_NOT_FOUND);
+        }
+
+        final PermissionsCheckStrategy strategy = permissionsCheckStrategies.stream()
+                .filter(s -> s.supportedContextTypes().contains(currentContextType))
+                .findFirst()
+                .orElseThrow(() -> new {{Domain}}ForbiddenException(
+                        MessageFormat.format(ExceptionMessages.UNRECOGNIZED_CONTEXT_TYPE, currentContextType)));
+        strategy.verifyPermissions({{primaryId}}, {{secondaryId}});
+    }
+}
+

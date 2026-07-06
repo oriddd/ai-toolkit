@@ -1,0 +1,68 @@
+package {{packageName}};
+
+// ...imports...
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class {{classUnderTest}}Test {
+
+    @Mock
+    private {{Collaborator1}} {{collaborator1Name}};
+
+    // ...additional @Mock collaborators...
+
+    @InjectMocks
+    private {{classUnderTest}} {{instanceName}};
+
+    // ─── happy path ──────────────────────────────────────────────
+    @Test
+    void when{{Condition}}_{{methodName}}_returns{{Outcome}}() {
+        // given
+        when({{collaborator1Name}}.{{stub}}(...)).thenReturn(...);
+
+        // when
+        var result = {{instanceName}}.{{methodName}}(...);
+
+        // then
+        assertEquals(..., result);
+        verify({{collaborator1Name}}, times(1)).{{stub}}(...);
+    }
+
+    // ─── error branches (parameterised) ──────────────────────────
+    private record ExceptionCase(Exception thrown, Class<? extends Exception> expected) {}
+
+    static Stream<ExceptionCase> exceptions() {
+        return Stream.of(
+                new ExceptionCase(new IllegalStateException("x"), IllegalStateException.class)
+                // ...one per exception declared by the method...
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("exceptions")
+    void when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) throws Exception {
+        when({{collaborator1Name}}.{{stub}}(any())).thenThrow(tc.thrown());
+
+        assertThrows(tc.expected(), () -> {{instanceName}}.{{methodName}}(...));
+
+        verifyNoInteractions(/* downstream collaborators that must NOT run */);
+    }
+
+    // ─── edge cases (null, empty, boundary) ──────────────────────
+    @Test
+    void when{{Input}}IsNull_throws{{Expected}}() {
+        assertThrows({{Expected}}.class, () -> {{instanceName}}.{{methodName}}(null));
+    }
+}
+

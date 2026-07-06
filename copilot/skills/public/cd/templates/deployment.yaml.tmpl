@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ "{{" }} .Chart.Name {{ "}}" }}
+spec:
+  selector:
+    matchLabels:
+      run: {{ "{{" }} .Chart.Name {{ "}}" }}
+  template:
+    metadata:
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/{{ "{{" }} .Chart.Name {{ "}}" }}: runtime/default
+      labels:
+        run: {{ "{{" }} .Chart.Name {{ "}}" }}
+        app: {{ "{{" }} .Chart.Name {{ "}}" }}
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 19000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 19000
+        runAsUser: 19000
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: {{ "{{" }} .Chart.Name {{ "}}" }}
+      containers:
+        - image: {{ "{{" }} include "helper.images.registryName" . {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.Version {{ "}}" }}
+          imagePullPolicy: {{ "{{" }} .Values.image.pullPolicy {{ "}}" }}
+          name: {{ "{{" }} .Chart.Name {{ "}}" }}
+          resources: {{ "{{" }}- toYaml .Values.resources | nindent 12 {{ "}}" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: []
+              drop:
+                - All
+            privileged: false
+            procMount: Default
+          livenessProbe:
+            httpGet:
+              path: {{contextPath}}/actuator/health/liveness
+              port: http
+            failureThreshold: 10
+            timeoutSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 300
+          readinessProbe:
+            httpGet:
+              path: {{contextPath}}/actuator/health/readiness
+              port: http
+            failureThreshold: 3
+            timeoutSeconds: 10
+            initialDelaySeconds: 10
+            periodSeconds: 60
+          ports:
+            - containerPort: {{appPort}}
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: <shared-auth-config>  # provided by an internal overlay if used
+          env:
+            - name: LOG_LEVEL
+              value: {{ "{{" }} .Values.logLevel | quote {{ "}}" }}
+            # {{extraEnv}}
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false

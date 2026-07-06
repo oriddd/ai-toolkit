@@ -1,0 +1,16 @@
+package {{basePackage}}.config;
+import org.springframework.context.annotation.*;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.Optional;
+@Configuration
+@EnableJpaAuditing(auditorAwareRef = "auditorAware")
+public class AuditConfig {
+    @Bean
+    AuditorAware<String> auditorAware() {
+        return () -> Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .map(a -> a.getName())
+                .or(() -> Optional.of("system"));
+    }
+}

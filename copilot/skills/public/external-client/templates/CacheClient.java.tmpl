@@ -1,0 +1,12 @@
+package {{basePackage}}.client.cache;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+@Component
+public class CacheClient {
+    private final WebClient webClient;
+    public CacheClient(WebClient cacheWebClient) { this.webClient = cacheWebClient; }
+    public CacheEntryResponse fetch(String key) {
+        return webClient.get().uri("/cache/{key}", key)
+                .retrieve().bodyToMono(CacheEntryResponse.class).block();
+    }
+}

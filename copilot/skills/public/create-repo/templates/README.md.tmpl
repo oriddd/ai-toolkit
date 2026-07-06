@@ -1,0 +1,51 @@
+# {{serviceDisplayName}}
+
+{{oneLineDescription}}
+
+## Tech stack
+
+- Java 21 + Spring Boot (via `org.springframework.boot:spring-boot-starter-parent`)
+- Maven build, Jacoco + Surefire quality gates
+- Jenkins CI (declarative pipeline)
+- Helm chart for Kubernetes deployment
+- Prometheus metrics on `{{contextPath}}/actuator/prometheus`
+
+## Local build
+
+```sh
+mvn -q -DskipTests package      # build
+mvn -q test                     # tests
+mvn spring-boot:run             # run locally on port {{appPort}}
+```
+
+The app exposes:
+
+- `GET {{contextPath}}/actuator/health/liveness`
+- `GET {{contextPath}}/actuator/health/readiness`
+- `GET {{contextPath}}/actuator/prometheus`
+
+## Project layout
+
+See [`generated-docs/`](./generated-docs/) and the
+[`code-structure`](../skills/public/code-structure/SKILL.md) skill for
+the canonical package hierarchy and design patterns enforced in this repo.
+
+## Deployment
+
+The Helm chart lives in [`helm-chart/`](./helm-chart/). Lint it with:
+
+```sh
+helm lint helm-chart
+helm template helm-chart | less
+```
+
+## CI/CD
+
+- **CI:** `Jenkinsfile` → the declarative pipeline in `Jenkinsfile`.
+- **CD:** image is published to `{{imageRegistry}}` and consumed by the
+  umbrella Helm chart (if any).
+
+## Codeowner
+
+{{codeowner}}
+

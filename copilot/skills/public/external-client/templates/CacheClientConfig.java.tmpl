@@ -1,0 +1,20 @@
+package {{basePackage}}.client.cache;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+import java.time.Duration;
+@Configuration
+@ConfigurationProperties(prefix = "client.cache")
+public class CacheClientConfig {
+    private String baseUrl = "http://localhost:8080";
+    private Duration timeout = Duration.ofSeconds(5);
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    public Duration getTimeout() { return timeout; }
+    public void setTimeout(Duration timeout) { this.timeout = timeout; }
+    @Bean
+    WebClient cacheWebClient() {
+        return WebClient.builder().baseUrl(baseUrl).build();
+    }
+}

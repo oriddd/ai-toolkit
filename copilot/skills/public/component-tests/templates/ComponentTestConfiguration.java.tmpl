@@ -1,0 +1,55 @@
+package {{basePackage}}.testconfig;
+
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+@TestConfiguration
+@Profile("component-test")
+public class ComponentTestConfiguration {
+
+    @Bean
+    public SecurityFilterChain testSecurityFilterChain(final HttpSecurity http) throws Exception {
+        http.csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    @Primary
+    public TestRestTemplate testRestTemplate() {
+        final SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
+        rf.setConnectTimeout(120_000);
+        rf.setReadTimeout(120_000);
+        final TestRestTemplate t = new TestRestTemplate();
+        t.getRestTemplate().setRequestFactory(rf);
+        return t;
+    }
+
+    // ─── deterministic fakes for external collaborators ──────────
+    // Branch on the input so a single bean can drive happy + failure paths
+    // from a single test class. Example:
+    //
+    // @Bean @Primary
+    // public PermissionsHandler permissionsHandler() throws Exception {
+    //     final var mock = mock(PermissionsHandler.class);
+    //     doAnswer(inv -> {
+    //         final String fileId = inv.getArgument(1);
+    //         if ("fileThatIsForbidden.txt".equals(fileId)) {
+    //             throw new FooForbiddenException("forbidden");
+    //         }
+    //         return null;
+    //     }).when(mock).handle(anyString(), anyString());
+    //     return mock;
+    // }
+}
+

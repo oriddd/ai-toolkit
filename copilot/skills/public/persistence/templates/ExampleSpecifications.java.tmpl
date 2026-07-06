@@ -1,0 +1,12 @@
+package {{basePackage}}.repository;
+import org.springframework.data.jpa.domain.Specification;
+/**
+ * Specifications keep composable predicates in one place — replaces the
+ * anti-pattern findByXAndYAndZAndW. Compose with `.and()` / `.or()`.
+ */
+public final class ExampleSpecifications {
+    private ExampleSpecifications() {}
+    public static <E> Specification<E> hasField(String field, Object value) {
+        return (root, q, cb) -> cb.equal(root.get(field), value);
+    }
+}

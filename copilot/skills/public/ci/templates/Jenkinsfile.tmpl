@@ -1,0 +1,18 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    stages {
+        stage('Build')    { steps { sh 'mvn -B -q -DskipTests package' } }
+        stage('Test')     { steps { sh 'mvn -B -q test' }
+                            post  { always { junit '**/target/surefire-reports/*.xml' } } }
+        stage('Coverage') { steps { sh 'mvn -B -q jacoco:report' }
+                            post  { always { archiveArtifacts 'target/site/jacoco/**' } } }
+        stage('Image')    { steps { sh 'docker build --build-arg APP_USER_NAME=app --build-arg APP_USER_ID=1000 -t {{artifactId}}:${BUILD_NUMBER} .' } }
+    }
+}
+
