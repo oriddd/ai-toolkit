@@ -11,26 +11,26 @@ every file change needed to satisfy all guild non-negotiables.
 
 ## Skills to apply (in this order)
 
-1. [`api-design`](../public/api-design/SKILL.md) — resource/verb/URL
+1. [`api-design`](../skills/api-design/SKILL.md) — resource/verb/URL
    conventions, status codes, versioning, pagination shape.
-2. [`openapi-first-codegen`](../public/openapi-first-codegen/SKILL.md)
+2. [`openapi-first-codegen`](../skills/openapi-first-codegen/SKILL.md)
    — update `api.yaml` first if the project uses OpenAPI codegen.
-3. [`code-structure`](../public/code-structure/SKILL.md) Pattern C —
+3. [`code-structure`](../skills/code-structure/SKILL.md) Pattern C —
    controller → operation → service layering.
-4. [`exception-handling`](../public/exception-handling/SKILL.md) —
+4. [`exception-handling`](../skills/exception-handling/SKILL.md) —
    domain exception subclass + `ExceptionMessages` entry.
-5. [`permissions`](../public/permissions/SKILL.md) — `PermissionsHandler`
+5. [`permissions`](../skills/permissions/SKILL.md) — `PermissionsHandler`
    check inside the operation.
-6. [`input-validation`](../public/input-validation/SKILL.md) —
+6. [`input-validation`](../skills/input-validation/SKILL.md) —
    Jakarta `@Constraint` for parameter rules, Spring `Validator` for
    object/cross-field rules, rule beans in `validation/rule/`.
-7. [`observability`](../public/observability/SKILL.md) — MDC correlation
+7. [`observability`](../skills/observability/SKILL.md) — MDC correlation
    ID flows through; log at INFO once per request in the operation.
-8. [`request-metrics`](../public/request-metrics/SKILL.md) — if this
+8. [`request-metrics`](../skills/request-metrics/SKILL.md) — if this
    endpoint needs a domain Timer metric, add a `MetricsRecorder`.
-9. [`unit-tests`](../public/unit-tests/SKILL.md) — operation + service +
+9. [`unit-tests`](../skills/unit-tests/SKILL.md) — operation + service +
    validator rule beans.
-10. [`component-tests`](../public/component-tests/SKILL.md) — full
+10. [`component-tests`](../skills/component-tests/SKILL.md) — full
     controller slice: happy path, 400, 401/403, 404.
 
 ## Step-by-step procedure

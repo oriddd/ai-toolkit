@@ -7,15 +7,21 @@ enforces the rules below, so a PR that violates them fails the build.
 ## 1. Directory layout
 
 ```
-skills/
-├── public/                ← every skill lives here
-│   └── <skill-name>/
-│       ├── SKILL.md       ← required
-│       └── templates/     ← optional, only if SKILL.md ships files
-├── REGISTRY.md            ← machine-readable index of every skill
-├── AUTHORING.md           ← this file
-├── BACKEND_GUILD.md       ← curated MUST / SHOULD / MAY bundle
-└── validate-skills.sh     ← CI linter
+copilot/
+└── public/
+    ├── skills/                  ← you are here
+    │   ├── <skill-name>/
+    │   │   ├── SKILL.md         ← required
+    │   │   └── templates/       ← optional, only if SKILL.md ships files
+    │   ├── README.md            ← per-skill index (validator checks this)
+    │   ├── REGISTRY.md          ← machine-readable index of every skill
+    │   ├── AUTHORING.md         ← this file
+    │   ├── BACKEND_GUILD.md     ← curated MUST / SHOULD / MAY bundle
+    │   ├── INDEX_BY_USE_CASE.md ← task → skills reverse-lookup
+    │   ├── CHEATSHEET.md        ← skills authoring/maintenance tips
+    │   ├── build-indexes.py     ← regenerates REGISTRY.md + BACKEND_GUILD.md
+    │   └── validate-skills.sh   ← CI linter
+    └── agents/                  ← task-focused agent prompts (+ AGENT_PROMPT.md)
 ```
 
 ## 2. Frontmatter contract
@@ -36,7 +42,7 @@ Rules (all enforced by the validator):
 | `name` field equals folder name | §2 |
 | `description` field present and non-empty | §2 |
 | Any markdown link `(./templates/<file>)` resolves | §3 |
-| Tier README (`public/README.md`) has a row for the skill | §4 |
+| Index (`README.md`) has a row for the skill | §4 |
 | `REGISTRY.md` has a row for the skill | §4 |
 | `templates/` files use only `{{placeholder}}` syntax | §5 |
 
@@ -86,16 +92,16 @@ Before opening a PR that adds or modifies a SKILL.md:
 - [ ] `description:` is one paragraph and explains *when* to use the skill.
 - [ ] Any `](./templates/<file>)` link resolves to a real file.
 - [ ] `templates/` files use only `{{placeholder}}` syntax.
-- [ ] `skills/public/README.md` has a new row.
-- [ ] `skills/REGISTRY.md` has a new row (and updated total).
-- [ ] `bash skills/validate-skills.sh` passes locally with zero errors.
+- [ ] `README.md` has a new row.
+- [ ] `REGISTRY.md` has a new row (and updated total).
+- [ ] `bash validate-skills.sh` passes locally with zero errors.
 
 ## 6. Adding a brand-new skill (walkthrough)
 
 ```sh
 SKILL=my-new-skill
-mkdir -p skills/public/$SKILL
-cat > skills/public/$SKILL/SKILL.md <<'EOF'
+mkdir -p $SKILL
+cat > $SKILL/SKILL.md <<'EOF'
 ---
 name: my-new-skill
 description: One paragraph explaining what this skill does and when to apply it.
@@ -109,10 +115,10 @@ description: One paragraph explaining what this skill does and when to apply it.
 ## 1. …
 EOF
 
-$EDITOR skills/public/README.md   # add a row
-$EDITOR skills/REGISTRY.md        # add a row (and update total)
+$EDITOR README.md   # add a row
+$EDITOR REGISTRY.md        # add a row (and update total)
 
-bash skills/validate-skills.sh
+bash validate-skills.sh
 ```
 
 ## 7. Marking a skill experimental / deprecated

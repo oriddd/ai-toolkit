@@ -7,7 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
+### Added
+- `agents/scaffold-repo.md` — new HITL agent for creating a brand-new Spring Boot
+  service repository from scratch (wraps `project-types`, `create-repo`, `code-structure`,
+  `ci`, `cd`, `local-dev-experience`, and baseline non-negotiables).
+- `agents/new-kafka-consumer.md` — focused agent for adding a Kafka consumer with
+  idempotency, DLQ, outbox, observability, and graceful-shutdown wiring.
+- `agents/refactor.md` — incremental refactoring agent that maps anti-patterns to
+  canonical skills and enforces characterisation tests before each migration step.
+- `CHEATSHEET.md` — pro tips for working inside this repo using IntelliJ IDEA and
+  the CLI: daily commands, navigation shortcuts, skill scaffolding, pre-commit alias,
+  dependency graph reference, and three-rule test for new skills.
+- **Co-located every tool next to what it serves** (the `context/` folder was
+  already the model, with its own `validate-context.sh`):
+  - Skills tooling + docs now live inside `public/skills/`: `REGISTRY.md`,
+    `AUTHORING.md`, `INDEX_BY_USE_CASE.md`, `BACKEND_GUILD.md`, `build-indexes.py`,
+    `validate-skills.sh`, and a skills-focused `CHEATSHEET.md`.
+  - `AGENT_PROMPT.md` moved next to the agents in `public/agents/`, with a new
+    agents-focused `public/agents/CHEATSHEET.md`.
+  - The `copilot/` root now holds only the global view: `README.md`, `HOW-TO.md`,
+    a high-level `CHEATSHEET.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE`.
+  - `build-indexes.py` and `validate-skills.sh` rewritten to treat `public/skills/`
+    as their own directory (skills are now direct children; generated links are
+    `./<name>/SKILL.md`); the optional `.publication-blocklist` now lives in
+    `public/skills/`.
+  - Updated every cross-reference across all docs, agents, and `setup/jetbrains/*`;
+    fixed two pre-existing broken cross-skill links surfaced by the move. Verified
+    zero broken relative links; all validators pass.
+
+### Changed
+- **Restructured the catalogue under a `public/` folder.** Skills now live at
+  `public/skills/<name>/SKILL.md` and agents at `public/agents/<name>.md`, so a
+  future `private/` fork can mirror the same `skills/` + `agents/` split. The
+  shared meta + tooling files (`REGISTRY.md`, `AGENT_PROMPT.md`, `BACKEND_GUILD.md`,
+  `INDEX_BY_USE_CASE.md`, `AUTHORING.md`, `build-indexes.py`, `validate-skills.sh`)
+  now sit at the `copilot/` root.
+  - `build-indexes.py` — discovery glob and generated links updated to `public/skills/`.
+  - `validate-skills.sh` — rewritten for the fixed `public/skills/` layout; index
+    check targets `public/skills/README.md`; blocklist reads `.publication-blocklist`
+    at the `copilot/` root and scans `public/**`.
+  - Folded the old `skills/README.md` intro into `public/skills/README.md`.
+  - Updated every cross-reference across the docs, all 10 agent files, and
+    `setup/jetbrains/*`. Verified zero broken relative links; all validators pass.
+- **Moved `skills/agents/` → `public/agents/`** — agents are compositions that orchestrate
+  skills, not a kind of skill, so they live alongside `public/skills/` under `public/`.
+- `copilot/README.md` — added a `public/agents/` row to "What's inside" and retitled to
+  "Skills, Agents & Context Platform".
+- `HOW-TO.md` — Option B agent list expanded from 7 to all 10 agents.
+- `agents/README.md` — updated index table from 7 to 10 agents.
+- `HOW-TO.md §5` — task-recipe table updated: `scaffold-repo`, `new-kafka-consumer`,
+  and `refactor` now point to their dedicated agents instead of `AGENT_PROMPT.md`.
+- `HOW-TO.md` quick-navigation table — added `CHEATSHEET.md` entry at the top.
+- `setup/jetbrains/cheatsheet.md` — agents table and usage examples updated to
+  cover all 10 agents.
+- Root `README.md` — agent count updated from 7 to 10; added a `setup/` row to
+  the "What's inside" table.
+
+### Fixed
+- `setup/jetbrains/cheatsheet.md` — replaced a stale `./bin/install-global.sh`
+  reference (the `bin/` scripts were removed) with the direct `ln -s` command.
+- `setup/jetbrains/README.md` — corrected the "7 task agents" label in the
+  how-it-works diagram to 10.
+- `README.md` — corrected the "7 task agents" count in the "What's inside" table to 10.
+
+## [1.0.0] - 2026-07-07
+
+### Added
+- `setup/jetbrains/` — JetBrains + GitHub Copilot setup guide, with:
+  - `README.md` — three-step setup walkthrough (symlink → global instructions → use).
+  - `copilot-global-instructions.md` — exact 2-line snippet to paste into
+    JetBrains → Settings → Tools → GitHub Copilot → Custom Instructions.
+  - `cheatsheet.md` — ready-to-paste `#file` chat patterns for all 40 skills,
+    7 task agents, and common full-task recipes (new endpoint, Kafka consumer, etc.).
+
+### Changed
+- `HOW-TO.md` §2 rewritten: leads with the symlink/zero-token approach before
+  the context-docs copy step.
+- Root `README.md` Quick-start section updated to lead with the global JetBrains
+  setup path and reference the new `setup/jetbrains/` guide.
 - Collapsed the skills catalogue from a two-tier layout (vendor-neutral + organization-specific overlays) into a single vendor-neutral tier. The organization-specific overlay directory and its associated `CODEOWNERS` file have been deleted.
 - Removed the hard-coded organization-term blocklist from `validate-skills.sh`. Publication-safety checking is now opt-in via an optional, uncommitted `skills/.publication-blocklist` file.
 

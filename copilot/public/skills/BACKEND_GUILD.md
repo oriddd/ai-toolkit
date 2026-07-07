@@ -16,56 +16,56 @@ task-driven recipes.
 
 | Skill | One-line summary |
 | --- | --- |
-| [`api-design`](./public/api-design/SKILL.md) | REST API design rules every Spring Boot service publishes — resource modelling, HTTP-verb semantics, status code catalogue, URL conventions, versioning (URI vs . |
-| [`cd`](./public/cd/SKILL.md) | Generate a vendor-neutral Helm chart to deploy a Java/Spring Boot microservice to Kubernetes, with hardened security context, liveness/readiness probes on Actua. |
-| [`ci`](./public/ci/SKILL.md) | Generate the Continuous Integration setup (Jenkinsfile, Dockerfile, Maven build) for a generic Java 21 / Spring Boot microservice. |
-| [`code-structure`](./public/code-structure/SKILL.md) | Apply the canonical Java/Spring Boot package hierarchy and design patterns (Strategy + Registry, OncePerRequestFilter for metrics, Recorder pattern, Operation/S. |
-| [`component-tests`](./public/component-tests/SKILL.md) | Generate Spring Boot component (slice) tests that boot the full application context with a dedicated test profile, replace external collaborators (HTTP clients,. |
-| [`context-maintenance`](./public/context-maintenance/SKILL.md) | Maintain project context documentation including architecture, standards, build plans, and progress tracking. |
-| [`create-repo`](./public/create-repo/SKILL.md) | Human-in-the-loop scaffolder that creates a brand-new Java/Spring Boot microservice repository. |
-| [`data-privacy`](./public/data-privacy/SKILL.md) | Handle PII (Personally Identifiable Information) and GDPR requirements in a Java microservice — field-level encryption, masking in logs, data retention/TTL, rig. |
-| [`documentation-and-adr`](./public/documentation-and-adr/SKILL.md) | Ship documentation as code — README, CONTRIBUTING, ARCHITECTURE (C4 levels 1–3 in PlantUML / Structurizr), Architecture Decision Records (ADRs) under `docs/adr/. |
-| [`exception-handling`](./public/exception-handling/SKILL.md) | Wire a clean error contract for a Spring Boot microservice — a typed domain exception hierarchy, a static ExceptionMessages catalogue, and a @RestControllerAdvi. |
-| [`external-client`](./public/external-client/SKILL.md) | Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). |
-| [`github-actions-ci`](./public/github-actions-ci/SKILL.md) | Alternative to the Jenkins-based `ci` skill — GitHub Actions workflows for build / test / image / release / dependency-scan. |
-| [`graceful-shutdown`](./public/graceful-shutdown/SKILL.md) | Wire graceful shutdown into a Spring Boot service so Kubernetes pod terminations drain in-flight requests, async work, message consumers, and outbound clients w. |
-| [`input-validation`](./public/input-validation/SKILL.md) | Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level rules and Spring Vali. |
-| [`local-dev-experience`](./public/local-dev-experience/SKILL.md) | Make the inner loop reproducible in under 5 minutes — docker-compose for downstream dependencies, Makefile/Justfile commands,. |
-| [`observability`](./public/observability/SKILL.md) | Wire the three observability pillars — metrics (Micrometer + Prometheus), structured JSON logs with MDC correlation IDs, and distributed traces (OpenTelemetry) . |
-| [`permissions`](./public/permissions/SKILL.md) | Wire authentication & authorization into a Spring Boot microservice using the Strategy + Handler pattern. |
-| [`pluggable-architecture`](./public/pluggable-architecture/SKILL.md) | Treat every external technology integration (cache, database, metrics backend, message broker, object store, secret manager, identity provider, …) as a swappabl. |
-| [`project-types`](./public/project-types/SKILL.md) | Meta-skill — picks the right combination of public skills for the **kind** of project being created. |
-| [`quality-review`](./public/quality-review/SKILL.md) | Run a SOLID / clean-code / project-conventions review on a class, package, or pull request. |
-| [`release-versioning`](./public/release-versioning/SKILL.md) | Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-release), git tag = ar. |
-| [`request-metrics`](./public/request-metrics/SKILL.md) | Implement per-request domain metrics in a Spring Boot microservice using the canonical Filter + Recorder + Parser pattern. |
-| [`resilience-patterns`](./public/resilience-patterns/SKILL.md) | Beyond simple retries — implement advanced stability patterns using Resilience4j (Bulkheads, Timeouts, Rate Limiters) and architectural strategies (Fallback, Si. |
-| [`security-hardening`](./public/security-hardening/SKILL.md) | Cross-cutting security beyond authentication & authorization — input validation, OWASP Top 10 checklist tailored to Spring Boot, CORS, rate limiting, secret man. |
-| [`spring-boot-conventions`](./public/spring-boot-conventions/SKILL.md) | Standard Spring Boot 3 idioms every Java microservice should adopt — typed @ConfigurationProperties over @Value, profile management, conditional beans, JSR-380 . |
-| [`static-analysis`](./public/static-analysis/SKILL.md) | Mechanically enforce code style and catch bug classes — Spotless (formatter), SpotBugs (bug patterns), Error-Prone (compile-time bug patterns), NullAway (null-s. |
-| [`unit-tests`](./public/unit-tests/SKILL.md) | Generate meaningful, high-coverage JUnit 5 + Mockito unit tests for Spring Boot classes. |
+| [`api-design`](./api-design/SKILL.md) | REST API design rules every Spring Boot service publishes — resource modelling, HTTP-verb semantics, status code catalogue, URL conventions, versioning (URI vs . |
+| [`cd`](./cd/SKILL.md) | Generate a vendor-neutral Helm chart to deploy a Java/Spring Boot microservice to Kubernetes, with hardened security context, liveness/readiness probes on Actua. |
+| [`ci`](./ci/SKILL.md) | Generate the Continuous Integration setup (Jenkinsfile, Dockerfile, Maven build) for a generic Java 21 / Spring Boot microservice. |
+| [`code-structure`](./code-structure/SKILL.md) | Apply the canonical Java/Spring Boot package hierarchy and design patterns (Strategy + Registry, OncePerRequestFilter for metrics, Recorder pattern, Operation/S. |
+| [`component-tests`](./component-tests/SKILL.md) | Generate Spring Boot component (slice) tests that boot the full application context with a dedicated test profile, replace external collaborators (HTTP clients,. |
+| [`context-maintenance`](./context-maintenance/SKILL.md) | Maintain project context documentation including architecture, standards, build plans, and progress tracking. |
+| [`create-repo`](./create-repo/SKILL.md) | Human-in-the-loop scaffolder that creates a brand-new Java/Spring Boot microservice repository. |
+| [`data-privacy`](./data-privacy/SKILL.md) | Handle PII (Personally Identifiable Information) and GDPR requirements in a Java microservice — field-level encryption, masking in logs, data retention/TTL, rig. |
+| [`documentation-and-adr`](./documentation-and-adr/SKILL.md) | Ship documentation as code — README, CONTRIBUTING, ARCHITECTURE (C4 levels 1–3 in PlantUML / Structurizr), Architecture Decision Records (ADRs) under `docs/adr/. |
+| [`exception-handling`](./exception-handling/SKILL.md) | Wire a clean error contract for a Spring Boot microservice — a typed domain exception hierarchy, a static ExceptionMessages catalogue, and a @RestControllerAdvi. |
+| [`external-client`](./external-client/SKILL.md) | Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). |
+| [`github-actions-ci`](./github-actions-ci/SKILL.md) | Alternative to the Jenkins-based `ci` skill — GitHub Actions workflows for build / test / image / release / dependency-scan. |
+| [`graceful-shutdown`](./graceful-shutdown/SKILL.md) | Wire graceful shutdown into a Spring Boot service so Kubernetes pod terminations drain in-flight requests, async work, message consumers, and outbound clients w. |
+| [`input-validation`](./input-validation/SKILL.md) | Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level rules and Spring Vali. |
+| [`local-dev-experience`](./local-dev-experience/SKILL.md) | Make the inner loop reproducible in under 5 minutes — docker-compose for downstream dependencies, Makefile/Justfile commands,. |
+| [`observability`](./observability/SKILL.md) | Wire the three observability pillars — metrics (Micrometer + Prometheus), structured JSON logs with MDC correlation IDs, and distributed traces (OpenTelemetry) . |
+| [`permissions`](./permissions/SKILL.md) | Wire authentication & authorization into a Spring Boot microservice using the Strategy + Handler pattern. |
+| [`pluggable-architecture`](./pluggable-architecture/SKILL.md) | Treat every external technology integration (cache, database, metrics backend, message broker, object store, secret manager, identity provider, …) as a swappabl. |
+| [`project-types`](./project-types/SKILL.md) | Meta-skill — picks the right combination of public skills for the **kind** of project being created. |
+| [`quality-review`](./quality-review/SKILL.md) | Run a SOLID / clean-code / project-conventions review on a class, package, or pull request. |
+| [`release-versioning`](./release-versioning/SKILL.md) | Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-release), git tag = ar. |
+| [`request-metrics`](./request-metrics/SKILL.md) | Implement per-request domain metrics in a Spring Boot microservice using the canonical Filter + Recorder + Parser pattern. |
+| [`resilience-patterns`](./resilience-patterns/SKILL.md) | Beyond simple retries — implement advanced stability patterns using Resilience4j (Bulkheads, Timeouts, Rate Limiters) and architectural strategies (Fallback, Si. |
+| [`security-hardening`](./security-hardening/SKILL.md) | Cross-cutting security beyond authentication & authorization — input validation, OWASP Top 10 checklist tailored to Spring Boot, CORS, rate limiting, secret man. |
+| [`spring-boot-conventions`](./spring-boot-conventions/SKILL.md) | Standard Spring Boot 3 idioms every Java microservice should adopt — typed @ConfigurationProperties over @Value, profile management, conditional beans, JSR-380 . |
+| [`static-analysis`](./static-analysis/SKILL.md) | Mechanically enforce code style and catch bug classes — Spotless (formatter), SpotBugs (bug patterns), Error-Prone (compile-time bug patterns), NullAway (null-s. |
+| [`unit-tests`](./unit-tests/SKILL.md) | Generate meaningful, high-coverage JUnit 5 + Mockito unit tests for Spring Boot classes. |
 
 ### SHOULD — when the service has the feature (12)
 
 | Skill | One-line summary |
 | --- | --- |
-| [`adapter-contract-tests`](./public/adapter-contract-tests/SKILL.md) | Prove the lego-brick contract — write one shared, vendor-neutral abstract test suite (a TCK) per port interface, then run it against EVERY adapter (Redis vs Inf. |
-| [`async-api-patterns`](./public/async-api-patterns/SKILL.md) | Handle long-running operations (> 2s) in a RESTful way. |
-| [`domain-modeling`](./public/domain-modeling/SKILL.md) | Tactical Domain-Driven Design vocabulary every Java microservice should adopt — Bounded Context, Aggregate Root, Entity, Value Object, Domain Event, Domain Serv. |
-| [`feature-flags`](./public/feature-flags/SKILL.md) | Implement feature toggles (flags) to decouple deployment from release. |
-| [`health-indicator`](./public/health-indicator/SKILL.md) | Interactive (HITL) skill that adds a Spring Boot Actuator readiness HealthIndicator for a downstream dependency. |
-| [`integration-tests`](./public/integration-tests/SKILL.md) | Drive a Spring Boot microservice against real downstream dependencies (DB, broker, S3-compatible object store, mocked HTTP) using Testcontainers, with strict Su. |
-| [`messaging`](./public/messaging/SKILL.md) | Wire async messaging (Kafka or RabbitMQ) into a Spring Boot service with the canonical patterns — idempotent consumer, transactional outbox for producer-side at. |
-| [`openapi-first-codegen`](./public/openapi-first-codegen/SKILL.md) | Drive controllers and DTOs from an OpenAPI 3 contract at the repo root (`api. |
-| [`persistence`](./public/persistence/SKILL.md) | Wire the persistence layer of a Spring Boot service — Spring Data JPA repositories, JPA entities (records vs classes), Flyway migrations, transaction boundaries. |
-| [`rate-limiting`](./public/rate-limiting/SKILL.md) | Protect the service from abuse and ensure fair usage using rate-limiting strategies. |
-| [`sdk-publishing`](./public/sdk-publishing/SKILL.md) | Producer-side of the lego-brick principle. |
-| [`uml-diagram`](./public/uml-diagram/SKILL.md) | Create and maintain UML diagrams using Mermaid to visualize system architecture, component relationships, and interaction flows. |
+| [`adapter-contract-tests`](./adapter-contract-tests/SKILL.md) | Prove the lego-brick contract — write one shared, vendor-neutral abstract test suite (a TCK) per port interface, then run it against EVERY adapter (Redis vs Inf. |
+| [`async-api-patterns`](./async-api-patterns/SKILL.md) | Handle long-running operations (> 2s) in a RESTful way. |
+| [`domain-modeling`](./domain-modeling/SKILL.md) | Tactical Domain-Driven Design vocabulary every Java microservice should adopt — Bounded Context, Aggregate Root, Entity, Value Object, Domain Event, Domain Serv. |
+| [`feature-flags`](./feature-flags/SKILL.md) | Implement feature toggles (flags) to decouple deployment from release. |
+| [`health-indicator`](./health-indicator/SKILL.md) | Interactive (HITL) skill that adds a Spring Boot Actuator readiness HealthIndicator for a downstream dependency. |
+| [`integration-tests`](./integration-tests/SKILL.md) | Drive a Spring Boot microservice against real downstream dependencies (DB, broker, S3-compatible object store, mocked HTTP) using Testcontainers, with strict Su. |
+| [`messaging`](./messaging/SKILL.md) | Wire async messaging (Kafka or RabbitMQ) into a Spring Boot service with the canonical patterns — idempotent consumer, transactional outbox for producer-side at. |
+| [`openapi-first-codegen`](./openapi-first-codegen/SKILL.md) | Drive controllers and DTOs from an OpenAPI 3 contract at the repo root (`api. |
+| [`persistence`](./persistence/SKILL.md) | Wire the persistence layer of a Spring Boot service — Spring Data JPA repositories, JPA entities (records vs classes), Flyway migrations, transaction boundaries. |
+| [`rate-limiting`](./rate-limiting/SKILL.md) | Protect the service from abuse and ensure fair usage using rate-limiting strategies. |
+| [`sdk-publishing`](./sdk-publishing/SKILL.md) | Producer-side of the lego-brick principle. |
+| [`uml-diagram`](./uml-diagram/SKILL.md) | Create and maintain UML diagrams using Mermaid to visualize system architecture, component relationships, and interaction flows. |
 
 ### MAY — useful but optional (1)
 
 | Skill | One-line summary |
 | --- | --- |
-| [`refactoring-playbook`](./public/refactoring-playbook/SKILL.md) | Step-by-step migrations from common anti-patterns to the canonical patterns shipped by the other public skills — `@Value` → `@ConfigurationProperties` record, `. |
+| [`refactoring-playbook`](./refactoring-playbook/SKILL.md) | Step-by-step migrations from common anti-patterns to the canonical patterns shipped by the other public skills — `@Value` → `@ConfigurationProperties` record, `. |
 
 <!-- END AUTO:matrix -->
 
@@ -219,8 +219,8 @@ aware sleep).
 
 ### 3.8 Pre-PR check (every change)
 
-`quality-review` checklist + `bash skills/validate-skills.sh` if
-`skills/` was touched + ensure `static-analysis` build passes locally.
+`quality-review` checklist + `bash validate-skills.sh` if
+`public/skills/` was touched + ensure `static-analysis` build passes locally.
 
 ### 3.9 New external technology integration (cache, DB dialect, metrics backend, broker, …)
 
@@ -344,7 +344,7 @@ producing code must validate the diff against this list before returning.
       observe it, who owns it.
 - [ ] ADR-0001 (initial architecture) merged under `docs/adr/`.
 - [ ] `context/` folder populated; `context-maintenance` skill applied.
-- [ ] `bash skills/validate-skills.sh` clean (if you touched `skills/`).
+- [ ] `bash validate-skills.sh` clean (if you touched `public/skills/`).
 
 ## 6. Change-control for this document
 
@@ -355,7 +355,7 @@ Loosening any of the **24 non-negotiables** requires:
 2. Approval from the architect group responsible for the catalogue.
 3. A matching update to [`REGISTRY.md`](./REGISTRY.md) and the affected
    `SKILL.md`.
-4. `bash skills/validate-skills.sh` passing on the same PR.
+4. `bash validate-skills.sh` passing on the same PR.
 5. A guild vote when the change weakens an enforcement (e.g. lowering the
    mutation-score threshold).
 

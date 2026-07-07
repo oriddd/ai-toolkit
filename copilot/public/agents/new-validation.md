@@ -11,13 +11,13 @@ annotation, the validator, the domain rule bean, and the tests.
 
 ## Skills to apply (in this order)
 
-1. [`input-validation`](../public/input-validation/SKILL.md) — the full
+1. [`input-validation`](../skills/input-validation/SKILL.md) — the full
    pattern: annotation → validator → rule bean.
-2. [`exception-handling`](../public/exception-handling/SKILL.md) — the
+2. [`exception-handling`](../skills/exception-handling/SKILL.md) — the
    400 ProblemDetail mapping must be in place.
-3. [`unit-tests`](../public/unit-tests/SKILL.md) — rule bean (plain
+3. [`unit-tests`](../skills/unit-tests/SKILL.md) — rule bean (plain
    POJO), validator (mock ConstraintValidatorContext), component test.
-4. [`component-tests`](../public/component-tests/SKILL.md) — end-to-end
+4. [`component-tests`](../skills/component-tests/SKILL.md) — end-to-end
    400 HTTP response assertion.
 
 ## Decision: which style to use?

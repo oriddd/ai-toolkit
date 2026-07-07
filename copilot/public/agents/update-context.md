@@ -13,13 +13,13 @@ code in this mode.
 
 ## Skills to apply (in this order)
 
-1. [`context-maintenance`](../public/context-maintenance/SKILL.md) —
+1. [`context-maintenance`](../skills/context-maintenance/SKILL.md) —
    primary skill; defines which context files to touch and when.
-2. [`documentation-and-adr`](../public/documentation-and-adr/SKILL.md) —
+2. [`documentation-and-adr`](../skills/documentation-and-adr/SKILL.md) —
    if the change warrants a new Architecture Decision Record.
-3. [`uml-diagram`](../public/uml-diagram/SKILL.md) — if component
+3. [`uml-diagram`](../skills/uml-diagram/SKILL.md) — if component
    relationships or sequence flows changed.
-4. [`release-versioning`](../public/release-versioning/SKILL.md) §
+4. [`release-versioning`](../skills/release-versioning/SKILL.md) §
    CHANGELOG — for updating `[Unreleased]` entries.
 
 ## Step-by-step procedure

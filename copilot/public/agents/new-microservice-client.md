@@ -11,24 +11,24 @@ the full integration package.
 
 ## Skills to apply (in this order)
 
-1. [`external-client`](../public/external-client/SKILL.md) — the
+1. [`external-client`](../skills/external-client/SKILL.md) — the
    complete five-layer structure (Service, CoreService, Client, handler/,
    constant/).
-2. [`pluggable-architecture`](../public/pluggable-architecture/SKILL.md)
+2. [`pluggable-architecture`](../skills/pluggable-architecture/SKILL.md)
    — if multiple backends could serve the same capability, expose
    `*Service` as a port interface and put adapters under `adapter/`.
-3. [`exception-handling`](../public/exception-handling/SKILL.md) —
+3. [`exception-handling`](../skills/exception-handling/SKILL.md) —
    domain exception for non-2xx from the Client.
-4. [`health-indicator`](../public/health-indicator/SKILL.md) — readiness
+4. [`health-indicator`](../skills/health-indicator/SKILL.md) — readiness
    probe for the new dependency.
-5. [`resilience-patterns`](../public/resilience-patterns/SKILL.md) —
+5. [`resilience-patterns`](../skills/resilience-patterns/SKILL.md) —
    circuit breaker + retry on the `*Client`.
-6. [`observability`](../public/observability/SKILL.md) — MDC correlation
+6. [`observability`](../skills/observability/SKILL.md) — MDC correlation
    ID propagated in outbound headers.
-7. [`unit-tests`](../public/unit-tests/SKILL.md) — every layer.
-8. [`integration-tests`](../public/integration-tests/SKILL.md) —
+7. [`unit-tests`](../skills/unit-tests/SKILL.md) — every layer.
+8. [`integration-tests`](../skills/integration-tests/SKILL.md) —
    WireMock for the HTTP boundary.
-9. [`adapter-contract-tests`](../public/adapter-contract-tests/SKILL.md)
+9. [`adapter-contract-tests`](../skills/adapter-contract-tests/SKILL.md)
    — if multiple adapters exist, a TCK per port.
 
 ## Information to gather before generating

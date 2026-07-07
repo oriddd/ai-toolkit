@@ -3,18 +3,18 @@
 > reference it from the system prompt). It is the operating manual that
 > turns the catalogue into autonomous behaviour.
 You are a code-generating agent contributing to a Java 21 / Spring Boot
-microservice. A reusable **skills catalogue** lives under `skills/`. It
+microservice. A reusable **skills catalogue** lives under `public/skills/`. It
 contains **40 atomic skills** covering everything from REST API design to
 release versioning. Your job is to apply the right subset of those
 skills to every request — never reinvent patterns the catalogue
 already prescribes.
 ## 1. Read order (every task, every time)
-1. **[`skills/BACKEND_GUILD.md`](./BACKEND_GUILD.md)** — adoption matrix,
+1. **[`BACKEND_GUILD.md`](../skills/BACKEND_GUILD.md)** — adoption matrix,
    apply-order, recipes, **non-negotiables** (mandatory before any diff).
-2. **[`skills/INDEX_BY_USE_CASE.md`](./INDEX_BY_USE_CASE.md)** —
+2. **[`INDEX_BY_USE_CASE.md`](../skills/INDEX_BY_USE_CASE.md)** —
    reverse-lookup from "the developer is asking …" to the relevant
    skills.
-3. **The specific `skills/public/<name>/SKILL.md` files** identified by
+3. **The specific `public/skills/<name>/SKILL.md` files** identified by
    steps 1 and 2. Read the full SKILL.md, not just the description.
 4. **Any `templates/` directory** shipped by a chosen skill. Copy these
    verbatim, substituting `{{placeholder}}` tokens.
@@ -105,8 +105,8 @@ the validator will reject it.
 - **Cite the skill.** Every non-trivial decision must cite the skill
   number, e.g. *"applied `spring-boot-conventions` §7b — property-driven
   interval"*. Reviewers grep for these citations.
-- **Run the validator** if you touched `skills/`:
-  `bash skills/validate-skills.sh`. If it fails, **fix before
+- **Run the validator** if you touched `public/skills/`:
+  `bash ../skills/validate-skills.sh`. If it fails, **fix before
   returning**.
 - **Update CHANGELOG.md** `[Unreleased]` for any user-visible change.
 - **Update `context/`** per `context-maintenance` whenever architecture
@@ -125,7 +125,7 @@ this consumer"):
 If the same pattern shows up twice across services and no skill covers
 it, propose a new skill **before** the third occurrence calcifies one
 team's local choice as a de-facto standard. Use
-[`skills/AUTHORING.md`](./AUTHORING.md) §6 walkthrough.
+[`AUTHORING.md`](../skills/AUTHORING.md) §6 walkthrough.
 ## 9. Optional context files
 Skills assume the following context files exist (created by
 `context-maintenance`):
@@ -141,8 +141,8 @@ If any are missing, create them from the templates referenced by
 Final pre-flight (every response):
 - [ ] All 24 non-negotiables satisfied?
 - [ ] Each skill cited by section number where applied?
-- [ ] `bash skills/validate-skills.sh` clean (if `skills/` touched)?
-- [ ] `python3 skills/build-indexes.py --check` clean (if frontmatter touched)?
+- [ ] `bash ../skills/validate-skills.sh` clean (if `public/skills/` touched)?
+- [ ] `python3 ../skills/build-indexes.py --check` clean (if frontmatter touched)?
 - [ ] `context/` updated where appropriate?
 - [ ] CHANGELOG `[Unreleased]` updated?
 If any answer is "no", the diff is not ready.

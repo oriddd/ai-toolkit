@@ -20,13 +20,15 @@ isolation. The skills encode hard-won patterns so you never re-invent them.
 
 | I want to… | Go here |
 | --- | --- |
-| Understand every skill at a glance | [`skills/REGISTRY.md`](./skills/REGISTRY.md) |
-| Find the skill(s) for my task | [`skills/INDEX_BY_USE_CASE.md`](./skills/INDEX_BY_USE_CASE.md) |
-| Know what is mandatory vs optional | [`skills/BACKEND_GUILD.md`](./skills/BACKEND_GUILD.md) |
-| Use an AI agent for a specific task | [`skills/agents/`](./skills/agents/README.md) |
-| Set up an AI agent for my whole project | [`skills/AGENT_PROMPT.md`](./skills/AGENT_PROMPT.md) |
+| **Toolkit overview — what lives where** | [`CHEATSHEET.md`](./CHEATSHEET.md) |
+| CLI & IntelliJ tips for authoring skills | [`public/skills/CHEATSHEET.md`](./public/skills/CHEATSHEET.md) |
+| Understand every skill at a glance | [`REGISTRY.md`](./public/skills/REGISTRY.md) |
+| Find the skill(s) for my task | [`INDEX_BY_USE_CASE.md`](./public/skills/INDEX_BY_USE_CASE.md) |
+| Know what is mandatory vs optional | [`BACKEND_GUILD.md`](./public/skills/BACKEND_GUILD.md) |
+| Use an AI agent for a specific task | [`public/agents/`](./public/agents/README.md) |
+| Set up an AI agent for my whole project | [`AGENT_PROMPT.md`](./public/agents/AGENT_PROMPT.md) |
 | Bootstrap a new service's docs | [`context/`](./context/) |
-| Write or validate a new skill | [`skills/AUTHORING.md`](./skills/AUTHORING.md) |
+| Write or validate a new skill | [`AUTHORING.md`](./public/skills/AUTHORING.md) |
 
 ---
 
@@ -34,7 +36,7 @@ isolation. The skills encode hard-won patterns so you never re-invent them.
 
 ### Option A — Full catalogue (recommended for a new project)
 
-Paste [`skills/AGENT_PROMPT.md`](./skills/AGENT_PROMPT.md) into your AI
+Paste [`AGENT_PROMPT.md`](./public/agents/AGENT_PROMPT.md) into your AI
 tool's system prompt (GitHub Copilot workspace instructions, Cursor rules,
 Claude project instructions, etc.).
 
@@ -46,28 +48,31 @@ The agent will:
 
 ### Option B — Topic agent (recommended for a focused task)
 
-Pick the relevant agent from [`skills/agents/`](./skills/agents/README.md)
+Pick the relevant agent from [`public/agents/`](./public/agents/README.md)
 and paste it as your system prompt. Topic agents are concise and fast:
 
 ```
-skills/agents/
-  update-context.md          Update docs + CHANGELOG after a code change
+agents/
+  scaffold-repo.md           Create a new Spring Boot service from scratch
   new-endpoint.md            Add a REST endpoint
+  new-feature.md             Implement a feature end-to-end
+  new-kafka-consumer.md      Add a Kafka consumer (idempotent, DLQ, observability)
   new-microservice-client.md Integrate a new downstream service
   new-validation.md          Add an input-validation rule
   new-metric.md              Add a domain request metric
   code-review.md             Pre-PR quality review
-  new-feature.md             Implement a feature end-to-end
+  refactor.md                Migrate legacy code to catalogue patterns
+  update-context.md          Update docs + CHANGELOG after a code change
 ```
 
 ### Option C — Manual (for developers, no AI)
 
-1. Find your task in [`skills/INDEX_BY_USE_CASE.md`](./skills/INDEX_BY_USE_CASE.md).
-2. Read each listed `skills/public/<name>/SKILL.md` in order.
-3. Copy templates from `skills/public/<name>/templates/` and substitute
+1. Find your task in [`INDEX_BY_USE_CASE.md`](./public/skills/INDEX_BY_USE_CASE.md).
+2. Read each listed `public/skills/<name>/SKILL.md` in order.
+3. Copy templates from `public/skills/<name>/templates/` and substitute
    `{{placeholder}}` tokens.
 4. Check your work against the 24 non-negotiables in
-   [`skills/BACKEND_GUILD.md §4`](./skills/BACKEND_GUILD.md).
+   [`BACKEND_GUILD.md §4`](./public/skills/BACKEND_GUILD.md).
 
 ---
 
@@ -84,7 +89,7 @@ cp -r copilot/context/ path/to/your-service/context/
 bash copilot/context/validate-context.sh
 
 # Run the skill validator after any skill edits
-bash copilot/skills/validate-skills.sh
+bash copilot/public/skills/validate-skills.sh
 ```
 
 ---
@@ -98,7 +103,7 @@ bash copilot/skills/validate-skills.sh
 | **MAY** | Optional; use when genuinely useful | 1 |
 
 Start with MUST skills when building a new service. The apply-order in
-[`BACKEND_GUILD.md §2`](./skills/BACKEND_GUILD.md) tells you the right sequence.
+[`BACKEND_GUILD.md §2`](./public/skills/BACKEND_GUILD.md) tells you the right sequence.
 
 ---
 
@@ -121,7 +126,7 @@ interface. The vendor SDK is imported only inside its adapter class.
 Swapping providers = changing one property. Multi-provider = adding a
 composite adapter. Zero domain-code changes needed.
 
-See [`pluggable-architecture`](./skills/public/pluggable-architecture/SKILL.md)
+See [`pluggable-architecture`](./public/skills/pluggable-architecture/SKILL.md)
 
 ### Law 3 — SDK-Like Lego Bricks
 
@@ -130,8 +135,8 @@ Every module exposes a stable interface and defaults via
 Every layer has its own test contract. Replacing a brick never touches
 its consumers.
 
-See [`sdk-publishing`](./skills/public/sdk-publishing/SKILL.md) and
-[`adapter-contract-tests`](./skills/public/adapter-contract-tests/SKILL.md)
+See [`sdk-publishing`](./public/skills/sdk-publishing/SKILL.md) and
+[`adapter-contract-tests`](./public/skills/adapter-contract-tests/SKILL.md)
 
 ---
 
@@ -139,15 +144,16 @@ See [`sdk-publishing`](./skills/public/sdk-publishing/SKILL.md) and
 
 | Task | Skills to read | Agent |
 | --- | --- | --- |
-| New REST endpoint | `api-design` → `code-structure` → `exception-handling` → `permissions` → `input-validation` → `unit-tests` → `component-tests` | `agents/new-endpoint.md` |
-| New downstream service | `external-client` → `resilience-patterns` → `health-indicator` → `observability` | `agents/new-microservice-client.md` |
-| New DB entity | `persistence` → `domain-modeling` → `integration-tests` | `agents/new-feature.md` |
-| New validation rule | `input-validation` → `exception-handling` → `unit-tests` | `agents/new-validation.md` |
-| New domain metric | `request-metrics` → `observability` | `agents/new-metric.md` |
-| New Kafka consumer | `messaging` → `observability` → `graceful-shutdown` → `integration-tests` | `agents/new-feature.md` |
-| Pre-PR review | `quality-review` → `BACKEND_GUILD §4` | `agents/code-review.md` |
-| Update docs | `context-maintenance` → `release-versioning` | `agents/update-context.md` |
-| Refactor legacy | `refactoring-playbook` → `quality-review` | `AGENT_PROMPT.md` |
+| **New service from scratch** | `project-types` → `create-repo` → `code-structure` → `ci` → `cd` → `local-dev-experience` | `public/agents/scaffold-repo.md` |
+| New REST endpoint | `api-design` → `code-structure` → `exception-handling` → `permissions` → `input-validation` → `unit-tests` → `component-tests` | `public/agents/new-endpoint.md` |
+| New downstream service | `external-client` → `resilience-patterns` → `health-indicator` → `observability` | `public/agents/new-microservice-client.md` |
+| New DB entity | `persistence` → `domain-modeling` → `integration-tests` | `public/agents/new-feature.md` |
+| New validation rule | `input-validation` → `exception-handling` → `unit-tests` | `public/agents/new-validation.md` |
+| New domain metric | `request-metrics` → `observability` | `public/agents/new-metric.md` |
+| **New Kafka consumer** | `messaging` → `observability` → `graceful-shutdown` → `integration-tests` | `public/agents/new-kafka-consumer.md` |
+| Pre-PR review | `quality-review` → `BACKEND_GUILD §4` | `public/agents/code-review.md` |
+| Update docs | `context-maintenance` → `release-versioning` | `public/agents/update-context.md` |
+| **Refactor legacy** | `refactoring-playbook` → `quality-review` | `public/agents/refactor.md` |
 | Swap a technology | `pluggable-architecture` → `adapter-contract-tests` | `AGENT_PROMPT.md` |
 
 ---
@@ -158,20 +164,20 @@ When you see the same pattern repeated in a third service, extract it:
 
 ```bash
 # 1. Create the folder
-mkdir -p skills/public/my-skill
+mkdir -p public/skills/my-skill
 
 # 2. Write SKILL.md following AUTHORING.md
 #    Minimum frontmatter required:
 #    name, description, tier, applies_to, depends_on,
 #    ships_templates, hitl, version, last_reviewed
 
-# 3. Add a row to skills/public/README.md
+# 3. Add a row to public/skills/README.md
 
 # 4. Validate — the tool tells you exactly what is missing
-bash skills/validate-skills.sh
+bash public/skills/validate-skills.sh
 
 # 5. Regenerate auto-generated indexes
-python3 skills/build-indexes.py
+python3 public/skills/build-indexes.py
 ```
 
 ---
@@ -180,16 +186,16 @@ python3 skills/build-indexes.py
 
 ```bash
 # Validate all 40 skills (frontmatter, links, template refs, indexes in sync)
-bash skills/validate-skills.sh
+bash public/skills/validate-skills.sh
 
 # Rebuild REGISTRY.md and BACKEND_GUILD.md matrix/graph from frontmatter
-python3 skills/build-indexes.py
+python3 public/skills/build-indexes.py
 
 # Validate context files (required sections are non-empty)
 bash context/validate-context.sh
 ```
 
-All three must exit 0 before any PR that touches `skills/` or `context/`.
+All three must exit 0 before any PR that touches `public/skills/` or `context/`.
 
 ---
 
@@ -256,6 +262,6 @@ Proceed only with explicit confirmation and an ADR under `docs/adr/`.
 See `AGENT_PROMPT.md §7`.
 
 **Q: How do I know the catalogue is up to date?**
-Run `bash skills/validate-skills.sh`. It checks every skill's frontmatter,
+Run `bash public/skills/validate-skills.sh`. It checks every skill's frontmatter,
 internal links, and that REGISTRY.md and BACKEND_GUILD.md are in sync.
 

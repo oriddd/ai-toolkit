@@ -72,7 +72,7 @@ graph TB
 
 **When to Create**: At project start, or when external dependencies change
 
-**Example**: See [`context/system-context.md`](../../context/system-context.md)
+**Example**: See [`context/system-context.md`](../../../context/system-context.md)
 
 #### Component/Container Diagram
 **Purpose**: Show high-level technology choices and component interactions
@@ -95,7 +95,7 @@ graph TB
 ```
 ````
 
-**Example**: See [`context/component-diagram.md`](../../context/component-diagram.md)
+**Example**: See [`context/component-diagram.md`](../../../context/component-diagram.md)
 
 ### 2. Sequence Diagrams
 
@@ -169,7 +169,7 @@ sequenceDiagram
 ```
 ````
 
-**Example**: See [`context/domain-flow.md`](../../context/domain-flow.md)
+**Example**: See [`context/domain-flow.md`](../../../context/domain-flow.md)
 
 ### 3. Class Diagrams
 
@@ -549,13 +549,13 @@ You can use the Mermaid CLI in your pipeline to validate syntax:
 ## Examples
 
 ### Example 1: Main Domain Flow
-See: [`context/domain-flow.md`](../../context/domain-flow.md)
+See: [`context/domain-flow.md`](../../../context/domain-flow.md)
 
 ### Example 2: System Context
-See: [`context/system-context.md`](../../context/system-context.md)
+See: [`context/system-context.md`](../../../context/system-context.md)
 
 ### Example 3: Component Structure
-See: [`context/component-diagram.md`](../../context/component-diagram.md)
+See: [`context/component-diagram.md`](../../../context/component-diagram.md)
 
 ## Resources
 

@@ -320,8 +320,8 @@ In `progress-tracker.md`:
 ## Related Skills
 
 - [uml-diagram](../uml-diagram/SKILL.md) - Create/update UML diagrams
-- [quality-review](../../public/quality-review/SKILL.md) - Code quality review
-- [documentation-and-adr](../../public/documentation-and-adr/SKILL.md) - General documentation
+- [quality-review](../quality-review/SKILL.md) - Code quality review
+- [documentation-and-adr](../documentation-and-adr/SKILL.md) - General documentation
 
 ## Validation
 

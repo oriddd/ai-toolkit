@@ -9,9 +9,9 @@ A consumer who can resolve only public Maven Central artifacts and pull
 from any OCI registry can apply these skills as-is and end up with a
 working microservice.
 
-> See [`../REGISTRY.md`](../REGISTRY.md) for the machine-readable index
-> of every skill, [`../AUTHORING.md`](../AUTHORING.md) for the SKILL.md
-> authoring contract, and [`../BACKEND_GUILD.md`](../BACKEND_GUILD.md)
+> See [`./REGISTRY.md`](./REGISTRY.md) for the machine-readable index
+> of every skill, [`./AUTHORING.md`](./AUTHORING.md) for the SKILL.md
+> authoring contract, and [`./BACKEND_GUILD.md`](./BACKEND_GUILD.md)
 > for the curated MUST / SHOULD / MAY adoption bundle.
 
 | Skill | Purpose |
@@ -80,4 +80,28 @@ catalogue:
 | `CallerContextResolver` SPI | A resolver that reads the organization's custom authentication token shape |
 | `ResourceAuthorizationSource` SPI | A client to the organization's authorization / search service |
 | Generic `*Client` template | Pre-wired clients for in-house file storage, search, analytics, etc. |
-| `<shared-auth-config>` placeholder in Helm | Reference to the organization's shared auth ConfigMap |
+| `<shared-auth-config>` placeholder in Helm | Reference to the organization's shared auth ConfigMap
+## Maintainer references
+
+| Resource | Purpose |
+| --- | --- |
+| [`./BACKEND_GUILD.md`](./BACKEND_GUILD.md) | Curated MUST / SHOULD / MAY adoption matrix + apply-order + task-driven recipes + non-negotiables for code review. |
+| [`./REGISTRY.md`](./REGISTRY.md) | Machine-readable index of every skill (counts, templates indicator). |
+| [`./AUTHORING.md`](./AUTHORING.md) | SKILL.md authoring contract — frontmatter rules, required sections, placeholder syntax, checklist. |
+| [`./validate-skills.sh`](./validate-skills.sh) | CI-friendly linter — fails on missing frontmatter, mismatched folder/`name`, broken template links, missing registry entries. |
+
+Run the validator before opening a PR that touches `public/skills/`:
+
+```sh
+bash validate-skills.sh
+```
+
+## Optional publication-safety check
+
+If you maintain a private fork that adds organization-specific terms you do
+not want leaking into shared skill files, create a `.publication-blocklist`
+file at the `copilot/` root (one substring per line, `#` for comments). The
+validator's publication-safety check fails the build if any blocklisted term
+appears in any `*.md` under `public/`. The shipped catalogue contains no such
+file and the check is a no-op by default.
+
