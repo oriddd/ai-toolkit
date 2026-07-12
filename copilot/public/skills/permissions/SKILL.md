@@ -3,29 +3,36 @@ name: permissions
 description: Wire authentication & authorization into a Spring Boot microservice using the Strategy + Handler pattern. Adds a PermissionsHandler that dispatches by a "caller context" (the type of authenticated principal — user, service-account, external system, etc.) to a pluggable PermissionsCheckStrategy, plus matching unit tests. Vendor-neutral — the caller-context type and the authorization back-end are plug-points.
 tier: must
 applies_to: [rest, monolith]
-depends_on: [code-structure, exception-handling]
+depends_on: [code-structure, exception-handling, strategy-registry-pattern]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-06-28
+version: 1.1
+last_reviewed: 2026-07-12
 ---
 
 # Permissions Skill (public)
 
+> **Pattern Foundation:** This skill is a concrete application of the [strategy-registry-pattern](../strategy-registry-pattern/SKILL.md) skill. 
+> Read that skill first to understand the foundational pattern, then return here for the permissions-specific implementation.
+
 This skill provisions the **authorization layer** of a Spring Boot
-microservice using a pluggable Strategy + Handler:
+microservice using a pluggable Strategy + Handler + Registry:
 
 ```
 permission/
 ├── CallerContext.java                       # enum: USER / SERVICE_ACCOUNT / EXTERNAL_SYSTEM / BASIC_AUTH …
-├── CallerContextResolver.java               # SPI: read the current principal and return a CallerContext
-├── PermissionsCheckStrategy.java            # interface
-├── PermissionsHandler.java                  # dispatcher (List<Strategy> + CallerContext)
-└── strategies/
-    ├── ScopeBasedPermissionsCheck.java      # SERVICE_ACCOUNT_CONTEXT → OAuth2 scope allow-list
-    ├── ResourcePermissionsCheck.java        # USER_CONTEXT → query an authorization source per resource
-    └── NoOpPermissionsCheck.java            # BASIC_AUTH (trusted callers, documented no-op)
+├── CallerContextResolver.java               # Resolver: read the current principal and return a CallerContext
+├── PermissionsCheckStrategy.java            # Strategy interface: defines the contract
+├── PermissionsHandler.java                  # Handler: orchestrates resolver → registry → strategy
+├── PermissionsRegistry.java                 # Registry: routes CallerContext → strategy (List injection)
+└── strategy/
+    ├── ScopeBasedPermissionsCheck.java      # Strategy: SERVICE_ACCOUNT_CONTEXT → OAuth2 scope allow-list
+    ├── ResourcePermissionsCheck.java        # Strategy: USER_CONTEXT → query an authorization source per resource
+    └── NoOpPermissionsCheck.java            # Strategy: BASIC_AUTH (trusted callers, documented no-op)
 ```
+
+> **Pattern Application:** This follows the **Handler-based variation** of the strategy-registry-pattern.
+> Components: Handler → Resolver (CallerContext) → Registry → Strategy (permissions check)
 
 The skill **does not bind to a specific JWT library, claim shape, or
 authorization back-end** — those are plug-points:
@@ -94,20 +101,20 @@ public interface PermissionsCheckStrategy {
 
 Adjust the `verifyPermissions` signature to the resource-id shape (Phase 1 #3).
 
-### 5. `PermissionsHandler` (dispatcher)
+### 5. `PermissionsHandler` (Handler/Dispatcher)
 
 ```java
 @Component
 @Slf4j
 public class PermissionsHandler {
-    private final List<PermissionsCheckStrategy> strategies;
     private final CallerContextResolver callerContextResolver;
+    private final PermissionsRegistry permissionsRegistry;
 
     @Autowired
-    public PermissionsHandler(final List<PermissionsCheckStrategy> strategies,
-                              final CallerContextResolver callerContextResolver) {
-        this.strategies = strategies;
+    public PermissionsHandler(final CallerContextResolver callerContextResolver,
+                              final PermissionsRegistry permissionsRegistry) {
         this.callerContextResolver = callerContextResolver;
+        this.permissionsRegistry = permissionsRegistry;
     }
 
     public void handle(final String resourceId) throws FooForbiddenException {
@@ -115,12 +122,30 @@ public class PermissionsHandler {
         if (ctx == null) {
             throw new FooForbiddenException(ExceptionMessages.CALLER_CONTEXT_NOT_FOUND);
         }
-        strategies.stream()
-                .filter(s -> s.supportedContexts().contains(ctx))
+        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
+        if (strategy == null) {
+            throw new FooForbiddenException(
+                    MessageFormat.format(ExceptionMessages.UNRECOGNIZED_CALLER_CONTEXT, ctx));
+        }
+        strategy.verifyPermissions(resourceId);
+    }
+}
+```
+
+### 5a. `PermissionsRegistry` (Registry/Router)
+
+```java
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class PermissionsRegistry {
+    // Spring injects ALL PermissionsCheckStrategy beans automatically
+    private final List<PermissionsCheckStrategy> strategies;
+
+    public PermissionsCheckStrategy getStrategy(final CallerContext callerContext) {
+        return strategies.stream()
+                .filter(s -> s.supportedContexts().contains(callerContext))
                 .findFirst()
-                .orElseThrow(() -> new FooForbiddenException(
-                        MessageFormat.format(ExceptionMessages.UNRECOGNIZED_CALLER_CONTEXT, ctx)))
-                .verifyPermissions(resourceId);
+                .orElse(null);
     }
 }
 ```

@@ -10,7 +10,7 @@ into any code-generating AI agent's system prompt or used directly by developers
 
 | Folder / File | Purpose |
 | --- | --- |
-| [`public/skills/`](./public/skills/README.md) | 40 atomic skills covering every layer of a microservice — API design, persistence, messaging, observability, CI/CD, testing, and more. |
+| [`public/skills/`](./public/skills/README.md) | 45 atomic skills covering every layer of a microservice — API design, persistence, messaging, observability, CI/CD, testing, and more. |
 | [`public/agents/`](./public/agents/README.md) | 10 task-focused agent prompts that compose skills for a single job (scaffold a repo, add an endpoint, add a Kafka consumer, code review, refactor, …). |
 | [`AGENT_PROMPT.md`](./public/agents/AGENT_PROMPT.md) | **Drop this into your agent's system prompt.** Operating manual that turns the catalogue into autonomous agent behaviour. |
 | [`BACKEND_GUILD.md`](./public/skills/BACKEND_GUILD.md) | Adoption matrix (MUST / SHOULD / MAY), apply-order, task-driven recipes, and 24 non-negotiables. |
@@ -49,7 +49,7 @@ Run `bash context/validate-context.sh` to verify required sections are populated
 ## Validation
 
 ```bash
-# Validate all 40 skills (frontmatter, links, template references)
+# Validate all 45 skills (frontmatter, links, template references)
 bash public/skills/validate-skills.sh
 
 # Validate project context files (required sections are non-empty)

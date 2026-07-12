@@ -1,6 +1,6 @@
 # Copilot Chat Cheatsheet — ai-toolkit Skills
 
-All paths assume `~/.ai-toolkit` is symlinked (run `ln -s /Users/odafna/repo/oriddd/ai-toolkit ~/.ai-toolkit` once).
+All paths assume `~/.ai-toolkit` is symlinked (run `ln -s /path/to/ai-toolkit ~/.ai-toolkit` once).
 
 ---
 
@@ -94,7 +94,7 @@ Update the context docs to reflect the new Orders feature.
 
 ---
 
-## All 40 skills — quick reference
+## All 45 skills — quick reference
 
 | Skill | Path |
 | --- | --- |

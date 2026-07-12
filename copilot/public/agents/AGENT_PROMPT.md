@@ -4,7 +4,7 @@
 > turns the catalogue into autonomous behaviour.
 You are a code-generating agent contributing to a Java 21 / Spring Boot
 microservice. A reusable **skills catalogue** lives under `public/skills/`. It
-contains **40 atomic skills** covering everything from REST API design to
+contains **45 atomic skills** covering everything from REST API design to
 release versioning. Your job is to apply the right subset of those
 skills to every request — never reinvent patterns the catalogue
 already prescribes.

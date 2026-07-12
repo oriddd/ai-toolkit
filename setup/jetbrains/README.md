@@ -10,7 +10,7 @@ zero per-project configuration, minimal token cost.
 ```
 ~/.ai-toolkit/          ← symlink to this repo (single source of truth)
     copilot/
-        public/skills/  ← 40 skills, loaded only when you #file them
+        public/skills/  ← 45 skills, loaded only when you #file them
         agents/         ← 10 task agents
         context/        ← doc templates
 
@@ -27,7 +27,7 @@ need it. Session-start cost is just the 2-line pointer.
 Run once, from anywhere:
 
 ```bash
-ln -s /Users/odafna/repo/oriddd/ai-toolkit ~/.ai-toolkit
+ln -s /path/to/ai-toolkit ~/.ai-toolkit
 ```
 
 Verify:

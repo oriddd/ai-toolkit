@@ -1,13 +1,13 @@
 ---
 name: quality-review
-description: Run a SOLID / clean-code / project-conventions review on a class, package, or pull request. Produces a structured report flagging violations of the project's quality bar (SRP, OCP, ISP, DIP, lego-brick packaging, SDK-style client wrapping, exception/logging/concurrency conventions, test meaningfulness) with concrete fix suggestions. Use before opening a PR or when refactoring legacy code into the project standard.
+description: Run a SOLID / clean-code / testability / project-conventions review on a class, package, or pull request. Produces a structured report flagging violations of the project's quality bar (SRP, OCP, ISP, DIP, lego-brick packaging, SDK-style client wrapping, testability anti-patterns like static methods/global state, exception/logging/concurrency conventions, test meaningfulness, positive & negative test coverage) with concrete fix suggestions. Use before opening a PR or when refactoring legacy code into the project standard.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
-depends_on: [unit-tests, static-analysis]
+depends_on: [unit-tests, static-analysis, testable-code-principles]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-06-28
+version: 1.1
+last_reviewed: 2026-07-12
 ---
 
 # this Quality Review Skill
@@ -91,6 +91,36 @@ other skills).
 
 ### C. Cross-cutting conventions
 
+9a. **Nullable fetch → filtered stream.** Any collaborator whose
+    contract documents `null` on error (graceful degradation) must be
+    filtered with `.filter(Objects::nonNull)` at the call-site before
+    downstream `map` / `flatMap`. Flag streams that call such methods
+    without a null filter.
+    *Fix:* add the filter; or promote the return type to `Optional<T>`
+    and force the caller to unwrap.
+
+9b. **No `@EnableXxx` on `@SpringBootApplication`.**
+    `@EnableScheduling`, `@EnableAsync`, `@EnableCaching`,
+    `@EnableConfigurationPropertiesScan` must live on dedicated
+    `@Configuration` classes (`SchedulingConfig`, `AsyncConfig`, …) so
+    test slices can opt out. See `spring-boot-conventions` §7b.
+
+9c. **One properties bean per dependency.** No infrastructure property
+    key (`*.endpoint`, `*.namespace`, `*.topic`, `*.timeout-ms`) may be
+    read via `@Value` in more than one class. Flag any such duplicate;
+    the fix is a shared `@ConfigurationProperties` record.
+
+9d. **Layer duplication.** Two classes in different packages
+    implementing the same capability (list-by-status query, event-history
+    reduction) is a smell — one must be the canonical implementation, the
+    other deleted. Flag any pair of classes that share ≥ 80 % of a
+    switch statement or query-building expression across packages.
+
+9e. **Scheduler purity.** A `@Scheduled` bean may only depend on
+    `service/`, `repository/`, `analyzer/`, and its own logger. Flag any
+    scheduler that injects a `*Client`, `WebClient`, SDK stub, or reads
+    infrastructure `@Value` fields directly.
+
 9. **Exceptions** — Throw-site uses a domain exception (`*Exception`,
    `*BadRequestException`, `*ForbiddenException`, `*NotFoundException`) with
    a `MessageFormat`-formatted message from `ExceptionMessages`. The HTTP
@@ -155,7 +185,72 @@ other skills).
     `@TestConfiguration` that replaces it with a no-op for component tests
     (see `NoHeavyStartupTestConfig`).
 
-### E. Quantitative thresholds
+21. **Positive & negative paths** — for every public method, verify tests
+    exist for both the happy path (valid inputs) and negative cases (null,
+    invalid, exception scenarios). Flag methods with only happy-path tests.
+    See `unit-tests` §"Test Every LEGO Brick".
+
+22. **Test naming convention** — test methods follow
+    `methodName_condition_expectedResult()` or `when<Condition>_<Then>()`
+    naming. Flag vague names like `test1()`, `testMethod()`, `happyPath()`.
+
+### E. Testability Anti-Patterns (see `testable-code-principles`)
+
+23. **Static methods with business logic** — flag any `static` method outside
+    of `*Constants`, `*Utils` (pure functions), or test helpers that
+    contains business logic. Business logic must be injectable.
+    *Smell:* `UserValidator.isValid(user)` instead of `@Component UserValidator`
+    with instance method.
+    *Fix:* convert to `@Component` with instance method, inject where needed.
+
+24. **Global state / Singletons** — flag static mutable fields, singleton
+    pattern implementation, or `getInstance()` methods in business code.
+    *Smell:* `private static final Map<String, Config> CACHE = new HashMap<>();`
+    or `private static ConfigManager instance;`.
+    *Fix:* convert to Spring bean with instance state; inject via constructor.
+
+25. **Hidden dependencies** — flag direct access to `System.getProperty()`,
+    `System.getenv()`, `Locale.getDefault()`, `TimeZone.getDefault()` in
+    business code (outside of `*Config` classes).
+    *Smell:* `String mode = System.getProperty("processing.mode");`.
+    *Fix:* inject via `@ConfigurationProperties` or constructor parameter.
+
+26. **Time-dependent logic without Clock** — flag `LocalDate.now()`,
+    `Instant.now()`, `System.currentTimeMillis()` without injected `Clock`.
+    *Smell:* `if (LocalDate.now().getDayOfWeek() == MONDAY)`.
+    *Fix:* inject `Clock`; use `LocalDate.now(clock)` for testability.
+
+27. **Direct file/network I/O in business logic** — flag `new File(...)`,
+    `Files.readAllBytes(...)`, `URL.openStream()`, raw JDBC/HTTP in
+    `service/` or `operation/`. I/O must be abstracted behind a repository
+    or client.
+    *Smell:* `byte[] data = Files.readAllBytes(Paths.get("config.json"));`
+    in a service method.
+    *Fix:* extract `ConfigRepository` or inject `ResourceLoader`.
+
+28. **Hidden side effects** — flag methods whose name suggests a query
+    (`get*`, `find*`, `is*`, `has*`, `calculate*`) but contains write
+    operations (logging excluded), cache updates, metrics increments, or
+    state mutations.
+    *Smell:* `public Document findById(String id) { cache.put(id, result); ... }`.
+    *Fix:* separate query from command; make side effects explicit in method name.
+
+29. **Constructor doing work** — flag constructors (or `@PostConstruct`)
+    that perform I/O, call external services, or heavy computation. Tests
+    cannot control timing or mock the work.
+    *Smell:* `public FooService() { this.config = loadConfigFromDisk(); }`.
+    *Fix:* inject pre-loaded dependencies; defer work to explicit `init()` or
+    lazy-load on first use with a supplier.
+
+30. **Unclear inputs/outputs** — flag methods with >4 parameters, methods
+    that modify input parameters (mutate collections/arrays passed in),
+    or methods returning `void` whose contract relies entirely on side effects
+    without a clear naming convention (`save*`, `send*`, `record*`).
+    *Smell:* `void process(List<Item> items)` that modifies `items` in place.
+    *Fix:* return new collection; or rename to `processInPlace(...)` to make
+    mutation explicit.
+
+### F. Quantitative thresholds
 
 For each finding below, cite the value in the report and apply the listed
 threshold. These are deliberately strict; treat each violation as a `WARN`
@@ -181,7 +276,7 @@ junit-named edge case may justify breaking one).
 Surface every violation as:
 
 ```
-[E21 CYC]  WARN  FooService#computeBucket  complexity 13  (limit 10)
+[F21 CYC]  WARN  FooService#computeBucket  complexity 13  (limit 10)
                     Suggested fix: extract decision table into a Map<X, Strategy>.
 ```
 

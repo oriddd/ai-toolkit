@@ -11,7 +11,7 @@ validating them using IntelliJ IDEA and the CLI. (Sits next to the skills it ser
 # Skills tooling lives here — run from public/skills/
 cd copilot/public/skills
 
-bash validate-skills.sh          # lint all 40 skill frontmatters + links
+bash validate-skills.sh          # lint all 45 skill frontmatters + links
 python3 build-indexes.py         # regenerate REGISTRY.md + BACKEND_GUILD.md matrix
 python3 build-indexes.py --check # dry-run (check without writing)
 
@@ -134,7 +134,7 @@ alias toolkit-check="cd $(git rev-parse --show-toplevel)/copilot && bash public/
 ### Use `#file` to test a skill in Copilot chat before publishing
 
 ```
-#file /Users/odafna/repo/oriddd/ai-toolkit/copilot/public/skills/my-new-skill/SKILL.md
+#file /path/to/ai-toolkit/copilot/public/skills/my-new-skill/SKILL.md
 Apply this skill to the code I'm about to paste.
 ```
 

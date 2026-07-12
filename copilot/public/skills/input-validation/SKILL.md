@@ -3,14 +3,17 @@ name: input-validation
 description: Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level rules and Spring Validator (org.springframework.validation.Validator) for object/cross-field rules. Covers custom annotation authoring, Spring-bean-aware validators with injected domain rule beans, annotation attribute propagation via initialize(), custom constraint violation messages, ValidationConfig @ControllerAdvice registration via @InitBinder, and the canonical package layout. Use whenever a new validation rule is required — never write ad-hoc if/throw guards in controllers, operations, or services when a validator can own the contract.
 tier: must
 applies_to: [rest, monolith]
-depends_on: [code-structure, exception-handling, spring-boot-conventions]
+depends_on: [code-structure, exception-handling, spring-boot-conventions, validation-pattern]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-07-01
+version: 1.2
+last_reviewed: 2026-07-12
 ---
 
 # Input Validation Skill (public)
+
+> **Pattern Foundation:** This skill is a concrete application of the [validation-pattern](../validation-pattern/SKILL.md) skill. 
+> Read that skill first to understand the foundational pattern, then return here for detailed implementation examples and edge cases.
 
 Validation is a **first-class concern** in every Spring Boot service. This skill
 defines the two canonical validation styles, when to use each, the package
@@ -42,6 +45,7 @@ validation/
 ├── annotation/      # custom Jakarta @Constraint annotations only
 ├── validator/       # ConstraintValidator + Spring Validator implementations
 ├── rule/            # reusable domain rule beans (no Jakarta/Spring imports here)
+│   └── (or ddm/, domain/, etc. — name contextually)
 └── config/
     └── ValidationConfig.java    # @ControllerAdvice that registers Spring Validators
 ```
@@ -51,11 +55,12 @@ Rules:
 - **`validator/`** contains validator implementations that *delegate* logic to
   `rule/` beans. Validators know how to produce constraint violations; they do
   not own business rule logic themselves.
-- **`rule/`** contains pure Spring `@Component` beans that express a single
-  domain rule (`isEntityEditable`, `isRelationTypeDefined`, …). These are
-  injectable, unit-testable in isolation, and reusable across multiple
+- **`rule/`** (or `ddm/`, `domain/`, etc.) contains pure Spring `@Component` beans 
+  that express a single domain rule (`isEntityEditable`, `isRelationTypeDefined`, …). 
+  These are injectable, unit-testable in isolation, and reusable across multiple
   validators. No Jakarta or Spring MVC imports allowed here — they speak the
-  domain language only.
+  domain language only. **May call external services** (via injected clients) to
+  fetch configuration or lookup data.
 - **`config/`** holds `ValidationConfig` and nothing else.
 
 ## 2. Style A — Jakarta `ConstraintValidator` (field / parameter level)
@@ -114,6 +119,7 @@ public class EditableEntityIdValidator
     public void initialize(final EditableEntityId annotation) {
         this.messageTemplate = annotation.message();
         // Capture any other annotation attributes (targetType, relationType, …) here.
+        // Example: this.targetType = annotation.targetType();
     }
 
     @Override
@@ -132,9 +138,14 @@ public class EditableEntityIdValidator
             return true;
         }
 
+        // Use the captured messageTemplate with runtime values
         return rejectWith(ctx, String.format(messageTemplate, entityId, entityType));
     }
 
+    /**
+     * Helper to build a constraint violation with a custom message.
+     * Disables the default violation and adds the custom one.
+     */
     private boolean rejectWith(final ConstraintValidatorContext ctx, final String message) {
         ctx.disableDefaultConstraintViolation();
         ctx.buildConstraintViolationWithTemplate(message).addConstraintViolation();
@@ -305,12 +316,12 @@ message, but they do not own domain logic. Extract all domain logic into
 dedicated `@Component` beans in `rule/`:
 
 ```java
-// rule/EntityEditabilityRule.java
+// rule/EntityEditabilityRule.java  (or ddm/EntityTypeValidator.java)
 @Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class EntityEditabilityRule {
-    private final DomainConfigService domainConfigService;   // injected external client port
+    private final DomainConfigService domainConfigService;   // injected external client
 
     public boolean isEditable(final String entityType) {
         final DomainEntityConfigDto config = domainConfigService.getEntityConfig(entityType);
@@ -320,8 +331,22 @@ public class EntityEditabilityRule {
         }
         return Boolean.TRUE.equals(config.isEditable());
     }
+
+    public boolean isExistent(final String entityType) {
+        return domainConfigService.getEntityConfig(entityType) != null;
+    }
+    
+    public boolean isCreatableByUser(final String entityType) {
+        final DomainEntityConfigDto config = domainConfigService.getEntityConfig(entityType);
+        return config != null && Boolean.TRUE.equals(config.isCreatable());
+    }
 }
 ```
+
+**Note on package naming:** The `rule/` package can be named contextually based on 
+your domain (e.g., `ddm/` for data-model rules, `domain/` for domain rules, 
+`acl/` for access-control rules). The key is that it contains **pure domain logic** 
+with no Jakarta or Spring MVC imports.
 
 Benefits:
 - Rule beans are **unit-testable in isolation** — no Jakarta machinery needed.

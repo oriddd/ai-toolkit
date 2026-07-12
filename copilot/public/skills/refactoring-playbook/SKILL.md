@@ -149,6 +149,100 @@ The bridge if you inherited a legacy `main(...)` server: wrap it in a
 `@SpringBootApplication`, expose the routes via `@RestController`,
 gradually delete the hand-rolled router. Worth its own ADR.
 
+## 11. `@EnableScheduling` on `@SpringBootApplication` → dedicated `SchedulingConfig`
+
+Symptom: `@EnableScheduling` (or `@EnableAsync`, `@EnableCaching`) sits on
+the main application class, so every test slice pays for the scheduler
+thread pool and cannot opt out.
+
+Steps:
+1. Create `config/SchedulingConfig.java` — a `@Configuration` class carrying
+   the single annotation `@EnableScheduling`.
+2. Remove the annotation from `<ServiceName>Application.java`.
+3. Repeat for `@EnableAsync` → `AsyncConfig`, `@EnableCaching` →
+   `CachingConfig`.
+4. Component tests that want the scheduler off simply exclude
+   `SchedulingConfig` via `@SpringBootTest(classes = ...)` or a test slice.
+
+See `spring-boot-conventions` §7b and `code-structure` §6 bootstrapping
+checklist.
+
+## 12. Scattered `@Value` for a dependency → one `@ConfigurationProperties` bean
+
+Symptom: the same infrastructure keys (`foo.dependency.endpoint`,
+`foo.dependency.namespace`, `foo.dependency.timeout-ms`,
+`foo.dependency.monitor.enabled`) are read via `@Value` in five different
+collaborators — client, repository, scheduler, health indicator, and
+initializer — with subtly different defaults.
+
+Steps:
+1. Create a single `FooDependencyProperties` record (see
+   `spring-boot-conventions` §1) grouping every key under one `prefix`.
+2. Inject the record wherever any of those keys is currently read via
+   `@Value`.
+3. Delete the `@Value` fields and their duplicated defaults.
+4. Verify the properties are read exactly once at startup (add a
+   `@PostConstruct` log line or a snapshot test on the bean).
+
+Applies equally to `@Configuration` beans that expose `@Value`-bound
+fields with getters: promote them to a `record` with `@NotBlank` /
+`@Positive` validation so misconfiguration fails at startup.
+
+## 13. Monolithic integration package → responsibility split
+
+Symptom: `client/<dep>/` has grown beyond a thin transport wrapper — it
+now contains list fetchers, detail fetchers, history fetchers, event
+analyzers, DTO mappers, scheduled polling jobs, and a public facade —
+all in one folder. Two classes iterate the same history stream with
+nearly identical `switch` statements.
+
+Steps:
+1. Identify each responsibility class-by-class using
+   `external-client` §11b Growth path.
+2. Move each to its canonical top-level package:
+   - repository methods → `repository/*Fetcher.java`
+   - pure analysis → `analyzer/*Calculator.java`
+   - DTO conversion → `mapper/*Converter.java`
+   - background jobs → `scheduler/*Scheduler.java`
+   - domain facade → `service/*Service.java`
+3. Delete any duplicate class (two "fetchers" doing the same thing;
+   two "analyzers" with the same switch statement).
+4. Update the scheduler to depend on the repository + analyzer rather
+   than doing its own transport.
+5. Run `ArchitectureTest` (from `code-structure` §4i) to confirm the
+   new layering.
+
+## 14. Scheduler doing its own data access → delegate to `repository/`
+
+Symptom: a `@Scheduled` bean under `scheduler/` (or `client/<dep>/`)
+opens the SDK, builds query strings, iterates event history, and logs
+progress — in one 300-line class.
+
+Steps:
+1. Extract every SDK/transport call to a `*Fetcher` in `repository/`
+   (one method per fetch shape).
+2. Extract every event/history iteration to an `*Analyzer` /
+   `*Calculator` in `analyzer/`.
+3. The scheduler shrinks to an orchestrator: fetch → analyze → log.
+4. If a fetch may return `null` on error, filter with
+   `.filter(Objects::nonNull)` at the stream call-site — never let a
+   `null` reach downstream mappers.
+
+See `code-structure` §1 layering rules for schedulers.
+
+## 15. Duplicated fetch/analyze logic across packages → single source of truth
+
+Symptom: two classes in different packages implement the same
+capability (list-by-status query, activity counter over event history).
+Both compile; only one is unit-tested; changes drift.
+
+Steps:
+1. Locate the canonical implementation (the one referenced by
+   `service/` / `operation/`).
+2. Delete the duplicate; point its callers at the canonical class.
+3. Add an `ArchUnit` rule forbidding the duplicate's package from
+   re-implementing the interface (see `code-structure` §4i).
+
 ---
 
 ## Migration discipline

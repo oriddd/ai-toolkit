@@ -2,7 +2,7 @@
 
 This is the **curated bundle** that every backend service in this
 organization should follow when an agent (or a human) generates code. It
-filters the 40 atomic skills in [`REGISTRY.md`](./REGISTRY.md) into a
+filters the 45 atomic skills in [`REGISTRY.md`](./REGISTRY.md) into a
 **MUST / SHOULD / MAY** adoption matrix, an apply-order sequence, and
 task-driven recipes.
 
@@ -12,7 +12,7 @@ task-driven recipes.
 ## 1. Adoption matrix
 
 <!-- BEGIN AUTO:matrix -->
-### MUST — every service (27)
+### MUST — every service (28)
 
 | Skill | One-line summary |
 | --- | --- |
@@ -35,16 +35,17 @@ task-driven recipes.
 | [`permissions`](./permissions/SKILL.md) | Wire authentication & authorization into a Spring Boot microservice using the Strategy + Handler pattern. |
 | [`pluggable-architecture`](./pluggable-architecture/SKILL.md) | Treat every external technology integration (cache, database, metrics backend, message broker, object store, secret manager, identity provider, …) as a swappabl. |
 | [`project-types`](./project-types/SKILL.md) | Meta-skill — picks the right combination of public skills for the **kind** of project being created. |
-| [`quality-review`](./quality-review/SKILL.md) | Run a SOLID / clean-code / project-conventions review on a class, package, or pull request. |
+| [`quality-review`](./quality-review/SKILL.md) | Run a SOLID / clean-code / testability / project-conventions review on a class, package, or pull request. |
 | [`release-versioning`](./release-versioning/SKILL.md) | Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-release), git tag = ar. |
 | [`request-metrics`](./request-metrics/SKILL.md) | Implement per-request domain metrics in a Spring Boot microservice using the canonical Filter + Recorder + Parser pattern. |
 | [`resilience-patterns`](./resilience-patterns/SKILL.md) | Beyond simple retries — implement advanced stability patterns using Resilience4j (Bulkheads, Timeouts, Rate Limiters) and architectural strategies (Fallback, Si. |
 | [`security-hardening`](./security-hardening/SKILL.md) | Cross-cutting security beyond authentication & authorization — input validation, OWASP Top 10 checklist tailored to Spring Boot, CORS, rate limiting, secret man. |
 | [`spring-boot-conventions`](./spring-boot-conventions/SKILL.md) | Standard Spring Boot 3 idioms every Java microservice should adopt — typed @ConfigurationProperties over @Value, profile management, conditional beans, JSR-380 . |
 | [`static-analysis`](./static-analysis/SKILL.md) | Mechanically enforce code style and catch bug classes — Spotless (formatter), SpotBugs (bug patterns), Error-Prone (compile-time bug patterns), NullAway (null-s. |
+| [`testable-code-principles`](./testable-code-principles/SKILL.md) | Foundational principles for writing testable code - LEGO Bricks (small, focused, self-explanatory components), SDK-like design (document through names not comme. |
 | [`unit-tests`](./unit-tests/SKILL.md) | Generate meaningful, high-coverage JUnit 5 + Mockito unit tests for Spring Boot classes. |
 
-### SHOULD — when the service has the feature (12)
+### SHOULD — when the service has the feature (14)
 
 | Skill | One-line summary |
 | --- | --- |
@@ -58,6 +59,8 @@ task-driven recipes.
 | [`openapi-first-codegen`](./openapi-first-codegen/SKILL.md) | Drive controllers and DTOs from an OpenAPI 3 contract at the repo root (`api. |
 | [`persistence`](./persistence/SKILL.md) | Wire the persistence layer of a Spring Boot service — Spring Data JPA repositories, JPA entities (records vs classes), Flyway migrations, transaction boundaries. |
 | [`rate-limiting`](./rate-limiting/SKILL.md) | Protect the service from abuse and ensure fair usage using rate-limiting strategies. |
+| [`response-layout`](./response-layout/SKILL.md) | Wire layout query parameter support (?layout=summary/detailed/full) into a Spring Boot REST endpoint using the Strategy + Handler + Registry pattern. |
+| [`response-mapper`](./response-mapper/SKILL.md) | Wire API versioning and response projection mapping into a Spring Boot REST API using the Strategy + Handler + Registry pattern. |
 | [`sdk-publishing`](./sdk-publishing/SKILL.md) | Producer-side of the lego-brick principle. |
 | [`uml-diagram`](./uml-diagram/SKILL.md) | Create and maintain UML diagrams using Mermaid to visualize system architecture, component relationships, and interaction flows. |
 
@@ -82,6 +85,7 @@ graph LR
   persistence --> async_api_patterns
   ci --> cd
   static_analysis --> ci
+  testable_code_principles --> code_structure
   unit_tests --> component_tests
   documentation_and_adr --> context_maintenance
   project_types --> create_repo
@@ -106,6 +110,7 @@ graph LR
   code_structure --> input_validation
   exception_handling --> input_validation
   spring_boot_conventions --> input_validation
+  validation_pattern --> input_validation
   component_tests --> integration_tests
   code_structure --> messaging
   observability --> messaging
@@ -115,12 +120,14 @@ graph LR
   api_design --> openapi_first_codegen
   code_structure --> permissions
   exception_handling --> permissions
+  strategy_registry_pattern --> permissions
   code_structure --> persistence
   pluggable_architecture --> persistence
   code_structure --> pluggable_architecture
   spring_boot_conventions --> pluggable_architecture
   unit_tests --> quality_review
   static_analysis --> quality_review
+  testable_code_principles --> quality_review
   observability --> rate_limiting
   external_client --> rate_limiting
   pluggable_architecture --> rate_limiting
@@ -129,12 +136,24 @@ graph LR
   code_structure --> request_metrics
   observability --> request_metrics
   spring_boot_conventions --> request_metrics
+  strategy_registry_pattern --> request_metrics
   external_client --> resilience_patterns
+  code_structure --> response_layout
+  spring_boot_conventions --> response_layout
+  strategy_registry_pattern --> response_layout
+  code_structure --> response_mapper
+  spring_boot_conventions --> response_mapper
+  strategy_registry_pattern --> response_mapper
   release_versioning --> sdk_publishing
   static_analysis --> sdk_publishing
   permissions --> security_hardening
   code_structure --> spring_boot_conventions
+  code_structure --> strategy_registry_pattern
+  spring_boot_conventions --> strategy_registry_pattern
   code_structure --> unit_tests
+  testable_code_principles --> unit_tests
+  code_structure --> validation_pattern
+  spring_boot_conventions --> validation_pattern
 ```
 <!-- END AUTO:graph -->
 

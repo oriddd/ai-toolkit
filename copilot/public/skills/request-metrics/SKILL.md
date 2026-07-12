@@ -3,14 +3,17 @@ name: request-metrics
 description: Implement per-request domain metrics in a Spring Boot microservice using the canonical Filter + Recorder + Parser pattern. A single OncePerRequestFilter measures elapsed time for every request, resolves the metric name from a URI-pattern map, delegates to a use-case-specific MetricsRecorder (Strategy + Registry), and emits a Micrometer Timer with structured tags extracted by pluggable parsers (HTTP method, response status, authenticated client ID, and any domain-specific tag). Add new use-case metrics by adding one new MetricsRecorder — the filter and registry never change. Apply whenever a new timed, domain-meaningful endpoint metric is needed.
 tier: must
 applies_to: [rest, monolith]
-depends_on: [code-structure, observability, spring-boot-conventions]
+depends_on: [code-structure, observability, spring-boot-conventions, strategy-registry-pattern]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-07-05
+version: 1.1
+last_reviewed: 2026-07-12
 ---
 
 # Request Metrics Skill (public)
+
+> **Pattern Foundation:** This skill is a concrete application of the [strategy-registry-pattern](../strategy-registry-pattern/SKILL.md) skill. 
+> Read that skill first to understand the foundational pattern, then return here for the metrics-specific implementation.
 
 Domain metrics in a Spring Boot service live in a dedicated `monitor/` package
 that follows the **Filter → Recorder → Parser** pattern. A single filter
@@ -19,10 +22,9 @@ structured tags. Adding a metric for a new endpoint requires adding exactly
 **one new `MetricsRecorder` class** — the filter, registry, and parsers never
 change. This is the open/closed principle (OCP) applied to observability.
 
-> This skill is the concrete implementation of Pattern B described in
-> `code-structure` §3. `observability` covers the three-pillar platform setup
-> (Micrometer, structured logs, OpenTelemetry). This skill covers domain-level
-> per-request metrics on top of that foundation.
+> This skill applies the **Filter-based variation** of the strategy-registry-pattern.
+> `observability` covers the three-pillar platform setup (Micrometer, structured logs, OpenTelemetry). 
+> This skill covers domain-level per-request metrics on top of that foundation.
 
 ## 1. Package structure
 

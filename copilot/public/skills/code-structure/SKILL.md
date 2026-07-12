@@ -1,13 +1,13 @@
 ---
 name: code-structure
-description: Apply the canonical Java/Spring Boot package hierarchy and design patterns (Strategy + Registry, OncePerRequestFilter for metrics, Recorder pattern, Operation/Service/Controller layering) when creating or refactoring a microservice.
+description: Apply the canonical Java/Spring Boot package hierarchy and design patterns (Strategy + Registry, OncePerRequestFilter for metrics, Recorder pattern, Operation/Service/Controller layering) when creating or refactoring a microservice. Every class is a LEGO brick - small, focused, self-explanatory, independently testable. Names document the code, comments are rarely needed.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
-depends_on: []
+depends_on: [testable-code-principles]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-06-28
+version: 1.1
+last_reviewed: 2026-07-12
 ---
 
 # this Code Structure Skill
@@ -34,16 +34,122 @@ com.example.<domain>.<subdomain>/
 ├── monitor/       # metrics filter, recorders, parsers (see Pattern B)
 ├── operation/     # use-case orchestrators (one class per public use case)
 ├── permission/    # authorization strategies + handler (see Pattern A)
+├── repository/    # data-access wrappers around a client/adapter (thin, per fetch shape)
+├── analyzer/      # pure-function business logic (event/history/state analysis)
+├── scheduler/     # @Scheduled tasks — orchestrate only (see rule below)
 └── service/       # business logic / IO – called by operations
 ```
+
+> `repository/`, `analyzer/`, and `scheduler/` are **only present when needed**
+> — do not scaffold empty packages. They exist to give background jobs,
+> data-access shapes, and pure analysis logic a home *outside* of `service/`
+> when a single service class would otherwise mix concerns.
 
 ### Layering rules
 
 ```
-controller ──► operation ──► service ──► client
-                 │             │
+controller ──► operation ──► service ──► repository ──► client
+                 │             │              │
                  └──► permission, converter, monitor (cross-cutting)
+                                                │
+                                     analyzer (pure functions)
+                                                │
+                 scheduler ──► service / repository / analyzer  (never client directly)
 ```
+
+## 1b. The LEGO Bricks Principle (Foundational)
+
+> **Core Philosophy:** Every class and method you write is a LEGO brick that
+> snaps together with others. Each brick must be **small**, **focused**, and
+> **self-explanatory**.
+
+This principle is foundational to the entire code structure and directly
+supports both **SOLID principles** and **testability**. See
+[`testable-code-principles`](../testable-code-principles/SKILL.md) for the
+complete rationale.
+
+### What makes a good LEGO brick?
+
+**✅ Small and focused:**
+- Class: ≤ 200 LOC (preferably ≤ 100)
+- Method: ≤ 30 LOC, cyclomatic complexity ≤ 10
+- One clear responsibility per class/method
+
+**✅ Self-explanatory names:**
+- Class and method names describe **exactly** what the component does
+- **No comments needed** to understand the purpose
+- Examples: `DocumentValidator`, `PdfToHtmlConverter`,
+  `UserPermissionsCheckStrategy`
+
+**✅ Easy to replace or rearrange:**
+- Depends on interfaces, not concrete implementations
+- Can be swapped via configuration without changing business logic
+- New behavior = new brick, not modification of existing brick (OCP)
+
+**✅ Independently testable:**
+- Clear inputs and outputs
+- No hidden dependencies (static methods, global state, file I/O)
+- Each brick has its own focused test class
+
+### Recognizing when to split a brick
+
+**Smell:** A class needs internal section comments like:
+```java
+public class DocumentService {
+    // --- validation ---
+    private void validate(...) { ... }
+    
+    // --- transformation ---
+    private byte[] transform(...) { ... }
+    
+    // --- persistence ---
+    private void save(...) { ... }
+}
+```
+
+**Fix:** Each comment reveals a missing brick:
+```java
+@Component public class DocumentValidator { ... }      // validation brick
+@Component public class DocumentTransformer { ... }    // transformation brick
+@Component public class DocumentRepository { ... }     // persistence brick
+
+@Component
+@RequiredArgsConstructor
+public class DocumentService {
+    private final DocumentValidator validator;
+    private final DocumentTransformer transformer;
+    private final DocumentRepository repository;
+    
+    public Document process(Document doc) {
+        validator.validate(doc);
+        byte[] transformed = transformer.transform(doc.getContent());
+        return repository.save(doc.withContent(transformed));
+    }
+}
+```
+
+Now each brick:
+- Has a **single, testable responsibility**
+- Can be **replaced** independently (e.g., swap `DocumentValidator` for
+  `StrictDocumentValidator`)
+- Has a **self-explanatory name** — no comments needed
+- Is **small** (each class ≤ 50 LOC instead of one 150 LOC class)
+
+### LEGO bricks → SOLID mapping
+
+| LEGO Principle | SOLID Principle | Benefit |
+|----------------|-----------------|---------|
+| **Small, focused** | Single Responsibility | One test suite per brick, clear failure isolation |
+| **Easy to replace** | Open/Closed, Liskov Substitution | Add/swap bricks without breaking existing code or tests |
+| **Interface-based** | Dependency Inversion, Interface Segregation | Mock bricks easily in tests; clear contracts |
+| **Self-explanatory** | Single Responsibility | Code reads like documentation; minimal comments |
+
+See [`testable-code-principles`](../testable-code-principles/SKILL.md) for
+detailed examples of testable vs. non-testable code.
+
+## 1c. Layer Responsibilities
+
+Each layer in the hierarchy has a specific, focused responsibility:
 
 - **Controllers** only translate HTTP ⇄ DTO and delegate to **one** `Operation`.
 - **Operations** orchestrate a single use case: permission check → service calls →
@@ -52,29 +158,54 @@ controller ──► operation ──► service ──► client
 - **Clients** wrap an external system (HTTP/gRPC). They never throw raw
   framework exceptions – translate to a domain `*Exception` from the
   `exception/` package.
+- **Repositories** provide **one method per fetch shape** on top of a client
+  (`fetchById`, `fetchByStatus`, `fetchHistory`). They own query-building and
+  transport-error handling; they do **not** transform DTOs or apply business
+  rules. Split into multiple small classes (`*ListFetcher`, `*DetailsFetcher`,
+  `*HistoryFetcher`) rather than a fat repository.
+- **Analyzers** are stateless, side-effect-free functions over domain data
+  (`ActivityProgressCalculator`, `RiskScoreEvaluator`). No I/O, no Spring
+  dependencies beyond `@Component`. Trivially unit-testable.
+- **Schedulers** (`@Scheduled` beans) are **orchestrators only** — they call
+  `service/`, `repository/`, and `analyzer/`. A scheduler that queries a
+  client directly, builds its own query strings, or re-implements analysis
+  logic is a duplication smell → move the logic into `repository/` or
+  `analyzer/` and inject it.
 - **Models** are immutable where possible (records / `@Value`).
-- Cross-cutting concerns (`permission`, `monitor`, `converter`) live in their
-  own packages and are wired via Spring DI.
+- Cross-cutting concerns (`permission`, `monitor`, `converter`, `analyzer`)
+  live in their own packages and are wired via Spring DI.
 
 ### Naming
 
 - One public class per file.
 - Suffixes are meaningful: `*Controller`, `*Operation`, `*Service`, `*Client`,
   `*Strategy`, `*Handler`, `*Registry`, `*Recorder`, `*Parser`, `*Filter`,
-  `*Config`, `*Exception`.
+  `*Config`, `*Exception`, `*Fetcher`, `*Builder`, `*Converter`,
+  `*Calculator`, `*Analyzer`, `*Scheduler`, `*Task`.
+- **Lego-brick sizing.** Prefer many small, named classes (≤ ~100 lines,
+  single responsibility) over one long orchestrator. If a class needs a
+  section comment like `// --- progress calculation ---` inside it, that
+  section is a missing `*Calculator` / `*Fetcher` / `*Builder`.
 - Test classes mirror the package of the class under test under `src/test/java`.
 
-## 2. Pattern A — Strategy + Handler (used in `permission/` and `converter/`)
+## 2. Pattern A — Strategy + Handler (used in `permission/`, `converter/`, `layout/`, `mapper/`)
+
+> **Foundational Pattern:** This is an application of the [strategy-registry-pattern](../strategy-registry-pattern/SKILL.md) skill.
+> Read that skill for the complete pattern definition and all component responsibilities.
 
 When the same operation has **multiple interchangeable implementations** chosen
-at runtime, use this trio:
+at runtime, use this pattern:
 
-1. **`<X>Strategy`** – interface with a `supports(...)` / `canHandle(...)` method
-   plus the business method.
-2. Concrete `@Component` strategies implementing the interface.
-3. **`<X>Handler`** (or `<X>Registry`) – `@Component` that receives
-   `List<<X>Strategy>` via constructor injection and dispatches by calling the
-   `supports` method:
+1. **`<X>Strategy`** – interface with a `supports(...)` / `canHandle(...)` method plus the business method
+2. **Concrete strategies** – `@Component` classes implementing the interface
+3. **`<X>Registry`** – `@Component` that receives `List<<X>Strategy>` via constructor injection and routes by calling `canHandle`
+4. **`<X>Handler`** – orchestrator that resolves context, calls registry, executes strategy
+
+**Reference implementations in this repo:**
+- `permission/` — PermissionsCheckStrategy + PermissionsHandler (see [permissions](../permissions/SKILL.md))
+- `monitor/` — MetricsRecorder + MetricsRecorderRegistry (see [request-metrics](../request-metrics/SKILL.md))
+- `layout/` — LayoutStrategy + LayoutHandler (see [response-layout](../response-layout/SKILL.md))
+- `mapper/` — MapperStrategy + MapperHandler (see [response-mapper](../response-mapper/SKILL.md))
 
 ```java
 @Component
@@ -106,9 +237,14 @@ indicating you should introduce a strategy.
 
 ## 3. Pattern B — Metrics Filter + Recorder Registry (used in `monitor/`)
 
+> **Foundational Pattern:** This is a **Filter-based variation** of the [strategy-registry-pattern](../strategy-registry-pattern/SKILL.md) skill.
+> Read that skill for the complete pattern definition. This section covers the filter-specific aspects.
+
 For request-level observability use a single `OncePerRequestFilter` that
 delegates to a **recorder** chosen by a registry, plus pluggable **parsers**
 that extract tags from the request/response.
+
+Full implementation details in [request-metrics](../request-metrics/SKILL.md) skill.
 
 ```
 monitor/
@@ -299,8 +435,11 @@ When applying this skill to a new module:
 
 - [ ] Create the empty package skeleton listed in §1.
 - [ ] Create `<ServiceName>Application.java` with `@SpringBootApplication`,
-      `@ComponentScan`, `@PropertySource("classpath:application.yaml")`,
-      and `@EnableScheduling` if scheduled tasks are needed.
+      `@ComponentScan`, `@PropertySource("classpath:application.yaml")`.
+      **Never** put `@EnableScheduling` / `@EnableAsync` / `@EnableCaching`
+      here — each goes on its own dedicated `@Configuration` class
+      (`SchedulingConfig`, `AsyncConfig`, `CachingConfig`) so test slices
+      can opt out. See `spring-boot-conventions` §7b.
 - [ ] Add `application.yaml` with `server.port`, `server.servlet.context-path`,
       actuator exposure (`prometheus,health,info,httptrace`), and
       `management.endpoint.health.probes.enabled: true`.

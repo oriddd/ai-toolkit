@@ -22,8 +22,14 @@ time, tests green after every step.
 | Anti-pattern | Target skill |
 | --- | --- |
 | `@Value` for grouped props | `spring-boot-conventions` |
+| Same infra property read via `@Value` in ≥ 2 classes | `spring-boot-conventions` + `external-client` §11b |
+| `@EnableScheduling` / `@EnableAsync` / `@EnableCaching` on `@SpringBootApplication` | `spring-boot-conventions` §7b |
 | Business logic in controller | `code-structure` |
 | Raw `WebClient`/`RestClient` in service | `external-client` |
+| Scheduler doing its own SDK calls / query building | `code-structure` §1 + `refactoring-playbook` §14 |
+| Bloated `client/<dep>/` (fetchers + analyzers + schedulers all inside) | `external-client` §11b + `refactoring-playbook` §13 |
+| Duplicated fetch / analyze logic across packages | `refactoring-playbook` §15 |
+| Stream over a nullable-fetch method with no `Objects::nonNull` filter | `quality-review` §9a |
 | Inline `if (principal.isAdmin)` auth | `permissions` |
 | Custom exception without hierarchy | `exception-handling` |
 | `e.printStackTrace()` / plain-text logs | `observability` |

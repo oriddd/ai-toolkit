@@ -7,7 +7,7 @@ to build production-grade Java 21 / Spring Boot microservices faster.
 
 ## What is this toolkit?
 
-A **vendor-neutral catalogue of 40 reusable coding patterns** (Skills) and
+A **vendor-neutral catalogue of 45 reusable coding patterns** (Skills) and
 **documentation templates** (Context) for Java 21 / Spring Boot microservices.
 
 Core philosophy: every service you build should read like an open-source SDK —
@@ -185,7 +185,7 @@ python3 public/skills/build-indexes.py
 ## 7. Validating the catalogue
 
 ```bash
-# Validate all 40 skills (frontmatter, links, template refs, indexes in sync)
+# Validate all 45 skills (frontmatter, links, template refs, indexes in sync)
 bash public/skills/validate-skills.sh
 
 # Rebuild REGISTRY.md and BACKEND_GUILD.md matrix/graph from frontmatter

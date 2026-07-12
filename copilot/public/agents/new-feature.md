@@ -13,6 +13,9 @@ IF new validation rule:     → input-validation
 IF new async/event:         → messaging, graceful-shutdown
 IF new scheduled job:       → spring-boot-conventions §7b
 IF new metric needed:       → request-metrics
+IF layout query param:      → response-layout (returns different field sets based on ?layout=summary/detailed/full)
+IF API versioning:          → response-mapper (supports multiple API versions with different DTOs)
+IF pluggable behavior:      → strategy-registry-pattern (multiple implementations selected at runtime)
 ```
 ## Always apply
 - `code-structure` — package layout, layering, naming
