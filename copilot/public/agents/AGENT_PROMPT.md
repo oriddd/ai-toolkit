@@ -76,15 +76,54 @@ These come from `BACKEND_GUILD.md §4`. They are not advisory:
 24. Domain endpoint metrics use the Filter → Recorder → Parser pattern
     (`request-metrics`).
 ## 4. HITL (human-in-the-loop) skills — when to ask
-Three skills require asking the developer instead of inferring:
+
+### Skills that REQUIRE asking the developer:
 - **`project-types`** — ask which shape the project is if not stated.
 - **`create-repo`** — runs the full scaffolding questionnaire.
 - **`health-indicator`** — ask for the downstream's name, base URL,
   expected status code, probe interval before generating the indicator.
-For every other skill, **infer aggressively** from context. Do not ask
-clarifying questions for things the catalogue prescribes (e.g., never
-ask "should we use Mockito or EasyMock?" — the answer is in
-`unit-tests`).
+- **`external-client`** — **CRITICAL**: Ask about API complexity and scale before choosing pattern (Simple Wrapper vs Lite Client vs Full 5-Layer). See skill §0 for decision tree.
+
+### Pattern Selection HITL Checkpoints
+
+**IMPORTANT**: Before applying heavyweight patterns, ask about **scale and growth**:
+
+#### External-Client Pattern Selection
+**STOP and ASK** before applying 5-layer pattern:
+1. How many API endpoints/methods do you need NOW? (1-4, 5-9, 10+)
+2. Is this simple REST CRUD or complex SDK integration?
+3. Do you expect this to grow significantly in next 6 months?
+
+**Decision:**
+- 1-4 simple endpoints → Simple RestClient Wrapper (3 files)
+- 5-9 endpoints, some complexity → Lite Client (5 files)  
+- 10+ endpoints OR complex DSL → Full 5-Layer (7-9 files)
+
+**Default Rule**: When uncertain, start simple. It's easier to add layers than remove them.
+
+#### Operation Layer Decision
+**STOP and ASK** before creating operation layer:
+1. Does controller orchestration involve 5+ service calls?
+2. Is there complex permission checking + business logic + audit logging?
+3. Are there multi-step transactions across repositories?
+
+**Decision:**
+- Simple orchestration (2-4 service calls) → Controller calls services directly
+- Complex orchestration (5+ steps, transactions) → Operation layer
+
+**Default Rule**: Start without operations. Add when controller exceeds ~100 LOC or has complex multi-step logic.
+
+### When NOT to ask
+
+For **prescriptive decisions** (tools, library choices), **infer from catalogue**:
+- ❌ Don't ask: "Should we use Mockito or EasyMock?" → `unit-tests` prescribes Mockito
+- ❌ Don't ask: "Should we use @Value or @ConfigurationProperties?" → `spring-boot-conventions` prescribes ConfigurationProperties
+- ❌ Don't ask: "Should we log JSON or plaintext?" → `observability` prescribes JSON
+
+For **scale/complexity decisions** (pattern selection), **ASK the developer**:
+- ✅ DO ask: "How many endpoints will this client have?"
+- ✅ DO ask: "Is this orchestration simple or complex?"
+- ✅ DO ask: "Do you expect significant growth in this area?"
 ## 5. Templating tokens
 When a skill ships files under `templates/`, substitute these tokens
 verbatim:

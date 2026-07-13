@@ -260,13 +260,23 @@ bean in isolation, validator with mocked `ConstraintValidatorContext`) →
 
 ### 3.11 New downstream microservice integration
 
-`external-client` (create `client/<dep>/` with `*Service` → `*CoreService` →
-`*Client` + `handler/request/` + `handler/response/` + `constant/`) →
-`exception-handling` (domain exception for non-2xx) → `health-indicator`
+**CRITICAL - HITL CHECKPOINT**: Before applying pattern, ASK developer:
+- How many API endpoints/methods needed NOW? (1-4, 5-9, 10+)
+- Is this simple REST CRUD or complex SDK integration?
+- Expected growth in next 6 months?
+
+**Pattern Selection** (see `external-client` §0):
+- **1-4 simple endpoints** → `external-client` Pattern 1 (Simple Wrapper: 3 files)
+- **5-9 endpoints** → `external-client` Pattern 2 (Lite Client: 5 files)
+- **10+ OR complex DSL** → `external-client` Pattern 3 (Full 5-Layer: 7-9 files)
+
+Then continue with: `exception-handling` (domain exception for non-2xx) → `health-indicator`
 (readiness probe for the new dependency) → `resilience-patterns` (circuit
 breaker + retry) → `request-metrics` (add a recorder if the call is an
 endpoint the team wants to meter) → `unit-tests` (every layer) →
 `integration-tests` (WireMock against the real HTTP boundary).
+
+**Default Rule**: When uncertain, start with Pattern 1. Refactor to Pattern 2/3 when complexity justifies it.
 
 ### 3.12 New domain endpoint metric
 
@@ -290,8 +300,12 @@ producing code must validate the diff against this list before returning.
 5. **Authorization** goes through `PermissionsHandler`, never inline
    `if (principal.isAdmin)` (`permissions`).
 6. **Outbound HTTP** goes through an `*Client` in its own sub-package —
-   never raw `WebClient` / `RestClient` calls in a service
-   (`external-client`).
+   never raw `WebClient` / `RestClient` calls in a service.
+   **Pattern complexity must match integration scale** (`external-client` §0):
+   - Simple CRUD (1-4 endpoints) → Simple Wrapper pattern
+   - Medium complexity (5-9 endpoints) → Lite Client pattern  
+   - Complex SDK (10+ endpoints OR complex DSL) → Full 5-Layer pattern
+   **HITL required**: Ask developer about scale before choosing pattern.
 7. **Transactions** live in the service layer, `readOnly = true` for
    queries (`persistence` §4).
 8. **`@Async` and `@Scheduled`** use a named `TaskExecutor` and a property-
@@ -340,6 +354,11 @@ producing code must validate the diff against this list before returning.
     BadRequestException(...)` in a controller, operation, or service
     (`input-validation`).
 23. **Every external downstream is wrapped in a `client/<dep>/` sub-package.**
+    **Pattern choice depends on scale** — ask developer before applying:
+    - 1-4 simple CRUD endpoints → Simple Wrapper (3 files)
+    - 5-9 endpoints with complexity → Lite Client (5 files)
+    - 10+ endpoints OR complex DSL → Full 5-Layer (7-9 files)
+    See `external-client` §0 decision tree. Default: start simple, add layers when needed.
     Callers depend only on `*Service`; `WebClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package. `exchangeToMono` + `handleResponse` handles
     all non-2xx. Filter map, request building, response parsing, and boolean

@@ -5,9 +5,9 @@ tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, spring-boot-conventions, validation-pattern]
 ships_templates: false
-hitl: false
-version: 1.2
-last_reviewed: 2026-07-12
+hitl: true
+version: 1.3
+last_reviewed: 2026-07-13
 ---
 
 # Input Validation Skill (public)
@@ -24,6 +24,75 @@ RFC 7807 `ProblemDetail` 400 responses — wired automatically by the
 > Ad-hoc `if (x == null) throw new BadRequestException(...)` blocks inside
 > controllers, operations, or services are an **anti-pattern**. The validation
 > layer owns input contracts; business logic assumes inputs are already valid.
+
+## 0. CRITICAL: Check OpenAPI Schema First (Avoid Redundancy)
+
+**STOP: Before creating custom validators, check if OpenAPI already handles it:**
+
+### OpenAPI Handles These Validations (DON'T Create Custom Validators)
+
+| Validation Type | OpenAPI Syntax | Example |
+|-----------------|----------------|---------|
+| **Enum values** | `enum: [value1, value2]` | `layout: enum: [all, metadata]` |
+| **Format** | `format: email/uri/date` | `email: {type: string, format: email}` |
+| **Range** | `minimum/maximum` | `age: {type: integer, minimum: 0, maximum: 150}` |
+| **Length** | `minLength/maxLength` | `name: {type: string, minLength: 1, maxLength: 100}` |
+| **Pattern** | `pattern: "regex"` | `phone: {type: string, pattern: "^\\+[0-9]+$"}` |
+| **Required** | `required: [field]` | `required: [userId, action]` |
+| **Array size** | `minItems/maxItems` | `tags: {type: array, minItems: 1}` |
+
+**If OpenAPI can express it → DON'T create custom validator (redundant!)**
+
+### Custom Validators ONLY For These
+
+| Validation Type | Why Custom Needed | Example |
+|-----------------|-------------------|---------|
+| **Cross-field** | Multiple fields interact | `startDate < endDate` |
+| **Business rules** | Domain logic | `age >= 18 for accountType=PREMIUM` |
+| **Database lookups** | External state | `userId exists in DB` |
+| **Complex logic** | Beyond simple regex | `IBAN checksum validation` |
+| **Conditional** | Rule depends on another field | `If country=US, state required` |
+
+### Decision Tree
+
+```
+Does validation involve:
+├─ Single field, simple check (enum, range, format, pattern)?
+│  └─ Can OpenAPI express it?
+│     ├─ YES → Use OpenAPI schema ← NO custom validator
+│     └─ NO → Custom Jakarta ConstraintValidator
+└─ Multiple fields or complex business logic?
+   └─ Custom Spring Validator (cross-field)
+```
+
+### Anti-Pattern Example
+
+```yaml
+# api.yaml
+parameters:
+  - name: layout
+    schema:
+      type: string
+      enum: [all, metadata]  # ← OpenAPI already validates!
+```
+
+```java
+// ❌ REDUNDANT - OpenAPI Generator already validates enum
+@Target({ElementType.PARAMETER, ElementType.FIELD})
+@Constraint(validatedBy = WorkflowLayoutValidator.class)
+public @interface ValidWorkflowLayout { ... }
+
+@Component
+public class WorkflowLayoutValidator implements ConstraintValidator<ValidWorkflowLayout, String> {
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        return value.equals("all") || value.equals("metadata");  // ← Duplicates OpenAPI
+    }
+}
+```
+
+**Fix**: Delete custom validator, OpenAPI handles it.
+
+---
 
 ## Two canonical styles
 

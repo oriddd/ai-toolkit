@@ -5,9 +5,9 @@ tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
-hitl: false
-version: 2.0
-last_reviewed: 2026-07-01
+hitl: true
+version: 2.1
+last_reviewed: 2026-07-13
 ---
 
 # External Client Skill
@@ -16,6 +16,92 @@ Every external dependency is wrapped in its own **self-contained sub-package**
 under `client/`. The package is a mini-SDK: consumers depend on **one**
 domain-friendly `*Service` facade and never see `WebClient`, `Mono`, SDK types,
 or remote DTOs. This is the **lego-brick** convention.
+
+## 0. CRITICAL: Pattern Selection (Human-in-the-Loop Required)
+
+**STOP: Before applying this skill, ASK the developer:**
+
+1. **API Complexity**: Is this a simple REST CRUD API or complex SDK integration?
+2. **Current Scale**: How many API endpoints/methods do you need NOW?
+3. **Future Growth**: Do you expect this to grow to 10+ endpoints in next 6 months?
+4. **Query Complexity**: Does this API require complex query building (filters, DSL)?
+5. **Response Complexity**: Is response parsing simple (1:1 JSON mapping) or complex (nested transformations)?
+
+### Decision Tree
+
+Based on answers, use this pattern:
+
+#### Pattern 1: Simple RestClient Wrapper (1-4 simple CRUD endpoints)
+**Use when:**
+- ✅ Simple REST CRUD (GET, POST, PUT, DELETE)
+- ✅ 1-4 endpoints currently needed
+- ✅ No complex query building
+- ✅ Simple JSON → POJO mapping
+- ✅ No shared request/response logic
+
+**Structure (3 files, ~300 LOC):**
+```
+client/<dep>/
+├── <Dep>Client.java              # All-in-one: RestClient + methods
+├── <Dep>ClientConfig.java        # RestClient bean
+└── <Dep>Properties.java          # @ConfigurationProperties
+```
+
+**Example**: Simple CRUD microservice, basic lookup service, health check proxy
+
+#### Pattern 2: Lite Client (5-9 endpoints, some complexity)
+**Use when:**
+- ✅ 5-9 endpoints
+- ✅ Some shared query building (pagination, filtering)
+- ✅ Some response parsing complexity
+- ✅ Growing but still manageable
+
+**Structure (5-6 files, ~500 LOC):**
+```
+client/<dep>/
+├── <Dep>Client.java              # RestClient wrapper
+├── <Dep>ClientConfig.java
+├── <Dep>Properties.java
+├── <Dep>RequestBuilder.java      # Shared query/filter building
+└── <Dep>ResponseParser.java      # Shared response extraction
+```
+
+**Example**: Paginated list APIs, filtered search with 5-10 filters
+
+#### Pattern 3: Full 5-Layer SDK Pattern (10+ endpoints, high complexity)
+**Use when:**
+- ✅ 10+ endpoints OR
+- ✅ Complex query DSL (Elasticsearch-style) OR
+- ✅ Multi-step protocols (Kafka producer patterns) OR
+- ✅ Heavy DTO transformation (SDK types → domain models) OR
+- ✅ Shared filter builders used across many operations
+
+**Structure (7-9 files, ~800 LOC):**
+```
+client/<dep>/
+├── <Dep>Service.java             # Facade
+├── constant/<Dep>Constants.java
+├── core/
+│   ├── <Dep>ClientConfig.java
+│   ├── <Dep>Client.java
+│   └── <Dep>CoreService.java
+└── handler/
+    ├── request/<Dep>RequestBuilder.java
+    └── response/
+        ├── <Dep>ResponseParser.java
+        └── <Dep>ResponseVerifier.java
+```
+
+**Example**: Elasticsearch integration, Kafka with custom protocols, AWS SDK wrappers
+
+### When Uncertain: Start Simple, Refactor When Needed
+
+**Default Rule**: If unsure, start with Pattern 1 (Simple Wrapper). Refactor to Pattern 2 or 3 when:
+- You add 5th similar method and see duplication
+- Request building becomes complex (>10 lines per method)
+- Response parsing diverges significantly per operation
+
+**It's easier to add layers than remove them.**
 
 ## 1. Canonical package structure
 
