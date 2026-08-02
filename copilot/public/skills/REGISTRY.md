@@ -11,7 +11,7 @@ enforce that every skill has a home in this file.
 
 | Tier | Count |
 | --- | --- |
-| Public | **45** |
+| Public | **46** |
 
 ## Public skills
 
@@ -33,12 +33,13 @@ Legend — **T** = ships templates; **HITL** = human-in-the-loop;
 | [`documentation-and-adr`](./documentation-and-adr/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | `uml-diagram` | Ship documentation as code — README, CONTRIBUTING, ARCHITECTURE (C4 levels 1–3 in PlantUML / Structurizr), Architecture Decision Records (AD. |
 | [`domain-modeling`](./domain-modeling/SKILL.md) | SHOULD |  |  | rest, event, monolith | `code-structure` | Tactical Domain-Driven Design vocabulary every Java microservice should adopt — Bounded Context, Aggregate Root, Entity, Value Object, Domai. |
 | [`exception-handling`](./exception-handling/SKILL.md) | MUST | ✓ |  | rest, event, monolith | `code-structure` | Wire a clean error contract for a Spring Boot microservice — a typed domain exception hierarchy, a static ExceptionMessages catalogue, and a. |
-| [`external-client`](./external-client/SKILL.md) | MUST | ✓ |  | rest, event, scheduler, monolith | `code-structure`, `observability`, `pluggable-architecture` | Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). |
+| [`external-client`](./external-client/SKILL.md) | MUST | ✓ | ✓ | rest, event, scheduler, monolith | `code-structure`, `observability`, `pluggable-architecture` | Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). |
 | [`feature-flags`](./feature-flags/SKILL.md) | SHOULD |  |  | rest, event, monolith | `code-structure`, `pluggable-architecture` | Implement feature toggles (flags) to decouple deployment from release. |
+| [`git-commit-conventions`](./git-commit-conventions/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | — | Write and sequence git commits so history stays reviewable and bisectable — Conventional Commit prefixes (feat, fix, docs, style, refactor, . |
 | [`github-actions-ci`](./github-actions-ci/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | `static-analysis` | Alternative to the Jenkins-based `ci` skill — GitHub Actions workflows for build / test / image / release / dependency-scan. |
 | [`graceful-shutdown`](./graceful-shutdown/SKILL.md) | MUST |  |  | rest, event, scheduler, monolith | — | Wire graceful shutdown into a Spring Boot service so Kubernetes pod terminations drain in-flight requests, async work, message consumers, an. |
 | [`health-indicator`](./health-indicator/SKILL.md) | SHOULD | ✓ | ✓ | rest, event, scheduler, monolith | `cd`, `observability` | Interactive (HITL) skill that adds a Spring Boot Actuator readiness HealthIndicator for a downstream dependency. |
-| [`input-validation`](./input-validation/SKILL.md) | MUST |  |  | rest, monolith | `code-structure`, `exception-handling`, `spring-boot-conventions`, `validation-pattern` | Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level r. |
+| [`input-validation`](./input-validation/SKILL.md) | MUST |  | ✓ | rest, monolith | `code-structure`, `exception-handling`, `spring-boot-conventions`, `validation-pattern` | Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level r. |
 | [`integration-tests`](./integration-tests/SKILL.md) | SHOULD |  |  | rest, event, monolith | `component-tests` | Drive a Spring Boot microservice against real downstream dependencies (DB, broker, S3-compatible object store, mocked HTTP) using Testcontai. |
 | [`local-dev-experience`](./local-dev-experience/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | — | Make the inner loop reproducible in under 5 minutes — docker-compose for downstream dependencies, Makefile/Justfile commands,. |
 | [`messaging`](./messaging/SKILL.md) | SHOULD | ✓ |  | event, monolith | `code-structure`, `observability`, `pluggable-architecture` | Wire async messaging (Kafka or RabbitMQ) into a Spring Boot service with the canonical patterns — idempotent consumer, transactional outbox . |
@@ -51,7 +52,7 @@ Legend — **T** = ships templates; **HITL** = human-in-the-loop;
 | [`quality-review`](./quality-review/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | `unit-tests`, `static-analysis`, `testable-code-principles` | Run a SOLID / clean-code / testability / project-conventions review on a class, package, or pull request. |
 | [`rate-limiting`](./rate-limiting/SKILL.md) | SHOULD |  |  | rest, monolith | `observability`, `external-client`, `pluggable-architecture` | Protect the service from abuse and ensure fair usage using rate-limiting strategies. |
 | [`refactoring-playbook`](./refactoring-playbook/SKILL.md) | MAY |  |  | rest, event, scheduler, library, monolith | `quality-review` | Step-by-step migrations from common anti-patterns to the canonical patterns shipped by the other public skills — `@Value` → `@ConfigurationP. |
-| [`release-versioning`](./release-versioning/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | `ci` | Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-re. |
+| [`release-versioning`](./release-versioning/SKILL.md) | MUST |  |  | rest, event, scheduler, library, monolith | `ci`, `git-commit-conventions` | Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-re. |
 | [`request-metrics`](./request-metrics/SKILL.md) | MUST |  |  | rest, monolith | `code-structure`, `observability`, `spring-boot-conventions`, `strategy-registry-pattern` | Implement per-request domain metrics in a Spring Boot microservice using the canonical Filter + Recorder + Parser pattern. |
 | [`resilience-patterns`](./resilience-patterns/SKILL.md) | MUST |  |  | rest, event, monolith | `external-client` | Beyond simple retries — implement advanced stability patterns using Resilience4j (Bulkheads, Timeouts, Rate Limiters) and architectural stra. |
 | [`response-layout`](./response-layout/SKILL.md) | SHOULD |  |  | rest, monolith | `code-structure`, `spring-boot-conventions`, `strategy-registry-pattern` | Wire layout query parameter support (?layout=summary/detailed/full) into a Spring Boot REST endpoint using the Strategy + Handler + Registry. |

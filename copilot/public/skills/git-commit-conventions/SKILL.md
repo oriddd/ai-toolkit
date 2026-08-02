@@ -1,4 +1,16 @@
-# Git Commit Conventions
+---
+name: git-commit-conventions
+description: Write and sequence git commits so history stays reviewable and bisectable — Conventional Commit prefixes (feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert), small single-purpose commits, the rule that every commit compiles on its own, subject/body formatting, staging and amend workflow, commit-msg hook and interactive rebase clean-up, plus a squash-vs-preserve policy for pull requests. Use whenever creating a commit, splitting work into logical commits, or preparing a feature branch for review.
+tier: must
+applies_to: [rest, event, scheduler, library, monolith]
+depends_on: []
+ships_templates: false
+hitl: false
+version: 1.0
+last_reviewed: 2026-08-02
+---
+
+# Git Commit Conventions Skill (public)
 
 ## Purpose
 Enforce consistent, readable, and meaningful git commit messages using industry-standard prefixes and best practices.
@@ -261,6 +273,11 @@ When creating commits, verify:
 - [ ] Commit message explains WHY, not just WHAT
 - [ ] No "wip", "fix", or other vague messages
 - [ ] Commits are in dependency order (later commits can depend on earlier ones)
+
+## Cross-references
+- [`release-versioning`](../release-versioning/SKILL.md) — consumes these prefixes to drive SemVer bumps, CHANGELOG generation, and `commitlint` enforcement.
+- [`ci`](../ci/SKILL.md) / [`github-actions-ci`](../github-actions-ci/SKILL.md) — where the commit-msg lint job runs in the pipeline.
+- [`quality-review`](../quality-review/SKILL.md) — commit hygiene is part of the pull-request review checklist.
 
 ## References
 - [Conventional Commits](https://www.conventionalcommits.org/)

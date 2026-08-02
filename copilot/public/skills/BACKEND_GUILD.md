@@ -12,7 +12,7 @@ task-driven recipes.
 ## 1. Adoption matrix
 
 <!-- BEGIN AUTO:matrix -->
-### MUST — every service (28)
+### MUST — every service (29)
 
 | Skill | One-line summary |
 | --- | --- |
@@ -27,6 +27,7 @@ task-driven recipes.
 | [`documentation-and-adr`](./documentation-and-adr/SKILL.md) | Ship documentation as code — README, CONTRIBUTING, ARCHITECTURE (C4 levels 1–3 in PlantUML / Structurizr), Architecture Decision Records (ADRs) under `docs/adr/. |
 | [`exception-handling`](./exception-handling/SKILL.md) | Wire a clean error contract for a Spring Boot microservice — a typed domain exception hierarchy, a static ExceptionMessages catalogue, and a @RestControllerAdvi. |
 | [`external-client`](./external-client/SKILL.md) | Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). |
+| [`git-commit-conventions`](./git-commit-conventions/SKILL.md) | Write and sequence git commits so history stays reviewable and bisectable — Conventional Commit prefixes (feat, fix, docs, style, refactor, perf, test, build, c. |
 | [`github-actions-ci`](./github-actions-ci/SKILL.md) | Alternative to the Jenkins-based `ci` skill — GitHub Actions workflows for build / test / image / release / dependency-scan. |
 | [`graceful-shutdown`](./graceful-shutdown/SKILL.md) | Wire graceful shutdown into a Spring Boot service so Kubernetes pod terminations drain in-flight requests, async work, message consumers, and outbound clients w. |
 | [`input-validation`](./input-validation/SKILL.md) | Implement all input validation in a Spring Boot microservice using Jakarta Bean Validation (ConstraintValidator) for field/parameter-level rules and Spring Vali. |
@@ -133,6 +134,7 @@ graph LR
   pluggable_architecture --> rate_limiting
   quality_review --> refactoring_playbook
   ci --> release_versioning
+  git_commit_conventions --> release_versioning
   code_structure --> request_metrics
   observability --> request_metrics
   spring_boot_conventions --> request_metrics

@@ -19,6 +19,7 @@ This index helps you find the right skills to read based on the task you are per
 | **Publish a shared library (SDK)** | `sdk-publishing`, `api-design`, `documentation-and-adr` |
 | **Refactor large classes** | `refactoring-playbook`, `domain-modeling`, `code-structure` (Patterns A, B, C) |
 | **Implement authorization** | `permissions`, `api-design` (URL conventions), `component-tests` |
+| **Prepare a branch for review / cut a release** | `git-commit-conventions`, `quality-review`, `release-versioning`, `ci` |
 
 ## How to use this catalogue
 

@@ -66,6 +66,7 @@ working microservice.
 | [`quality-review`](./quality-review/SKILL.md) | SOLID / clean-code / testability audit with **43 items** including testability anti-patterns (static methods, global state), positive & negative test coverage, and quantitative thresholds (complexity ≤ 10, method ≤ 30 LOC, mutation score ≥ 75 %, …). |
 | [`adapter-contract-tests`](./adapter-contract-tests/SKILL.md) | TCK-style shared abstract test suite per port, run against every adapter so swapping a provider cannot change business behaviour — proves the lego-brick contract. |
 | **Lifecycle** | |
+| [`git-commit-conventions`](./git-commit-conventions/SKILL.md) | Conventional Commit prefixes, small single-purpose commits, every commit compiles on its own, subject/body rules, commit-msg hook + interactive rebase clean-up, squash-vs-preserve policy for PRs. |
 | [`release-versioning`](./release-versioning/SKILL.md) | Conventional Commits + SemVer + `release-please` / `semantic-release` + CHANGELOG generation + deprecation policy. |
 | [`local-dev-experience`](./local-dev-experience/SKILL.md) | `docker-compose.yml` for deps, `Makefile`, `.devcontainer`, `.editorconfig`, pre-commit hooks. |
 
