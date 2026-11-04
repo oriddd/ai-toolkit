@@ -39,7 +39,7 @@ helm-chart/
 | `appPort` | `8080` | container port |
 | `contextPath` | `/my-service` | Spring `server.servlet.context-path`; used by health probes |
 | `imageRegistry` | `ghcr.io/<org>` | any OCI registry the cluster can pull from |
-| `runAsUser` / `runAsGroup` / `fsGroup` | `1000` | non-root pod UID/GID (override per environment) |
+| `runAsUser` / `runAsGroup` / `fsGroup` | `1000` | non-root pod UID/GID, written into the template as `{{runAsUser}}` etc. (must be able to read the image's files) |
 | `resources.requests` | `cpu: 500m`, `memory: 512Mi` | sensible defaults; tune per service |
 | `resources.limits` | `cpu: 1`, `memory: 1Gi` | |
 | `autoscaling.maxReplicas` | `5` | |
@@ -57,7 +57,9 @@ helm-chart/
    - `securityContext` (`runAsNonRoot: true`, `runAsUser/Group`, `fsGroup`, seccomp `RuntimeDefault`).
    - Container-level `securityContext`: `allowPrivilegeEscalation: false`, drop ALL capabilities, `privileged: false`, `readOnlyRootFilesystem: true` (use an `emptyDir` for `/tmp` if the app writes temp files).
    - `enableServiceLinks: false`, `hostNetwork/PID/IPC: false`.
-   - Liveness + readiness probes on `{{contextPath}}/actuator/health/{liveness,readiness}`.
+   - Startup + liveness + readiness probes on `{{contextPath}}/actuator/health/{liveness,readiness}` (liveness and readiness every 10 s so a hung pod is replaced in about 30 s).
+   - `terminationGracePeriodSeconds: 60` and a `preStop` sleep, so the pod drains before `SIGKILL` (`graceful-shutdown` skill).
+   - A `/tmp` `emptyDir` — the template mounts it because the root filesystem is read-only.
    - `serviceAccountName: {{ .Chart.Name }}`.
    *(Add AppArmor annotations or shared ConfigMaps as needed for your platform.)*
 4. **`templates/_helpers.tpl`** – Keep the image registry configurable through

@@ -48,7 +48,7 @@ libraries or token shapes are assumed.
 | [`sdk-publishing`](../plugins/ai-toolkit-java-build/skills/sdk-publishing/SKILL.md) | Producer side — turn an internal module into a Spring Boot starter (auto-config with `@ConditionalOnMissingBean` defaults, configuration metadata, SemVer + deprecation). |
 | [`messaging`](../plugins/ai-toolkit-java-build/skills/messaging/SKILL.md) | Async messaging (Kafka / RabbitMQ): immutable events, transactional outbox, idempotent consumer, DLQ, schema evolution. |
 | [`rate-limiting`](../plugins/ai-toolkit-java-build/skills/rate-limiting/SKILL.md) | Protect from abuse: token bucket, sliding window; local enforcement (Bucket4j, Resilience4j) and distributed limiting (Redis). |
-| [`persistence`](../plugins/ai-toolkit-java-build/skills/persistence/SKILL.md) | Spring Data JPA + **Flyway (§3) or Liquibase (§3b)** forward-only migrations + `@Version` optimistic locking + auditing + Specification pattern + transaction boundaries + N+1 prevention. |
+| [`persistence`](../plugins/ai-toolkit-java-build/skills/persistence/SKILL.md) | Spring Data JPA + **Flyway (§3)** forward-only migrations + `@Version` optimistic locking + auditing + Specification pattern + transaction boundaries + N+1 prevention. |
 | **Build, deploy, operate** | |
 | [`ci`](../plugins/ai-toolkit-java-ops/skills/ci/SKILL.md) | Vendor-neutral Jenkins declarative pipeline + Dockerfile + Maven `pom.xml`. |
 | [`github-actions-ci`](../plugins/ai-toolkit-java-ops/skills/github-actions-ci/SKILL.md) | Same contract as `ci` but for GitHub Actions (build / image / release / Trivy / cosign / SBOM / Dependabot). |

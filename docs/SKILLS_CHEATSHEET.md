@@ -46,8 +46,8 @@ mkdir -p plugins/$P/skills/$SKILL/templates
 cat > plugins/$P/skills/$SKILL/SKILL.md << 'EOF'
 ---
 name: my-skill
-description: One paragraph — what this skill prescribes and why.
-tier: SHOULD
+description: One paragraph — what this skill prescribes and why. Use when <the situation that should trigger it>.
+tier: should
 applies_to: [rest, event, monolith]
 depends_on: [code-structure]
 ships_templates: false

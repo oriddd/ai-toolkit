@@ -78,7 +78,7 @@ while IFS= read -r f; do
 done < <(tracked)
 [ "$noise" -eq 0 ] && pass "no .DS_Store / .idea / IDE files tracked"
 
-# 1c. Broken or self-referential symlinks anywhere in the tree.
+# 1c. Broken symlinks, or symlinks that point at the repo root, anywhere in the tree.
 sym=0
 while IFS= read -r link; do
   target="$(readlink "$link")"
@@ -104,8 +104,8 @@ fi
 section "2. Confidential / internal content"
 
 # 2a. Absolute user paths (leak usernames + machine directory codenames).
-if git grep -nIE "(/Users/[a-z0-9._-]+/|/home/[a-z0-9._-]+/|C:\\\\Users\\\\[A-Za-z0-9._-]+)" -- . ':(exclude)prepare-for-publish.sh' 2>/dev/null \
-      | grep -vE "/path/to/|/Users/<|/home/<" > /tmp/pfp_paths.$$; then
+if git grep -nIoE "(/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/|C:\\\\Users\\\\[A-Za-z0-9._-]+)" -- . ':(exclude)prepare-for-publish.sh' 2>/dev/null \
+      | grep -vE ":/(Users|home)/(name|user|username|you|me|example)/$" > /tmp/pfp_paths.$$; then
   while IFS= read -r line; do fail "absolute user path leak: $line"; done < /tmp/pfp_paths.$$
 else
   pass "no absolute user paths (/Users, /home, C:\\Users) in tracked files"
@@ -117,7 +117,7 @@ rm -f /tmp/pfp_paths.$$
 BLOCK=()
 if [ -f "$ROOT/.publication-blocklist" ]; then
   while IFS= read -r line; do
-    line="${line%%#*}"; line="$(echo "$line" | xargs 2>/dev/null)"
+    line="${line%%#*}"; line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"   # not xargs: it chokes on quotes and would drop the term
     [ -n "$line" ] && BLOCK+=("$line")
   done < "$ROOT/.publication-blocklist"
   pass "loaded extra terms from .publication-blocklist"
@@ -170,7 +170,7 @@ git grep -nIE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" -- . ':(exclude)L
 git grep -nIE "\b[A-Z]{2,6}-[0-9]{2,6}\b" -- . 2>/dev/null \
   | grep -vE "PROJ-|TICKET-|ADR-|JSR-|ISO-|RFC-|UTF-|SHA-|CVE-|TD-0|AES-|HS-|HTTP-|TLS-" \
   | while IFS= read -r line; do warn "ticket-key-like string: ${line:0:120}"; done
-git grep -nIE "https?://[A-Za-z0-9.-]+\.(local|internal|corp|lan)\b|:8443\b" -- . 2>/dev/null \
+git grep -nIE "https?://[A-Za-z0-9.-]+\.(local|internal|corp|lan)\b|:8443\b" -- . ':(exclude)prepare-for-publish.sh' 2>/dev/null \
   | while IFS= read -r line; do fail "internal-looking host: ${line:0:120}"; done
 
 # 2f. AI-tool attribution must not appear in tracked content or in any commit message.

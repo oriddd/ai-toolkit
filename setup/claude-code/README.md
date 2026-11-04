@@ -27,15 +27,15 @@ install the phase plugins one by one.
 | `ai-toolkit-workflow` | `ai-toolkit-quality` |
 | `ai-toolkit-quality` | — |
 
-A language's routing table is injected only when the project is that language (`pom.xml` / `build.gradle`,
-`pyproject.toml` / `requirements*.txt` / `setup.cfg` / `Pipfile`, or a `package.json` that contains `react-native`).
+A language's routing table is injected only when the project is that language (`pom.xml` / `build.gradle(.kts)` / `settings.gradle(.kts)`,
+`pyproject.toml` / `requirements*.txt` / `setup.py` / `setup.cfg` / `Pipfile`, or a `package.json` that contains `react-native`).
 Detection looks at the project root only.
 
 ## Phase plugins on their own
 
 Each phase plugin declares the plugins its skills depend on, so `ai-toolkit-java-build` alone also installs
-`-java-design`, `-java-ops`, `-java-quality` and `ai-toolkit-workflow`. The order is design → quality → ops → build; `-design` depends on
-nothing. `validate-skills.sh` fails a skill dependency its plugin does not declare, and any dependency cycle.
+`-java-design`, `-java-ops`, `-java-quality` and `ai-toolkit-workflow`. The order is design → quality → ops → build; `-design` depends only on the
+neutral `ai-toolkit-quality` (its routing table cites `completion-gate`). `validate-skills.sh` fails a skill dependency its plugin does not declare, and any dependency cycle.
 
 ## For a whole team
 

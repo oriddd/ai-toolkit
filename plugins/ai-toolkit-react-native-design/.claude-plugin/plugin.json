@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-react-native-design",
   "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft) Part of the `ai-toolkit-react-native` set — install that to get the whole language.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "oriddd"
   },
@@ -14,5 +14,8 @@
     "engineering-standards",
     "design",
     "react-native"
+  ],
+  "dependencies": [
+    "ai-toolkit-quality"
   ]
 }

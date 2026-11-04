@@ -53,7 +53,8 @@ It must:
 - Accept a `WebClient` via constructor.
 - Define `abstract` getters: `getServiceName()`, `getSuccessStatusCode()`,
   `getReadinessURI()`.
-- Catch `RestClientException` and any `Exception` → return `Health.down()`.
+- Apply a response timeout to the blocking call (about 2 s) — a hung dependency must not hang the probe.
+- Catch `WebClientException` and any `Exception` → return `Health.down()`.
 - Log at `debug` on every refresh; `error` on failure.
 
 ### b) `health/config/ReadinessClientConfig.java`
@@ -73,8 +74,8 @@ public class {{Dep}}HealthIndicator extends AbstractReadinessIndicator {
 
     @Autowired
     public {{Dep}}HealthIndicator(final WebClient readinessWebClient,
-                                  @Value("${ {{configKey}}.base-url }") final String baseUrl,
-                                  @Value("${ {{configKey}}.readiness-endpoint }") final String readinessEndpoint) {
+                                  @Value("${{{configKey}}.base-url}") final String baseUrl,
+                                  @Value("${{{configKey}}.readiness-endpoint}") final String readinessEndpoint) {
         super(readinessWebClient);
         this.baseUrl = baseUrl;
         this.readinessEndpoint = readinessEndpoint;
@@ -106,7 +107,7 @@ management:
             - {{indicatorBeanName}}     # ← add this line
 
 {{configKey}}:
-  base-url: http://${ {{baseUrlEnvHost}} :localhost}:${ {{baseUrlEnvPort}} :8080}{{baseUrlPath}}
+  base-url: http://${{{baseUrlEnvHost}}:localhost}:${{{baseUrlEnvPort}}:8080}{{baseUrlPath}}
   readiness-endpoint: {{readinessEndpoint}}
 ```
 
@@ -157,9 +158,9 @@ Generate alongside, using the `unit-tests` skill, asserting:
 Print:
 - File(s) created/modified.
 - The exact env vars the platform team must set in the target cluster.
-- The fact that the readiness probe will now fail-open if the dependency is
-  unreachable for longer than `failureThreshold * periodSeconds` (defaults
-  from `cd`: 3 × 60s = 3 minutes).
+- That the readiness probe now **fails closed**: when the dependency is unreachable for longer than
+  `failureThreshold * periodSeconds` (defaults from `cd`: 3 × 10 s = 30 s) the pod goes Unready and leaves the Service.
+  A shared outage therefore takes every replica out at once — add only dependencies the service truly cannot work without.
 
 ## Do / Don't
 

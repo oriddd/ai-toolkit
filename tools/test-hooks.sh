@@ -49,11 +49,11 @@ out="$(python3 -c 'import json; print(json.dumps({"tool_input":{"command":"ls","
 SAFEBIN="$(mktemp -d)"; for b in cat dirname grep bash sh env; do ln -s "$(command -v $b)" "$SAFEBIN/$b" 2>/dev/null; done
 out="$(mk_json 'git commit -m x' | PATH="$SAFEBIN" "$GUARD")"
 printf '%s' "$out" | grep -q '"permissionDecision": "ask"' || printf '%s' "$out" | grep -q 'permissionDecision' || { echo "FAIL: no-python fallback missed git commit"; fail=1; }
-for c in 'git revert HEAD' 'git am patch.mbox' 'git reset --hard HEAD~1' 'gh pr create --fill' 'gh -R a/b pr merge 3' 'gh release create v1'; do
+for c in 'git revert HEAD' 'git am patch.mbox' 'git reset --hard HEAD~1' 'gh pr create --fill' 'gh -R a/b pr merge 3' 'gh release create v1' 'npm publish' 'pnpm version patch' 'mvn -B release:prepare' 'mvn deploy'; do
   out="$(mk_json "$c" | PATH="$SAFEBIN" "$GUARD")"
   printf '%s' "$out" | grep -q '"permissionDecision":"ask"' || { echo "FAIL: no-python fallback missed: $c"; fail=1; }
 done
-for c in 'git status' 'git reset --soft HEAD~1' 'gh pr view 3' 'gh pr list'; do
+for c in 'git status' 'git reset --soft HEAD~1' 'gh pr view 3' 'gh pr list' 'npm run build' 'mvn -B verify' 'mvn dependency:tree'; do
   out="$(mk_json "$c" | PATH="$SAFEBIN" "$GUARD")"
   [ -z "$out" ] || { echo "FAIL: no-python fallback fired on: $c"; fail=1; }
 done

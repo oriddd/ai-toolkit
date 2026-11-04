@@ -70,15 +70,23 @@ One parser per additional tag (e.g. export format, order type):
 ```java
 @Component
 public class ExportFormatParser {
+    private static final Set<String> KNOWN_FORMATS = Set.of("csv", "pdf", "xlsx");
+
     public String parseExportFormat(final HttpServletRequest request) {
         final String format = request.getParameter("format");
-        return StringUtils.isBlank(format) ? MonitoringConstants.UNKNOWN : format;
+        if (StringUtils.isBlank(format)) {
+            return MonitoringConstants.UNKNOWN;
+        }
+        // the value is caller-controlled: map it onto a closed set, never use it as a tag as-is
+        return KNOWN_FORMATS.contains(format.toLowerCase(Locale.ROOT)) ? format.toLowerCase(Locale.ROOT) : MonitoringConstants.OTHER;
     }
 }
 ```
 
 Rules for all parsers:
 - **Never return `null` or `""`** — always return a non-blank sentinel.
+- **Tag values come from a closed set.** Never return a request parameter, header or path segment as-is: a client could
+  create unlimited time series. Map it onto known values and return `OTHER` for the rest (`observability`: fewer than 100 values per tag).
 - **Swallow exceptions** with a `log.error` and return the sentinel; a bad tag
   must not fail the request.
 - Keep the method name `parse<TagConcept>(request|response|…)` for consistency.

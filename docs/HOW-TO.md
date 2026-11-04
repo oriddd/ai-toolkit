@@ -60,6 +60,7 @@ agents/
   new-microservice-client.md Integrate a new downstream service
   new-validation.md          Add an input-validation rule
   new-metric.md              Add a domain request metric
+  test-writer.md             Write tests for existing classes (worker the other agents delegate to)
   code-review.md             Pre-PR quality review
   refactor.md                Migrate legacy code to catalogue patterns
   update-context.md          Update docs + CHANGELOG after a code change
@@ -96,11 +97,14 @@ bash tools/validate-skills.sh
 
 ## 3. Understanding the skill tiers
 
-| Tier | Meaning | Count |
-| --- | --- | --- |
-| **MUST** | Required in every service; PR fails without it | 27 |
-| **SHOULD** | Required when the service has that feature | 12 |
-| **MAY** | Optional; use when genuinely useful | 1 |
+| Tier | Meaning |
+| --- | --- |
+| **MUST** | Required in every service; PR fails without it |
+| **SHOULD** | Required when the service has that feature |
+| **MAY** | Optional; use when genuinely useful |
+| **FOUNDATIONAL** | A pattern other skills build on (`strategy-registry-pattern`, `validation-pattern`) |
+
+Current counts per tier are in [`REGISTRY.md`](REGISTRY.md) (generated).
 
 Start with MUST skills when building a new service. The apply-order in
 [`BACKEND_GUILD.md §2`](BACKEND_GUILD.md) tells you the right sequence.

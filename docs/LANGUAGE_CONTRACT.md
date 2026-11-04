@@ -46,7 +46,7 @@ A language is **complete** when it provides these concerns (names are `<slug>-<c
 | quality | `unit-tests`, `static-analysis` |
 | ops | `ci` |
 
-Languages marked **draft** (see `status:` in `plugin.json` description) may provide only these;
+Languages marked **draft** (marked "(draft)" in the plugin description) may provide only these;
 everything else is optional and added as the standards mature.
 
 ## Routing hook
@@ -73,7 +73,7 @@ Plugins declare `dependencies` in `plugin.json` (bare names, same marketplace; C
 The graph must stay acyclic and shallow:
 
 - A plugin depends on **every plugin its skills' `depends_on` name** and nothing more; the validator fails a missing dependency and any cycle.
-  So `-design` depends on nothing, `-quality` on `-design` (Python / React Native also `-build`), `-ops` on `-design` and `-quality`, and
+  So `-design` depends only on the neutral `ai-toolkit-quality` (its routing table cites `completion-gate`), `-quality` on `-design` (Python / React Native also `-build`), `-ops` on `-design` and `-quality`, and
   `-build` on what its skills need (Java: design, ops, quality, workflow). A skill never lists a skill from a *later* phase in `depends_on`;
   mention it in prose instead.
 - `ai-toolkit-<lang>` (java, python, react-native) is a manifest-only plugin that depends on that language's four phase plugins and

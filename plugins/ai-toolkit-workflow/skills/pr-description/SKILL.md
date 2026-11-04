@@ -72,15 +72,19 @@ Note the `version` integer — it is required for the update call.
 
 ### Step 2 — Replace the description
 
+Write the new description to a file and let `jq` build the JSON — hand-escaping quotes and newlines breaks on real text:
+
 ```bash
+body="$(mktemp)"
+jq -n --argjson version <VERSION> \
+      --arg title "<current title — must be included even if unchanged>" \
+      --rawfile description description.md \
+      '{version: $version, title: $title, description: $description}' > "$body"
 bb -X PUT \
   -H "Content-Type: application/json" \
-  --data '{
-    "version": <VERSION>,
-    "title":   "<current title — must be included even if unchanged>",
-    "description": "<full new description as a single JSON string — use \\n for newlines>"
-  }' \
+  --data @"$body" \
   "https://<host>/rest/api/1.0/projects/{proj}/repos/{repo}/pull-requests/{id}"
+rm -f "$body"
 ```
 
 **Important:**

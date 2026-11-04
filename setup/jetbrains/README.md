@@ -26,7 +26,7 @@ need it. Session-start cost is just the short pointer.
 Run once, from anywhere:
 
 ```bash
-ln -s /path/to/ai-toolkit ~/.ai-toolkit
+ln -sfn /path/to/ai-toolkit ~/.ai-toolkit
 ```
 
 Verify:
@@ -80,7 +80,7 @@ is automatic — just `git pull` in the ai-toolkit repo. No reinstall needed.
 
 | Problem | Fix |
 | --- | --- |
-| `~/.ai-toolkit` not found | Re-run: `ln -s /path/to/ai-toolkit ~/.ai-toolkit` |
+| `~/.ai-toolkit` not found | Re-run: `ln -sfn /path/to/ai-toolkit ~/.ai-toolkit` (`-n` replaces an existing link instead of creating one inside it) |
 | JetBrains doesn't see the instructions | Confirm the setting was saved in the correct IDE (each IDE has its own settings) |
 | `#file` path not resolving | Use the full expanded path: `/Users/<you>/.ai-toolkit/...` instead of `~/...` |
 | Skill file not found | Run `ls ~/.ai-toolkit/plugins/*/skills` (or look the skill up in `docs/REGISTRY.md`) to check available skills |

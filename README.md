@@ -38,7 +38,7 @@ All plugin names are prefixed `ai-toolkit`. How the axes and the per-language sk
 
 ## GitHub Copilot / JetBrains
 
-Prefer Copilot? Symlink the repo (`ln -s /path/to/ai-toolkit ~/.ai-toolkit`), paste
+Prefer Copilot? Symlink the repo (`ln -sfn /path/to/ai-toolkit ~/.ai-toolkit`), paste
 [`setup/jetbrains/copilot-global-instructions.md`](./setup/jetbrains/copilot-global-instructions.md) into
 JetBrains → Settings → Tools → GitHub Copilot → Custom Instructions, and load skills on demand:
 

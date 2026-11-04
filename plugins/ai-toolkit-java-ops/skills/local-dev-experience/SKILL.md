@@ -24,7 +24,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment: { POSTGRES_DB: foo, POSTGRES_USER: foo, POSTGRES_PASSWORD: foo }
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]      # bind to loopback — the dev credentials are weak
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U foo"]
       interval: 5s
@@ -32,13 +32,13 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     environment: { … KRaft single-node config … }
-    ports: ["9092:9092"]
+    ports: ["127.0.0.1:9092:9092"]
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:<pinned-release-tag>   # pin a RELEASE.* tag — never latest
     command: server /data --console-address ":9001"
     environment: { MINIO_ROOT_USER: foo, MINIO_ROOT_PASSWORD: foopass }
-    ports: ["9000:9000","9001:9001"]
+    ports: ["127.0.0.1:9000:9000","127.0.0.1:9001:9001"]
 ```
 
 Bring it up with `docker compose up -d` (wrapped by a Makefile target —
@@ -52,10 +52,11 @@ see below). Spring Boot's `application.yaml` defaults match these ports.
 ## 2. `Makefile` (or `Justfile`) — the canonical entry points
 
 ```makefile
-.PHONY: up down build test it lint format precommit run logs
+.PHONY: up down reset build test it lint format precommit run logs
 
 up:        ; docker compose up -d
-down:      ; docker compose down -v
+down:      ; docker compose down            # keeps the volumes (your local data)
+reset:     ; docker compose down -v         # also deletes the volumes — destroys local data
 build:     ; mvn -B -q -DskipTests package
 test:      ; mvn -B -q test
 it:        ; mvn -B -q -Dgroups=integration verify

@@ -76,7 +76,6 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_recorderFound_callsRecord() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/v1/invoices/e1/export");
         when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
         when(registry.getMetricsRecorder(MonitoringConstants.METRIC_EXPORT_INVOICE))
                 .thenReturn(recorder);
@@ -89,7 +88,6 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_chainThrows_recorderStillCalled() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/v1/invoices/e1/export");
         when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
         when(registry.getMetricsRecorder(any())).thenReturn(recorder);
         doThrow(new ServletException("boom")).when(chain).doFilter(any(), any());

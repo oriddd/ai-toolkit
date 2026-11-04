@@ -10,7 +10,7 @@ home="${HOME:?HOME is not set}"
 apply=0; [ "${1:-}" = "--apply" ] && apply=1
 [ -r "$names" ] || { echo "shipped-names.txt not found next to this plugin"; exit 1; }
 stamp="$(date +%Y%m%d-%H%M%S)"; backup="$home/.claude/ai-toolkit-old-copies-backup-$stamp"
-found=0
+found=0; moved=0
 while IFS=: read -r kind name; do
   name="${name%$'\r'}"; kind="${kind%$'\r'}"
   [ -n "$name" ] || continue
@@ -21,14 +21,14 @@ while IFS=: read -r kind name; do
   esac
   found=$((found + 1))
   if [ "$apply" -eq 1 ]; then
-    mkdir -p "$(dirname "$dest")" && mv "$src" "$dest" && echo "moved   $kind $name"
+    if mkdir -p "$(dirname "$dest")" && mv "$src" "$dest"; then moved=$((moved + 1)); echo "moved   $kind $name"; else echo "FAILED  $kind $name  ($src)" >&2; fi
   else
     echo "found   $kind $name  ($src)"
   fi
 done < "$names"
 if [ "$found" -eq 0 ]; then echo "No old copies found."; exit 0; fi
 if [ "$apply" -eq 1 ]; then
-  echo; echo "Moved $found item(s) to $backup — restore by moving them back."
+  echo; echo "Moved $moved of $found item(s) to $backup — restore by moving them back."
 else
   echo; echo "$found old copy(ies) found. Review, then re-run with --apply (moves them to a backup folder; nothing is deleted)."
   echo "Only remove copies you did not customise: a skill you edited yourself under the same name would be moved too."

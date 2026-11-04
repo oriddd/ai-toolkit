@@ -65,7 +65,7 @@ context/
 
 **Files to Update:**
 - `architecture.md` - Update design patterns, component structure
-- `*.puml` diagrams - Reflect new architecture
+- Diagrams (Mermaid in `context/*.md`; any `*.puml` if the project uses PlantUML) - Reflect new architecture
 - `code-standards.md` - Update if patterns change
 - `progress-tracker.md` - Note as technical change
 
@@ -119,7 +119,7 @@ When adding a caching layer:
 - [ ] Update `progress-tracker.md` with sprint progress
 - [ ] Review technical debt register
 - [ ] Update metrics (test coverage, mutation score, etc.)
-- [ ] Append to `CHANGELOG.md` for any changes
+- [ ] Append to `CHANGELOG.md` for any changes (unless a release bot owns it)
 
 ### After Major Changes
 - [ ] Update affected documentation files
@@ -178,6 +178,10 @@ mmdc -i context/system-context.md -o system-context.png
 ## CHANGELOG Maintenance
 
 The `CHANGELOG.md` is **append-only** at the top (under `[Unreleased]`).
+
+> **Release bot:** when release-please / semantic-release owns the changelog, do not edit it by hand — not the weekly append, not the release
+> rename (see `release-versioning`). Hand-maintained files use the Keep a Changelog headings (Added / Changed / Fixed); bot-generated
+> files use the bot's own headings.
 
 ### Adding Entries
 

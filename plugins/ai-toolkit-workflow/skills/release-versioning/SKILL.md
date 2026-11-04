@@ -120,7 +120,8 @@ mirrors the same value.
 - Mark with the language's deprecation marker (`@Deprecated(forRemoval = true, since = "1.4.0")`,
   `warnings.warn(..., DeprecationWarning)`, `@deprecated` TSDoc) and with `Deprecation` + `Sunset`
   headers on HTTP endpoints.
-- Remove after **2 minor releases** (or longer for public APIs).
+- Remove only in the next **MAJOR** release (removing an API is a breaking change, §2), and not before at least **2 minor releases**
+  after the deprecation — longer for public APIs.
 - CHANGELOG documents every deprecation under `### Deprecations`.
 
 ## 8. Branch model

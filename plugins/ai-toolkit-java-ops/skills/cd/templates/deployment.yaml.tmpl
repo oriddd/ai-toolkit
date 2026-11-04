@@ -16,13 +16,15 @@ spec:
     spec:
       enableServiceLinks: false
       securityContext:
-        fsGroup: 19000
+        fsGroup: {{fsGroup}}
         fsGroupChangePolicy: OnRootMismatch
-        runAsGroup: 19000
-        runAsUser: 19000
+        runAsGroup: {{runAsGroup}}
+        runAsNonRoot: true
+        runAsUser: {{runAsUser}}
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: {{ "{{" }} .Chart.Name {{ "}}" }}
+      terminationGracePeriodSeconds: 60   # > spring.lifecycle.timeout-per-shutdown-phase + preStop (graceful-shutdown skill)
       containers:
         - image: {{ "{{" }} .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.Version {{ "}}" }}
           imagePullPolicy: {{ "{{" }} .Values.image.pullPolicy {{ "}}" }}
@@ -36,22 +38,34 @@ spec:
                 - All
             privileged: false
             procMount: Default
+            readOnlyRootFilesystem: true
+          startupProbe:
+            httpGet:
+              path: {{contextPath}}/actuator/health/liveness
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
           livenessProbe:
             httpGet:
               path: {{contextPath}}/actuator/health/liveness
               port: http
-            failureThreshold: 10
+            failureThreshold: 3
             timeoutSeconds: 5
-            initialDelaySeconds: 30
-            periodSeconds: 300
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: {{contextPath}}/actuator/health/readiness
               port: http
             failureThreshold: 3
-            timeoutSeconds: 10
-            initialDelaySeconds: 10
-            periodSeconds: 60
+            timeoutSeconds: 5
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]   # let kube-proxy / ingress drop the endpoint; needs `sh` in the image
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: {{appPort}}
               name: http
@@ -60,6 +74,9 @@ spec:
             - name: LOG_LEVEL
               value: {{ "{{" }} .Values.logLevel | quote {{ "}}" }}
             # {{extraEnv}}
+      volumes:
+        - name: tmp
+          emptyDir: {}
       hostNetwork: false
       hostPID: false
       hostIPC: false

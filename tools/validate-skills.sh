@@ -216,6 +216,15 @@ else:
             owner = seen.get(dep)
             if owner and owner != pname and owner not in _closure(pname):
                 err(f"{os.path.relpath(path, root)}: depends_on `{dep}` lives in {owner}, which {pname} does not depend on (add it to plugin.json dependencies)")
+    # Qualified references (`ai-toolkit-x:skill`) in a plugin's docs and hooks must point at a plugin it depends on.
+    # The agents and docs plugins are optional by design and exempt.
+    _qref = re.compile(r"`(ai-toolkit-[a-z-]+):[a-z0-9-]+`")
+    for pname, pdir in listed.items():
+        reach = _closure(pname)
+        for f in glob.glob(os.path.join(pdir, "**", "*.md"), recursive=True) + glob.glob(os.path.join(pdir, "**", "*.sh"), recursive=True):
+            for target in sorted(set(_qref.findall(read(f)))):
+                if target != pname and target in listed and target not in reach and not target.endswith("-agents") and target != "ai-toolkit-docs":
+                    err(f"{os.path.relpath(f, root)}: cites a skill in {target}, which {pname} does not depend on (add it to plugin.json dependencies)")
     agent_names = {os.path.basename(a)[:-3] for a in glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md"))}
     for agent in glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md")):
         rel = os.path.relpath(agent, root)

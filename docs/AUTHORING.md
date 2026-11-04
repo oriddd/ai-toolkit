@@ -33,7 +33,10 @@ Every `SKILL.md` **must** begin with YAML frontmatter, on line 1:
 ```yaml
 ---
 name: <folder-name>          # MUST equal the parent directory name
-description: <one-paragraph> # MUST be present; agents grep this to choose a skill
+description: <one-paragraph> # MUST say WHEN to use it ("Use when …" / "Apply when …"); agents grep this to choose a skill
+tier: should                 # lowercase: must | should | may | foundational
+applies_to: [rest]           # project types
+depends_on: []               # skills this one needs (the plugin must depend on their plugins)
 ---
 ```
 
@@ -63,7 +66,7 @@ A SKILL.md should contain, in roughly this order:
    so cross-references in `BACKEND_GUILD.md` stay stable.
 6. **Anti-patterns / Do / Don't** — bullet list with ✅ / ❌ markers.
 7. **Cross-references** — bullet list linking the other skills this
-   skill leans on (use relative links: `../<other>/SKILL.md`).
+   skill leans on (link skills of the *same plugin* with `../<other>/SKILL.md`; name skills of other plugins in backticks — §1).
 
 ## 3b. Keep SKILL.md small — move deep dives to `references/`
 
@@ -118,19 +121,23 @@ Before opening a PR that adds or modifies a SKILL.md:
 - [ ] `SKILL.md` is under ~12 KB (hard limit 16 KB), or its deep-dive sections are in `references/` with a reference map (§3b).
 - [ ] Every `` `skill` §N `` citation resolves to a heading (the validator checks this).
 - [ ] `templates/` files use only `{{placeholder}}` syntax.
-- [ ] `README.md` has a new row.
-- [ ] `REGISTRY.md` has a new row (and updated total).
+- [ ] `docs/README.md` has a new row.
+- [ ] Run `python3 tools/build-indexes.py` — it regenerates `docs/REGISTRY.md` (never edit that file by hand).
 - [ ] `bash tools/validate-skills.sh` passes locally with zero errors.
 
 ## 6. Adding a brand-new skill (walkthrough)
 
 ```sh
 SKILL=my-new-skill
-mkdir -p $SKILL
-cat > $SKILL/SKILL.md <<'EOF'
+P=ai-toolkit-java-design     # the plugin that owns the skill's phase
+mkdir -p plugins/$P/skills/$SKILL
+cat > plugins/$P/skills/$SKILL/SKILL.md <<'EOF'
 ---
 name: my-new-skill
-description: One paragraph explaining what this skill does and when to apply it.
+description: One paragraph explaining what this skill does. Use when <the situation that should trigger it>.
+tier: should
+applies_to: [rest]
+depends_on: []
 ---
 
 # My New Skill
@@ -141,8 +148,8 @@ description: One paragraph explaining what this skill does and when to apply it.
 ## 1. …
 EOF
 
-$EDITOR README.md   # add a row
-$EDITOR REGISTRY.md        # add a row (and update total)
+$EDITOR docs/README.md            # add a row to the skill index
+python3 tools/build-indexes.py    # regenerates docs/REGISTRY.md and the other generated files
 
 bash tools/validate-skills.sh
 ```

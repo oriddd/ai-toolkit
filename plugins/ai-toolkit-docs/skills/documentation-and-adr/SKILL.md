@@ -46,15 +46,16 @@ docs/
                              # ArchUnit's slices (Java; import-linter / eslint boundaries elsewhere — see code-structure)
 ```
 
-Use **Structurizr DSL** or **C4-PlantUML**. Render in CI:
+Default to **Mermaid** — fenced `mermaid` blocks in `.md` files render natively on GitHub / GitLab, so there is nothing to render or commit
+(see `uml-diagram`). Use **Structurizr DSL** or **C4-PlantUML** only when you need C4 tooling; then render in CI:
 
 ```yaml
-- uses: cloudbees/plantuml-github-action@master
+- uses: cloudbees/plantuml-github-action@<commit-sha>   # pin a commit SHA — never @master
   with: { args: -tsvg docs/diagrams/*.puml }
 ```
 
-Generated SVGs are committed to `docs/diagrams/_rendered/`; pre-commit
-fails if `.puml` changed but the SVG was not regenerated.
+With PlantUML / Structurizr, generated SVGs are committed to `docs/diagrams/_rendered/`; pre-commit
+fails if `.puml` changed but the SVG was not regenerated. Mermaid diagrams need neither step.
 
 ## 4. `docs/adr/` — Architecture Decision Records
 
@@ -122,7 +123,7 @@ navigate without `grep`.
 ✅ Documentation is code: lives in the repo, is reviewed in PR, is rendered
 in CI.
 ✅ Every architectural choice has an ADR.
-✅ Diagrams are text-first (PlantUML / Structurizr) so they diff in git.
+✅ Diagrams are text-first (Mermaid by default; PlantUML / Structurizr when needed) so they diff in git.
 ❌ Never put architecture diagrams in Confluence or a slide deck "as the
 source of truth" — they drift the day after the meeting.
 ❌ Never amend a past ADR; supersede it.

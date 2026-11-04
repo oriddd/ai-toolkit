@@ -92,9 +92,14 @@ indexable by Elastic / Loki / Datadog without a parser.
 management:
   tracing:
     sampling.probability: 1.0   # 100% in dev / staging; 0.05 in prod, raise per incident
-otel:
-  exporter.otlp.endpoint: http://otel-collector:4317
-  resource.attributes: service.name={{artifactId}},service.version={{version}}
+  otlp:
+    tracing:
+      endpoint: http://otel-collector:4318/v1/traces   # OTLP over HTTP (Boot's default transport; gRPC needs management.otlp.tracing.transport=grpc)
+  opentelemetry:
+    resource-attributes:
+      service.version: {{version}}
+spring:
+  application.name: {{artifactId}}                      # becomes the OpenTelemetry service.name
 ```
 
 Conventions:

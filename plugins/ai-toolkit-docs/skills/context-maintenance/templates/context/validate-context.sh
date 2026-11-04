@@ -1,36 +1,38 @@
 #!/usr/bin/env bash
-# Validates that every .md file in context/ has its (REQUIRED) sections.
+# Validates that every .md file in context/ has content under each (REQUIRED) section.
+# "Content" = at least one line that is not blank and not inside an HTML comment (comments may span lines).
 set -euo pipefail
 CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 errors=0
 for f in "$CONTEXT_DIR"/*.md; do
   [ -e "$f" ] || continue
   rel="$(basename "$f")"
-  # Search for (REQUIRED) headers that don't have enough content
-  # This is a simple check: at least one line of non-comment text after the header.
-  while read -r line; do
-    if [[ "$line" =~ ^(##+.*\(REQUIRED\)) ]]; then
-      header="${BASH_REMATCH[1]}"
-      # Check if there is actual content before the next header or end of file
-      has_content=0
-      found_next=0
-      while read -r content_line; do
-        if [[ "$content_line" =~ ^##+ ]]; then
-           found_next=1
-           break
-        fi
-        # Ignore comments and empty lines
-        if [[ ! "$content_line" =~ ^[[:space:]]*$ ]] && [[ ! "$content_line" =~ ^"<!--" ]]; then
-          has_content=1
-          break
-        fi
-      done
-      if [ "$has_content" -eq 0 ]; then
-        echo "ERR: $rel: section '$header' is empty but required."
-        errors=$((errors + 1))
-      fi
-    fi
-  done < "$f"
+  out="$(awk -v rel="$rel" '
+    function flush() {
+      if (in_req && !has_content) printf "ERR: %s: section \047%s\047 is empty but required.\n", rel, header
+    }
+    /^##+/ { flush(); in_req = ($0 ~ /\(REQUIRED\)/); header = $0; has_content = 0; in_comment = 0; next }
+    in_req {
+      line = $0; text = ""
+      while (length(line) > 0) {
+        if (in_comment) {
+          i = index(line, "-->")
+          if (i == 0) { line = ""; break }
+          line = substr(line, i + 3); in_comment = 0
+        } else {
+          i = index(line, "<!--")
+          if (i == 0) { text = text line; line = ""; break }
+          text = text substr(line, 1, i - 1); line = substr(line, i + 4); in_comment = 1
+        }
+      }
+      if (text !~ /^[ \t\r]*$/) has_content = 1
+    }
+    END { flush() }
+  ' "$f")"
+  if [ -n "$out" ]; then
+    echo "$out"
+    errors=$((errors + $(printf '%s\n' "$out" | wc -l)))
+  fi
 done
 if [ "$errors" -gt 0 ]; then
   echo "FAILED: $errors context section(s) missing content."

@@ -9,17 +9,27 @@ base="${1:-}"
 if [ -z "$base" ]; then
   for c in origin/main origin/master main master; do git rev-parse --verify -q "$c" >/dev/null && { base="$c"; break; }; done
 fi
-[ -n "$base" ] || { echo "check-versions: no base ref found — skipped"; exit 0; }
+[ -n "$base" ] || { echo "check-versions: no base ref found"; [ -n "${CI:-}" ] && exit 1; echo "(skipped — set CI=1 to make this an error)"; exit 0; }
 mb="$(git merge-base "$base" HEAD 2>/dev/null || echo "$base")"
 fail=0
 for dir in plugins/*/; do
   p="$(basename "$dir")"
-  changed="$(git diff --name-only "$mb" -- "$dir" ':(exclude)'"$dir"'.claude-plugin/plugin.json' | head -1)"
+  changed="$({ git diff --name-only "$mb" -- "$dir" ':(exclude)'"$dir"'.claude-plugin/plugin.json'; git ls-files --others --exclude-standard -- "$dir"; } | grep -v '\.claude-plugin/plugin\.json$' | head -1)"
   [ -n "$changed" ] || continue
   new="$(python3 -c "import json,sys;print(json.load(open('$dir.claude-plugin/plugin.json')).get('version',''))")"
   old="$(git show "$mb:$dir.claude-plugin/plugin.json" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('version',''))" 2>/dev/null)"
-  if [ -n "$old" ] && [ "$old" = "$new" ]; then
+  [ -n "$old" ] || continue    # new plugin: nothing to compare against
+  order="$(python3 -c "
+import sys
+def v(s):
+    try: return tuple(int(x) for x in s.split('-')[0].split('.')[:3])
+    except ValueError: return None
+o, n = v(sys.argv[1]), v(sys.argv[2])
+print('same' if o is None or n is None or o == n else ('down' if n < o else 'up'))" "$old" "$new")"
+  if [ "$order" = "same" ]; then
     echo "FAIL: $p changed (e.g. $changed) but version is still $new — bump it in $dir.claude-plugin/plugin.json"; fail=1
+  elif [ "$order" = "down" ]; then
+    echo "FAIL: $p version went down ($old -> $new) — installed users would never receive it"; fail=1
   fi
 done
 [ $fail -eq 0 ] && echo "versions OK (against $base)"

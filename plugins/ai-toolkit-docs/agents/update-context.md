@@ -72,7 +72,7 @@ Then show the full updated content of each changed file.
 
 ## Non-negotiables
 
-- Never delete existing content — only add or update.
+- Never delete existing content — only add or update. (Pruning outdated content is the human monthly review in `context-maintenance`, not this agent.)
 - Every `context/` change must be in the **same logical unit** as the
   code change it describes (same PR / commit).
 - CHANGELOG entries use Conventional Commits format.

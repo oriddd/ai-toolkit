@@ -47,6 +47,7 @@ Create a new Spring Boot service for managing orders.
 | `new-metric` | Adding a domain request metric |
 | `code-review` | Pre-PR quality review against the non-negotiables |
 | `refactor` | Migrating legacy code to canonical patterns |
+| `test-writer` | Writing tests for classes that already exist (the worker the other agents delegate to) |
 | `update-context` | Updating docs / CHANGELOG after a change |
 
 ---

@@ -41,10 +41,10 @@ spec:
 ```
 
 Timing:
-1. K8s sends `SIGTERM` and removes the Pod from the Service endpoints.
-2. `preStop sleep 5` gives the ingress / kube-proxy time to update.
-3. Spring's graceful shutdown kicks in (30 s).
-4. K8s sends `SIGKILL` after `terminationGracePeriodSeconds`.
+1. K8s marks the Pod Terminating and starts removing it from the Service endpoints.
+2. The `preStop` hook runs (`sleep 5`) and gives the ingress / kube-proxy time to update.
+3. Only then does K8s send `SIGTERM`; Spring's graceful shutdown kicks in (up to 30 s).
+4. K8s sends `SIGKILL` once `terminationGracePeriodSeconds` has elapsed — the clock started at step 1, so it covers preStop **and** the drain.
 
 Always `terminationGracePeriodSeconds > timeout-per-shutdown-phase + preStop`.
 
