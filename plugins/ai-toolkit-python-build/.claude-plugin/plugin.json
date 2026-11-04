@@ -1,8 +1,18 @@
 {
   "name": "ai-toolkit-python-build",
   "description": "Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation and SQLAlchemy 2.0 persistence. (draft)",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "oriddd"
-  }
+  },
+  "license": "MIT",
+  "repository": "https://github.com/oriddd/ai-toolkit",
+  "homepage": "https://github.com/oriddd/ai-toolkit",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "engineering-standards",
+    "build",
+    "python"
+  ]
 }

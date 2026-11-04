@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-04
+
+### Changed — skills load on demand
+- The ten largest Java skills (`external-client`, `input-validation`, `request-metrics`, `code-structure`, `unit-tests`,
+  `strategy-registry-pattern`, `pattern-selection`, `testable-code-principles`, `quality-review`, `pluggable-architecture`)
+  keep decision gates, layout, Do / Don't and a reference map in `SKILL.md`. The code-heavy sections moved verbatim to
+  `references/` and are read only when needed: each `SKILL.md` is 45–83 % smaller, about 112 KB less across the ten.
+  Section numbers and headings are unchanged, so `skill §N` citations still resolve.
+- `pattern-selection` is generated as a lean `SKILL.md` plus `references/` from `docs/PATTERN_SELECTION_GUIDE.md`
+  (`tools/build-indexes.py --check` covers the references).
+- `docs/AUTHORING.md` §3b documents the `references/` convention.
+- Python and React Native plugins are versioned `0.1.0` to match their draft status; all other plugins are `1.1.0`.
+- CI actions are pinned by commit SHA and `base_ref` is passed through `env:`.
+
+### Added
+- `validate-skills.sh` now fails on a `SKILL.md` over 16 KB, on a review agent that is not read-only, and on a
+  `` `skill` §N `` citation that has no matching heading.
+- `plugin.json` metadata on every plugin: `license`, `repository`, `homepage`, `keywords`.
+
+### Fixed
+- Commit guard: `git commit -n` (`--no-verify`) and `git merge -n` / `git rebase -n` no longer skip the prompt; `-n` is
+  treated as a dry run only for `git push`.
+- Commit guard: `gh api` writes now ask — `--method=POST`, `-XPOST`, and bodies sent with `-f` / `-F` / `--field` / `--input`.
+- Commit guard: the no-python fallback also asks for `am`, `revert`, `reset --hard`, `gh pr create|merge` and `gh release create`.
+- Two citations that pointed at sections that do not exist (a `quality-review` item and a `code-structure` subsection), and a single logging annotation (`@Slf4j`).
+- `external-client` no longer prescribes an inline `@MockBean`; `component-tests` notes the Spring Boot 3.4 deprecation
+  in favour of `@MockitoBean`; the `ci` example uses `{{springBootVersion}}` instead of a pinned 3.3.4.
+- `docs/REGISTRY.md` totals list the real tiers (MUST / SHOULD / MAY / FOUNDATIONAL) instead of a single "Public" row.
+
+
 ### Changed — marketplace restructure (breaking: plugin and path names)
 - The catalogue is now a Claude Code **plugin marketplace** (`.claude-plugin/marketplace.json`,
   `plugins/ai-toolkit-<phase | lang-phase>/`). Skills, agents, context templates, tools and docs

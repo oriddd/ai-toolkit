@@ -1,10 +1,20 @@
 {
   "name": "ai-toolkit-java-design",
   "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Install this first for Java. Installing it also installs the language's build, quality and ops plugins and the neutral workflow and quality plugins.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "author": {
     "name": "oriddd"
   },
+  "license": "MIT",
+  "repository": "https://github.com/oriddd/ai-toolkit",
+  "homepage": "https://github.com/oriddd/ai-toolkit",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "engineering-standards",
+    "design",
+    "java"
+  ],
   "dependencies": [
     "ai-toolkit-java-build",
     "ai-toolkit-java-quality",

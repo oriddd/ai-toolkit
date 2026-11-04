@@ -1,10 +1,20 @@
 {
   "name": "ai-toolkit-python-agents",
   "description": "Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker (draft). Requires the python-* plugins.",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "oriddd"
   },
+  "license": "MIT",
+  "repository": "https://github.com/oriddd/ai-toolkit",
+  "homepage": "https://github.com/oriddd/ai-toolkit",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "engineering-standards",
+    "agents",
+    "python"
+  ],
   "dependencies": [
     "ai-toolkit-python-design",
     "ai-toolkit-docs"

@@ -31,6 +31,12 @@ A language's routing table is injected only when the project is that language (`
 `pyproject.toml` / `requirements*.txt` / `setup.cfg` / `Pipfile`, or a `package.json` that contains `react-native`).
 Detection looks at the project root only.
 
+## Install a language as a set
+
+Skills lean on skills in sibling plugins — for example the `java-build` skills cite `code-structure` from `java-design`.
+Install a language through its `-design` plugin, which depends on its siblings and pulls them in. Installing `-build`,
+`-ops` or `-quality` on its own works, but the references to sibling skills will not resolve.
+
 ## For a whole team
 
 Register the marketplace once in the repository so everyone is prompted to install it:
@@ -80,6 +86,9 @@ Every installed skill and agent adds its description to the session's skill list
 of the context window. With everything installed that is roughly 9–10k tokens, so **install only the languages you use**
 (about 2.5–6k tokens per language plus the neutral plugins). If descriptions are cut short in your setup, raise
 `skillListingBudgetFraction` in your settings or install fewer plugins.
+
+Skill *bodies* are not part of this budget: a body loads only when the skill is invoked, and the largest skills keep their
+code-heavy sections in `references/` files that load only when that part of the work needs them.
 
 ## Windows
 
