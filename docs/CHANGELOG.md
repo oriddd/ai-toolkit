@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-04
+
 ### Fixed — review pass
 - **Helm / ops:** the HPA target was 500 % CPU and could never scale out (now 80); the deployment template now has the `runAsNonRoot`, read-only root
   filesystem, `/tmp` volume, `terminationGracePeriodSeconds` + `preStop` and startup probe its skills require, and probe periods that detect a hung pod in
