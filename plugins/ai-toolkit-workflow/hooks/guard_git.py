@@ -28,7 +28,8 @@ WRAPPERS = {"sudo", "command", "env", "nohup", "exec", "builtin", "xargs", "nice
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
 GIT_OPTS_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env"}
 GIT_ALWAYS = {"commit", "push", "rebase", "cherry-pick", "merge", "am", "revert"}
-SAFE_FLAGS = {"--abort", "--continue", "--skip", "--quit", "--dry-run", "-n", "--show-current-patch", "-h", "--help"}
+SAFE_FLAGS = {"--abort", "--continue", "--skip", "--quit", "--dry-run", "--show-current-patch", "-h", "--help"}
+PUSH_DRY_RUN_FLAGS = {"-n"}  # `-n` is --no-verify for commit and --no-stat for merge/rebase, so it is safe only for push
 TAG_LIST_FLAGS = {"-l", "--list", "-n", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "-v", "--verify"}
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SHELL_C = re.compile(r"^-[A-Za-z]*c[A-Za-z]*$")
@@ -110,7 +111,8 @@ def git_risky(args):
     sub = args[i] if i < len(args) else ""
     rest = args[i + 1:]
     if sub in GIT_ALWAYS:
-        return not any(r in SAFE_FLAGS or r == "--no-commit" for r in rest)
+        safe = SAFE_FLAGS | PUSH_DRY_RUN_FLAGS if sub == "push" else SAFE_FLAGS
+        return not any(r in safe or r == "--no-commit" for r in rest)
     if sub == "tag":
         has_name = any(not r.startswith("-") for r in rest)
         return has_name and not any(r in TAG_LIST_FLAGS for r in rest)
