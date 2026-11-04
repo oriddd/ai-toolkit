@@ -31,7 +31,7 @@ Pair with [`github-actions-ci`](../github-actions-ci/SKILL.md) by picking
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.4</version>
+    <version>{{springBootVersion}}</version> <!-- a currently supported Spring Boot release -->
     <relativePath/>
   </parent>
 

@@ -16,8 +16,8 @@ Part of the [`external-client`](../SKILL.md) skill. Section numbers are stable; 
 - **`*ServiceTest`** — mock `CoreService`; assert domain-language methods
   guard blank inputs and call core methods correctly.
 
-For component tests, provide a `@MockBean` of the `*Service` (not the
-transport) in `ComponentTestConfiguration` — tests drive domain semantics,
+For component tests, provide a test double of the `*Service` (not the
+transport) through the shared `ComponentTestConfiguration` — tests drive domain semantics,
 not HTTP.
 
 ## 11b. Growth path — when the integration outgrows `client/<dep>/`

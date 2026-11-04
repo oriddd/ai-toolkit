@@ -199,7 +199,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 ## 5. Cross-cutting conventions
 
-- **Logging:** `@Slf4j` (or `@Log4j2`) – never `System.out`. Use
+- **Logging:** `@Slf4j` – never `System.out`. Use
   `log.debug` for happy-path detail, `log.warn` for recoverable, `log.error`
   for unexpected with the exception as the **last** argument (not
   concatenated). Never log secrets or URLs with credentials.

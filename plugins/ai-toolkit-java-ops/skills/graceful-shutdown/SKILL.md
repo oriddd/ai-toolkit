@@ -57,9 +57,8 @@ ex.setWaitForTasksToCompleteOnShutdown(true);
 ex.setAwaitTerminationSeconds(20);
 ```
 
-…and any hand-rolled `ExecutorService` follows the canonical pattern from
-`code-structure` §4e: `@PreDestroy` → `shutdown()` →
-`awaitTermination(...)` → `shutdownNow()` if timeout.
+…and any hand-rolled `ExecutorService` follows the canonical pattern:
+`@PreDestroy` → `shutdown()` → `awaitTermination(...)` → `shutdownNow()` if timeout.
 
 ## 4. Message consumers
 

@@ -116,7 +116,7 @@ duplicate.
 
 ### e) `application.yaml` (test)
 Set deterministic values so component tests do not perform real HTTP calls
-(or are stubbed by a `WireMock`/`@MockBean`):
+(or are stubbed by a `WireMock` server or a test double):
 
 ```yaml
 {{configKey}}:

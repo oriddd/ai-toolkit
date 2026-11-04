@@ -41,7 +41,7 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
    `exception-handling`.) Flag any `throw new RuntimeException("…")`
    in business code or inline error string.
 
-10. **Logging** — `@Slf4j` / `@Log4j2`; no `System.out`; no logging of secrets
+10. **Logging** — `@Slf4j`; no `System.out`; no logging of secrets
     or full URLs with credentials; `log.debug` for happy-path detail,
     `log.warn` for recoverable, `log.error` for unexpected with exception as
     last arg (not concatenated).

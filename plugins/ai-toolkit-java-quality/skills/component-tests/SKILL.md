@@ -141,6 +141,10 @@ the canonical template.
 
 ## `@MockBean` vs `@TestConfiguration` — decision matrix
 
+> **Spring Boot 3.4+:** `@MockBean` / `@SpyBean` are deprecated (removed in Boot 4.0) in favour of Spring Framework 6.2's
+> `@MockitoBean` / `@MockitoSpyBean`. On 3.4+ read every `@MockBean` / `@SpyBean` in these skills as the `@Mockito*` annotation;
+> the rules below are unchanged.
+
 | Use `@MockBean` directly in the test class when… | Use `@TestConfiguration` (this skill's default) when… |
 | --- | --- |
 | Only one test method needs the override | Multiple test classes share the same fakes |

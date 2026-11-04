@@ -25,7 +25,7 @@ public class FooClientConfig {
 
 ```java
 @Component
-@Log4j2
+@Slf4j
 public class FooClient {
     private final WebClient fooWebClient;
     private final String searchEndpoint;
