@@ -26,7 +26,7 @@ spec:
       serviceAccountName: {{ "{{" }} .Chart.Name {{ "}}" }}
       terminationGracePeriodSeconds: 60   # > spring.lifecycle.timeout-per-shutdown-phase + preStop (graceful-shutdown skill)
       containers:
-        - image: {{ "{{" }} .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.Version {{ "}}" }}
+        - image: {{ "{{" }} (.Values.global).imageRegistry | default .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.Version {{ "}}" }}
           imagePullPolicy: {{ "{{" }} .Values.image.pullPolicy {{ "}}" }}
           name: {{ "{{" }} .Chart.Name {{ "}}" }}
           resources: {{ "{{" }}- toYaml .Values.resources | nindent 12 {{ "}}" }}

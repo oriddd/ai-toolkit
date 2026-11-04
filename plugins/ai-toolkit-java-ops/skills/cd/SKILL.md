@@ -62,8 +62,10 @@ helm-chart/
    - A `/tmp` `emptyDir` — the template mounts it because the root filesystem is read-only.
    - `serviceAccountName: {{ .Chart.Name }}`.
    *(Add AppArmor annotations or shared ConfigMaps as needed for your platform.)*
-4. **`templates/_helpers.tpl`** – Keep the image registry configurable through
-   `{{ .Values.image.registry }}` so a deployment repo can override it.
+4. **`templates/_helpers.tpl`** – Resolve the image registry with
+   `{{ (.Values.global).imageRegistry | default .Values.image.registry }}` so a parent
+   (umbrella) chart can set it once for every service, and a standalone install
+   falls back to the chart's own value.
 5. **`templates/service.yaml`** – ClusterIP service exposing port `http` → `appPort`.
 6. **`templates/hpa.yaml`** – HorizontalPodAutoscaler tied to
    `.Values.autoscaling.{min,max}Replicas` and `targetCPUUtilizationPercentage`.
@@ -88,8 +90,8 @@ consumed by the Helm probes + ServiceMonitor.
 ## Do / Don't
 
 ✅ Keep secrets as `secretKeyRef` – never inline credentials in `values.yaml`.
-✅ Use `{{ .Values.image.registry }}` for the image registry so
-the chart works both standalone and when a deployment repo overrides the value.
+✅ Use `{{ (.Values.global).imageRegistry | default .Values.image.registry }}` for the
+image registry so the chart works both standalone and inside an umbrella chart.
 ❌ Never set `runAsUser: 0`.
 ❌ Never expose the actuator port separately – it lives on the same `appPort`.
 ❌ Never bake environment-specific image registries, ConfigMaps, or service
