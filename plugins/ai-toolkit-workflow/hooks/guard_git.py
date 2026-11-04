@@ -31,6 +31,8 @@ GIT_ALWAYS = {"commit", "push", "rebase", "cherry-pick", "merge", "am", "revert"
 SAFE_FLAGS = {"--abort", "--continue", "--skip", "--quit", "--dry-run", "--show-current-patch", "-h", "--help"}
 PUSH_DRY_RUN_FLAGS = {"-n"}  # `-n` is --no-verify for commit and --no-stat for merge/rebase, so it is safe only for push
 TAG_LIST_FLAGS = {"-l", "--list", "-n", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "-v", "--verify"}
+GH_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+GH_BODY_FLAGS = {"-f", "-F", "--field", "--raw-field", "--input"}
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SHELL_C = re.compile(r"^-[A-Za-z]*c[A-Za-z]*$")
 PKG_PUBLISH = {("npm", "version"), ("npm", "publish"), ("yarn", "publish"), ("pnpm", "publish"), ("yarn", "version"), ("pnpm", "version")}
@@ -129,10 +131,25 @@ def gh_risky(args):
     if rest[:2] in (["pr", "create"], ["pr", "merge"], ["release", "create"]):
         return not any(r in ("--help", "-h") for r in rest)
     if rest[:1] == ["api"]:
-        for j, r in enumerate(rest):
-            if r in ("-X", "--method") and j + 1 < len(rest) and rest[j + 1].upper() in ("POST", "PUT", "PATCH", "DELETE"):
-                return True
+        return gh_api_risky(rest[1:])
     return False
+
+
+def gh_api_risky(args):
+    """`gh api` writes when the method is a write verb, or — with no explicit method — when it sends a body (-f/-F/--input)."""
+    method, has_body = None, False
+    for j, a in enumerate(args):
+        if a in ("-X", "--method") and j + 1 < len(args):
+            method = args[j + 1]
+        elif a.startswith("--method="):
+            method = a.split("=", 1)[1]
+        elif a.startswith("-X") and len(a) > 2:
+            method = a[2:]
+        elif a in GH_BODY_FLAGS or a.startswith(("--field=", "--raw-field=", "--input=")) or re.match(r"^-[fF].", a):
+            has_body = True
+    if method is not None:
+        return method.upper() in GH_WRITE_METHODS
+    return has_body
 
 
 def command_start(seg):

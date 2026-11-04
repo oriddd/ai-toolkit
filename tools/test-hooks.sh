@@ -24,6 +24,8 @@ ASK=(
   'echo `git commit -m x`' 'sudo -u bob git commit -m x' 'env -i git commit -m x' 'nice -n 5 git push' 'timeout 5 git push' 'xargs -n1 git push'
   'bash -lc "git commit -m x"' 'sh -ec "git push"' 'bash --login -c "git commit -m x"' 'eval git commit -m x' 'bash -c "bash -c \"git push\""'
   'gh -R a/b pr create' 'gh release create v1' 'gh api -X POST repos/a/b/pulls' 'git.exe commit -m x' 'C:\\Program\ Files\\Git\\git.exe push'
+  'gh api --method=POST repos/a/b/pulls' 'gh api -XPOST repos/a/b/pulls' 'gh api -X delete repos/a/b' 'gh api --method PATCH repos/a/b/issues/1'
+  'gh api repos/a/b/pulls -f title=x' 'gh api repos/a/b/pulls -F draft=true' 'gh api repos/a/b/pulls --field title=x' 'gh api repos/a/b/pulls --input body.json'
   'npm version patch' 'npm publish' 'mvn release:prepare' 'mvn -B release:perform' 'mvn deploy'
 )
 QUIET=(
@@ -36,6 +38,7 @@ QUIET=(
   'git merge --no-commit feature' 'git commit -h' 'gh pr create --help' 'git rebase --show-current-patch' 'git am --abort'
   $'git status\ngit diff' 'git diff | grep commit' 'git status # commit later' 'git commit-graph verify' 'git merge-base a b'
   'npm run build' 'npm test' 'mvn -B verify' 'mvn dependency:tree' 'gh api repos/a/b/pulls' 'gh api -X GET repos/a/b'
+  'gh api --method=GET repos/a/b/pulls -f per_page=1' 'gh api repos/a/b/pulls --jq .[].number' 'gh api -H "Accept: application/json" repos/a/b'
 )
 for c in "${ASK[@]}";   do expect_ask "$c";   done
 for c in "${QUIET[@]}"; do expect_quiet "$c"; done
@@ -46,6 +49,14 @@ out="$(python3 -c 'import json; print(json.dumps({"tool_input":{"command":"ls","
 SAFEBIN="$(mktemp -d)"; for b in cat dirname grep bash sh env; do ln -s "$(command -v $b)" "$SAFEBIN/$b" 2>/dev/null; done
 out="$(mk_json 'git commit -m x' | PATH="$SAFEBIN" "$GUARD")"
 printf '%s' "$out" | grep -q '"permissionDecision": "ask"' || printf '%s' "$out" | grep -q 'permissionDecision' || { echo "FAIL: no-python fallback missed git commit"; fail=1; }
+for c in 'git revert HEAD' 'git am patch.mbox' 'git reset --hard HEAD~1' 'gh pr create --fill' 'gh -R a/b pr merge 3' 'gh release create v1'; do
+  out="$(mk_json "$c" | PATH="$SAFEBIN" "$GUARD")"
+  printf '%s' "$out" | grep -q '"permissionDecision":"ask"' || { echo "FAIL: no-python fallback missed: $c"; fail=1; }
+done
+for c in 'git status' 'git reset --soft HEAD~1' 'gh pr view 3' 'gh pr list'; do
+  out="$(mk_json "$c" | PATH="$SAFEBIN" "$GUARD")"
+  [ -z "$out" ] || { echo "FAIL: no-python fallback fired on: $c"; fail=1; }
+done
 rm -rf "$SAFEBIN"
 # robustness: always exit 0, silent stderr, odd inputs, missing parser
 chk_rc() { desc="$1"; shift; err="$("$@" 2>&1 >/dev/null)"; rc=$?; { [ $rc -eq 0 ] && [ -z "$err" ]; } || { echo "FAIL ($desc): rc=$rc stderr=[$err]"; fail=1; }; }

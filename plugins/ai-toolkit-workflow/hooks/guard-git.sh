@@ -16,7 +16,10 @@ if [ -f "$d/guard_git.py" ] && command -v python3 >/dev/null 2>&1 \
 fi
 
 # Fallback (no usable python3): coarse text match; catches the common direct forms only.
-if printf '%s' "$input" | grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+(commit|push|tag|rebase|cherry-pick|merge)([^[:alnum:]_-]|$)'; then
+git_re='(^|[^[:alnum:]_.-])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+'
+if printf '%s' "$input" | grep -Eq "${git_re}(commit|push|tag|rebase|cherry-pick|merge|am|revert)([^[:alnum:]_-]|\$)" \
+   || printf '%s' "$input" | grep -Eq "${git_re}reset[[:space:]]+([^\"]*[[:space:]])?--(hard|merge|keep)" \
+   || printf '%s' "$input" | grep -Eq '(^|[^[:alnum:]_.-])gh([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+(pr[[:space:]]+(create|merge)|release[[:space:]]+create)([^[:alnum:]_-]|$)'; then
   cat <<'JSON'
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"ai-toolkit policy: do not commit, push, tag, release or rewrite history until the developer asks. Approve only if you asked for it."}}
 JSON
