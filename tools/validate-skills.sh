@@ -327,6 +327,44 @@ agent_names_list = [os.path.basename(a)[:-3] for a in agents_all]
 for n in {x for x in agent_names_list if agent_names_list.count(x) > 1}:
     err(f"agent name `{n}` exists in more than one plugin")
 
+# size: a skill body is loaded in full on every invocation — deep dives belong in references/ (docs/AUTHORING.md §3b)
+MAX_SKILL_BYTES = 16 * 1024
+for name, (path, fm) in sorted(skill_fm.items()):
+    size = len(read(path).encode("utf-8"))
+    if size > MAX_SKILL_BYTES:
+        err(f"{os.path.relpath(path, root)}: SKILL.md is {size} bytes (limit {MAX_SKILL_BYTES}) — move deep-dive sections to references/")
+
+# agents: reviewers are read-only by construction; implementers deliberately inherit all tools (they edit files and run builds)
+for name, (path, fm) in sorted(agent_fm.items()):
+    if name.endswith("code-review") or name.endswith("-review"):
+        tools = str(fm.get("tools", ""))
+        rel = os.path.relpath(path, root)
+        if not tools:
+            err(f"{rel}: review agents must declare `tools` (read-only) instead of inheriting every tool")
+        elif re.search(r"\b(Write|Edit|NotebookEdit)\b", tools):
+            err(f"{rel}: review agents must not have write tools (found: {tools})")
+
+# citations: `skill` §N must resolve to a heading in that skill's SKILL.md or references/
+_heads = {}
+for name, (path, fm) in skill_fm.items():
+    hs = []
+    for f in [path] + sorted(glob.glob(os.path.join(os.path.dirname(path), "references", "*.md"))):
+        fence = False
+        for line in read(f).split("\n"):
+            if line.startswith("```"):
+                fence = not fence
+            if not fence and re.match(r"#{2,4} ", line):
+                hs.append(line)
+    _heads[name] = hs
+_cite = re.compile(r"`([a-z][a-z0-9-]+)`\s*(?:skill\s*)?§\s?([0-9]+[a-z]?)")
+for f in (glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)
+          + glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md"))
+          + glob.glob(os.path.join(root, "plugins", "*", "skills", "*", "**", "*.md"), recursive=True)):
+    for n, line in enumerate(read(f).split("\n"), 1):
+        for target, sec in _cite.findall(line):
+            if target in _heads and not any(re.match(r"#{2,4} " + sec + r"(?![0-9a-z])", h) for h in _heads[target]):
+                err(f"{os.path.relpath(f, root)}:{n}: cites `{target}` §{sec}, which has no such heading")
+
 # reachability: every skill must be routed, referenced by another skill/agent/routing table, or depended on
 corpus = {}
 for p in all_skills + agents_all + glob.glob(os.path.join(root, "plugins", "*", "hooks", "routing.md")):

@@ -72,13 +72,20 @@ Keep `SKILL.md` to what must always be read; move code-heavy sections that are n
 part into `references/<topic>.md`.
 
 - **Stays in `SKILL.md`:** frontmatter, *When to use*, any HITL / decision gate, the layout and layering
-  overview, Do / Don't, cross-references and templates. Target **under ~12 KB**.
+  overview, Do / Don't, cross-references and templates. Target **under ~12 KB**; `validate-skills.sh` fails a `SKILL.md` over 16 KB.
 - **Moves to `references/`:** per-layer walkthroughs, long code samples, tests, growth paths.
 - **Keep section numbers stable.** Other skills and `BACKEND_GUILD.md` cite `skill §N`; leave the `## N.` headings
   in the reference file and list every moved section in a reference-map table in `SKILL.md`
   (section, topic, *load when*, link). Say "load only the file you need".
 - Link with relative paths (`](./references/<file>.md)`); `tools/check-links.py` verifies them. A reference file
   links back with `](../SKILL.md)` and has no frontmatter.
+
+## 3c. Agents and tools
+
+An agent without a `tools:` line inherits every tool. That is deliberate for implementers (`new-feature`, `refactor`,
+`test-writer`, …): they edit files, run builds and load skills. **Review agents** (`*-review`) are read-only by
+construction and must declare `tools:` without `Write`, `Edit` or `NotebookEdit`; `validate-skills.sh` enforces it.
+Give any new agent that only reports findings the same treatment.
 
 ## 4. Templating syntax
 
@@ -108,7 +115,8 @@ Before opening a PR that adds or modifies a SKILL.md:
 - [ ] Folder name = `name` in frontmatter.
 - [ ] `description:` is one paragraph and explains *when* to use the skill.
 - [ ] Any `](./templates/<file>)` link resolves to a real file.
-- [ ] `SKILL.md` is under ~12 KB, or its deep-dive sections are in `references/` with a reference map (§3b).
+- [ ] `SKILL.md` is under ~12 KB (hard limit 16 KB), or its deep-dive sections are in `references/` with a reference map (§3b).
+- [ ] Every `` `skill` §N `` citation resolves to a heading (the validator checks this).
 - [ ] `templates/` files use only `{{placeholder}}` syntax.
 - [ ] `README.md` has a new row.
 - [ ] `REGISTRY.md` has a new row (and updated total).

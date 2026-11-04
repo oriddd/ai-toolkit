@@ -11,7 +11,11 @@ enforce that every skill has a home in this file.
 
 | Tier | Count |
 | --- | --- |
-| Public | **73** |
+| MUST | 48 |
+| SHOULD | 22 |
+| MAY | 1 |
+| FOUNDATIONAL | 2 |
+| **Total** | **73** |
 
 ## Skills
 

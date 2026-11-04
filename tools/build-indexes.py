@@ -60,7 +60,9 @@ def render_registry(skills):
             "enforce that every skill has a home in this file.\n",
             "## Totals\n",
             f"| Tier | Count |", f"| --- | --- |",
-            f"| Public | **{len(skills)}** |\n",
+            *[f"| {t} | {n} |" for t in ("MUST", "SHOULD", "MAY", "FOUNDATIONAL")
+              if (n := sum(1 for s in skills if s.get("tier", "?").upper() == t))],
+            f"| **Total** | **{len(skills)}** |\n",
             "## Skills\n",
             "Legend — **T** = ships templates; **HITL** = human-in-the-loop;",
             "**Tier** = MUST / SHOULD / MAY adoption tier.\n",
