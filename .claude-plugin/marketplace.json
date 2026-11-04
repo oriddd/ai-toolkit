@@ -2,7 +2,7 @@
   "name": "ai-toolkit",
   "metadata": {
     "description": "Engineering standards as Claude Code plugins, organised by delivery phase and language — skills, task agents and routing hooks.",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "owner": {
     "name": "oriddd"

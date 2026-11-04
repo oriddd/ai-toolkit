@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-04
+
 ### Changed — plugin dependencies match what skills need
 - Install a language with its new meta plugin: `ai-toolkit-java`, `ai-toolkit-python` or `ai-toolkit-react-native`
   (manifest-only; they depend on the language's design, build, quality and ops plugins plus the neutral ones).
