@@ -65,7 +65,7 @@ Pick **one** of:
 Rules:
 - Bump the major version only on **breaking** changes.
 - Both versions coexist for **at least 6 months**.
-- Deprecation announced via `Deprecation: <RFC 8594 date>` + `Sunset: <date>`
+- Deprecation announced via `Deprecation: @<unix-seconds>` (the IETF `Deprecation` header takes a structured-field date) + `Sunset: <HTTP-date>` (RFC 8594)
   headers on the old version's responses, with a link to migration docs.
 
 ## 4. Pagination, filtering, sorting

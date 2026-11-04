@@ -19,10 +19,15 @@ class ArchitectureTest {
     static final ArchRule layered =
         layeredArchitecture().consideringAllDependencies()
             .layer("Controller").definedBy("..controller..")
-            .layer("Operation").definedBy("..operation..")
+            .optionalLayer("Operation").definedBy("..operation..")
             .layer("Service").definedBy("..service..")
+            .optionalLayer("Repository").definedBy("..repository..")
+            .optionalLayer("Scheduler").definedBy("..scheduler..")
+            .optionalLayer("Health").definedBy("..health..")
             .layer("Client").definedBy("..client..")
             .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
             .whereLayer("Operation").mayOnlyBeAccessedByLayers("Controller")
-            .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation");
+            .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler")
+            .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler")
+            .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health");
 }

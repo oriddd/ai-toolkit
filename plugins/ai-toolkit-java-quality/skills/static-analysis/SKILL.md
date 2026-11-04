@@ -19,7 +19,7 @@ on objective violations.
 
 | Tool | What it catches | Configured how |
 | --- | --- | --- |
-| **Spotless** | Formatting drift (indent, imports, blank lines) | `pom.xml` plugin + `.spotless.gradle`-style import order |
+| **Spotless** | Formatting drift (indent, imports, blank lines) | `pom.xml` plugin with an `<importOrder>` block |
 | **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, fail on HIGH |
 | **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepDisableWarningsInGeneratedCode` to silence noise |
 | **NullAway** | Null-safety: every reference is annotated `@Nullable` or assumed non-null | Annotated packages only |
@@ -52,8 +52,9 @@ on objective violations.
       <version>4.8.6.4</version>
       <configuration>
         <effort>Max</effort>
-        <threshold>Low</threshold>
+        <threshold>Medium</threshold>          <!-- Low would fail the build on every minor finding -->
         <failOnError>true</failOnError>
+        <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>   <!-- the baseline: known findings, reviewed periodically -->
         <plugins>
           <plugin>
             <groupId>com.h3xstream.findsecbugs</groupId>
@@ -82,6 +83,7 @@ on objective violations.
           </path>
         </annotationProcessorPaths>
         <compilerArgs>
+          <!-- Error Prone on JDK 17+/21 also needs the --add-exports / --add-opens flags from the note below -->
           <arg>-XDcompilePolicy=simple</arg>
           <arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode -Xep:NullAway:ERROR
                -XepOpt:NullAway:AnnotatedPackages={{basePackage}}</arg>
@@ -112,12 +114,19 @@ on objective violations.
 - Project-wide suppressions live in a checked-in `spotbugs-exclude.xml`,
   reviewed periodically. Empty list is the goal.
 
+**JDK 17+ / 21:** Error Prone runs inside javac and needs access to compiler internals. Put these in `.mvn/jvm.config` (one line), or the
+build fails with `IllegalAccessError`:
+
+```
+--add-exports jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED
+```
+
 ## CI failure policy
 
 | Tool | Fail build on |
 | --- | --- |
 | Spotless | Any difference |
-| SpotBugs | Any HIGH; new MEDIUM versus baseline |
+| SpotBugs | Any MEDIUM or HIGH finding not in the `spotbugs-exclude.xml` baseline |
 | Error-Prone / NullAway | Any new violation |
 | Sonar | Quality Gate failure (default: > 5 % new code smells, < 80 % new-code coverage) |
 

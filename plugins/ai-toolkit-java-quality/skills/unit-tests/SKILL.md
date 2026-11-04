@@ -106,7 +106,7 @@ non-null-returning method – that proves nothing.
 ❌ Never share mutable state between tests without `@AfterEach` cleanup.
 
   - [ ] Add PIT mutation testing for core logic.
-  - [ ] Integrate Jacoco check with a line coverage threshold (e.g., 80%).
+  - [ ] Integrate Jacoco check with a coverage threshold of 85 % line / 75 % branch per class (the same numbers as above and in `quality-review`).
 
 ## 6. Architecture Tests (ArchUnit)
 

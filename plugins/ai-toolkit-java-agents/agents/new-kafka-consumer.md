@@ -56,7 +56,7 @@ file change needed, satisfying all messaging non-negotiables.
    d. *Service — business logic, @Transactional.
    e. Outbox entity + publisher (if at-least-once delivery required).
    f. ObservabilityConfig additions — MDC header propagator, consumer lag gauge.
-   g. Graceful-shutdown hook — consumer.pause() on SIGTERM.
+   g. Graceful shutdown — rely on the listener container's lifecycle (`server.shutdown=graceful`, container `stop`/`SmartLifecycle`); never call `KafkaConsumer.pause()` from a signal hook (the consumer is not thread-safe).
    h. application.yaml additions — topic, group-id, DLQ topic, concurrency.
 
 4. TEST:

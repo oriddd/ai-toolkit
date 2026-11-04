@@ -118,5 +118,5 @@ Beyond the SOLID checks, explicitly flag these testability violations:
 20. External tech behind a port; vendor SDK only in adapter/<vendor>/.
 21. Every adapter passes port TCK.
 22. Validation in validation layer — never inline.
-23. Downstream in five-layer client/<dep>/ sub-package.
+23. Downstream integration in a `client/<dep>/` sub-package whose pattern matches its scale (Simple Wrapper / Lite / five-layer — `external-client` §0); do not demand five layers for a small API.
 24. Domain metrics via Filter → Recorder → Parser.

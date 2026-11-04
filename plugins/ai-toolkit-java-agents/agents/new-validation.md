@@ -74,6 +74,6 @@ table. Fix failures at the cause; never suppress or weaken a check to get green.
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.
-- [ ] `@MockBean` for the validator added to affected `@WebMvcTest` tests.
+- [ ] The validator / rule bean is provided to affected tests through the shared `ComponentTestConfiguration` (`component-tests`) — not an inline `@MockBean`, which would also mock away the rule under test.
 - [ ] CHANGELOG updated.
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

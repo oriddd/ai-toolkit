@@ -16,9 +16,8 @@ the full integration package.
 
 ## Skills to apply (in this order)
 
-1. `external-client` — the
-   complete five-layer structure (Service, CoreService, Client, handler/,
-   constant/).
+1. `external-client` — first ask the scale questions in its §0 (how many endpoints now / in 6 months, query and response complexity) and choose
+   Simple Wrapper, Lite or the full five-layer structure (Service, CoreService, Client, handler/, constant/). Default to the simplest that fits.
 2. `pluggable-architecture`
    — if multiple backends could serve the same capability, expose
    `*Service` as a port interface and put adapters under `adapter/`.
@@ -40,9 +39,9 @@ the full integration package.
 
 ```
 1. Service display name (e.g. "Product Catalogue Service")
-2. Sub-package name in kebab-case (e.g. "product-catalogue")
-3. Base URL config key (e.g. product-catalogue.base-url)
-4. Operations to expose: HTTP method + path + purpose (list each)
+2. Sub-package name: lower-case, no hyphens — hyphens are illegal in Java package names (e.g. `productcatalogue`)
+3. Base URL config key — kebab-case is fine here (e.g. product-catalogue.base-url)
+4. Operations to expose: HTTP method + path + purpose (list each) — and how many you expect within 6 months (decides the pattern, `external-client` §0)
 5. Auth mechanism (none / bearer passthrough / OAuth2 client credentials / basic)
 6. Connect timeout / read timeout in ms
 7. Is idempotent (safe to retry)?

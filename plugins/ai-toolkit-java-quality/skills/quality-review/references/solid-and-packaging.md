@@ -5,7 +5,7 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 ### A. SOLID
 
 1. **SRP** — Does the class have one reason to change?
-   *Smell:* >300 LOC, mixed responsibilities (HTTP + DTO build + business
+   *Smell:* >200 LOC, mixed responsibilities (HTTP + DTO build + business
    logic), method names spanning unrelated nouns.
    *Fix template:* extract a `*Parser` / `*Builder` / `*Transformer` /
    `*ResponseHandler` companion class — exactly as

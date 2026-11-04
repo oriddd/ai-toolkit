@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — review pass
+- **Helm / ops:** the HPA target was 500 % CPU and could never scale out (now 80); the deployment template now has the `runAsNonRoot`, read-only root
+  filesystem, `/tmp` volume, `terminationGracePeriodSeconds` + `preStop` and startup probe its skills require, and probe periods that detect a hung pod in
+  about 30 s instead of 50 minutes; the health-indicator templates now produce valid `@Value` placeholders; request-metrics no longer uses caller-controlled
+  tag values, matches URIs inside the context path, cannot replace a handler's result from `finally`, and its tests no longer fail on strict stubs;
+  tracing config uses Spring Boot's `management.otlp.tracing.*` keys.
+- **Messaging / Kafka:** the consumer example acknowledges after the transaction commits; retry properties use `spring.kafka.retry.topic.*`; the container
+  factory customises Boot's instead of replacing it; the outbox relay is property-driven, waits for the broker ack and uses `SKIP LOCKED`.
+- **Build skills:** `PermissionsHandler` / `PermissionsCheckStrategy` templates compile and match the skill (plus a `PermissionsRegistry` template);
+  `SecurityConfig` is stateless and allows the actuator endpoints the skills expose; `GlobalExceptionHandler` logs, maps `ConstraintViolationException`
+  to `400` and lets Spring Security exceptions through; `@Version` is a `Long` (a primitive broke auditing with assigned ids); `@Where` → `@SQLRestriction`;
+  external-client applies connect / response timeouts, retries on the translated exception and no longer logs bodies; PII masking is wired and no longer
+  leaves the tail of an email; sdk-publishing compiles (public `internal` classes, actuator bean in a conditional nested class); validator messages escape
+  request data (template injection); Bucket4j example uses the current API and a bucket per client.
+- **Design / quality:** the `Application` template no longer carries `@EnableScheduling`, a bare `@ComponentScan` or `@PropertySource`; the ArchUnit layer
+  rule uses layer names; Spring Boot conventions corrected (`@Validated` on properties records, processor dependency, `ConstraintViolationException`
+  handling, `@Scheduled` error behaviour, `AFTER_COMMIT` listeners, profiles); async-api-patterns matches api-design and guards webhooks against SSRF;
+  PIT config includes `pitest-junit5-plugin`; Error-Prone JDK flags and SpotBugs threshold match the CI policy; integration-test naming / WireMock version
+  / `@Transactional` caveat; class-size and coverage numbers agree across skills; Flyway baseline and duplicate-removal steps are safe.
+- **Agents:** `new-microservice-client` asks the scale questions and no longer suggests hyphenated Java packages; `code-review` no longer demands five layers
+  for a small client; `refactor` records its notes in the report; `new-validation` no longer prescribes an inline `@MockBean`.
+- **Docs / tooling:** `prepare-for-publish.sh` no longer fails on itself, handles quotes in the blocklist and case-insensitive path leaks;
+  `check-versions.sh` fails on a downgrade, counts new files and fails closed in CI; `check-links.py` checks case-exact paths; `validate-context.sh` handles
+  adjacent required sections, multi-line comments and a missing final newline; the commit-guard fallback also covers `npm` / `mvn` release commands;
+  the diagram guidance agrees (Mermaid by default); stale tier counts, agent lists, scaffolds, detection markers and the Copilot symlink command are fixed.
+- **Dependencies:** the three `-design` plugins depend on `ai-toolkit-quality` (their routing tables cite `completion-gate`); the validator now fails a
+  qualified `ai-toolkit-x:skill` reference that its plugin does not depend on.
+
 ## [2.1.0] - 2026-11-04
 
 ### Changed — plugin dependencies match what skills need

@@ -110,8 +110,8 @@ Rules:
   to speed up local dev.
 - **Never** rely on a fixed host port — always read the mapped port from the
   container.
-- **Always tag** with `@Tag("integration")` so Failsafe picks them up and
-  Surefire skips them.
+- **Always name them `*IT.java`** — that is what makes Failsafe run them and Surefire skip them. `@Tag("integration")` only adds a way to
+  select them with `-Dgroups=integration`; a tag on its own excludes nothing from Surefire.
 
 ## WireMock — contract-faithful HTTP stub
 
@@ -122,6 +122,7 @@ too heavy), use **WireMock**:
 <dependency>
     <groupId>org.wiremock</groupId>
     <artifactId>wiremock-standalone</artifactId>
+    <version>3.9.1</version>   <!-- not managed by the Spring Boot BOM -->
     <scope>test</scope>
 </dependency>
 ```
@@ -197,7 +198,8 @@ Pick **one** of the two per organization. Whichever is chosen:
 
 - **Never** rely on test ordering. Each `@Test` sets up and tears down its
   own data (`@BeforeEach` insert, `@AfterEach` delete) or runs inside a
-  transaction that is rolled back (`@Transactional` on the test class).
+  transaction that is rolled back (`@Transactional` on the test class — only for tests that call the code in-process; with
+  `@SpringBootTest(webEnvironment = RANDOM_PORT)` the server thread has its own transaction, so nothing rolls back: clean up explicitly).
 - For schemas: `Flyway` / `Liquibase` migrations run automatically against
   the Testcontainer; never bypass them with ad-hoc DDL.
 

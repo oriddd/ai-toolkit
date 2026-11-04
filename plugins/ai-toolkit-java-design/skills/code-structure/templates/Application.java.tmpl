@@ -2,17 +2,12 @@ package {{basePackage}};
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.PropertySource;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
-@EnableScheduling
-@ComponentScan
-@PropertySource("classpath:application.yaml")
+// Only @SpringBootApplication: it already scans this package (with the exclude filters test slices rely on) and loads application.yaml.
+// @EnableScheduling / @EnableAsync / @EnableCaching each go on their own @Configuration class (SchedulingConfig, …).
 @SpringBootApplication
 public class {{applicationClassName}} {
     public static void main(String[] args) {
         SpringApplication.run({{applicationClassName}}.class, args);
     }
 }
-

@@ -116,9 +116,10 @@ Symptom: `spring.jpa.hibernate.ddl-auto=update` in `application.yaml`.
 Steps:
 1. Set `ddl-auto=validate` in prod, `none` elsewhere.
 2. Add `flyway-core`.
-3. Capture the current schema with `flyway baseline` → write as
-   `V001__baseline.sql`.
-4. From now on, every schema change is a new `V00N__*.sql`.
+3. Dump the current schema as DDL (e.g. `pg_dump --schema-only`) and commit it as `V1__baseline.sql` — `flyway baseline` only writes a history row, it
+   does not produce a SQL file. Existing databases must skip that script: set `spring.flyway.baseline-on-migrate=true` and `baseline-version=1`,
+   or a `V1` applied to a populated schema fails.
+4. From now on, every schema change is a new `V<n>__*.sql`.
 5. Add a Testcontainer-based migration test (see `integration-tests`).
 
 ## 8. JSON `Map<String,Object>` request → typed record + `@Valid`
@@ -240,7 +241,8 @@ Both compile; only one is unit-tested; changes drift.
 Steps:
 1. Locate the canonical implementation (the one referenced by
    `service/` / `operation/`).
-2. Delete the duplicate; point its callers at the canonical class.
+2. Diff the two and pin the behaviour first: add a characterization test that passes on **both** implementations (anything the duplicate does that the
+   canonical one does not is either a bug to drop or behaviour to port). Only then delete the duplicate and point its callers at the canonical class.
 3. Add an `ArchUnit` rule forbidding the duplicate's package from
    re-implementing the interface (see `code-structure` §4i).
 

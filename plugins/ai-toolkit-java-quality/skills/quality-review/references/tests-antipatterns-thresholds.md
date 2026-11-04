@@ -106,7 +106,7 @@ junit-named edge case may justify breaking one).
 | --- | --- | --- |
 | 21. Cyclomatic complexity per method | **≤ 10** | SpotBugs / PMD |
 | 22. Method length (effective LOC, ignoring blank/`}`) | **≤ 30** | manual / Checkstyle |
-| 23. Class length | **≤ 300** | Checkstyle |
+| 23. Class length | **≤ 200** (hard ceiling 300) | Checkstyle |
 | 24. Number of method parameters | **≤ 4** (use a record / parameter object beyond) | Checkstyle |
 | 25. Number of fields | **≤ 7** (sign of class doing too much) | manual |
 | 26. NCSS (non-commenting source statements) per file | **≤ 500** | PMD |

@@ -13,6 +13,14 @@ seeded bugs:
     <groupId>org.pitest</groupId>
     <artifactId>pitest-maven</artifactId>
     <version>1.16.0</version>
+    <dependencies>
+        <!-- without this PIT finds no JUnit 5 tests and the mutation gate silently measures nothing -->
+        <dependency>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-junit5-plugin</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+    </dependencies>
     <executions><execution><goals><goal>mutationCoverage</goal></goals></execution></executions>
     <configuration>
         <targetClasses><param>{{basePackage}}.*</param></targetClasses>
@@ -46,7 +54,7 @@ class FooDependencyClientTest {
 
     @Test
     void deserializesAndUnwrapsHits() {
-        server.enqueue(new MockResponse().setBody("""{"hits":[{"id":"x"}]}""")
+        server.enqueue(new MockResponse().setBody("{\"hits\":[{\"id\":\"x\"}]}")
                 .addHeader("Content-Type","application/json"));
 
         var client = new FooDependencyClient(

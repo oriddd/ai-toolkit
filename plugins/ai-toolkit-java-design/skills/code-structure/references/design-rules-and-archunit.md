@@ -57,19 +57,25 @@ test dependency:
 Then assert layering, naming and the absence of cycles:
 
 ```java
-@AnalyzeClasses(packages = "{{basePackage}}")
+@AnalyzeClasses(packages = "{{basePackage}}", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
 
     @ArchTest static final ArchRule layered = layeredArchitecture()
         .consideringAllDependencies()
         .layer("Controller").definedBy("..controller..")
-        .layer("Operation").definedBy("..operation..")
+        .optionalLayer("Operation").definedBy("..operation..")
         .layer("Service").definedBy("..service..")
+        .optionalLayer("Repository").definedBy("..repository..")
+        .optionalLayer("Scheduler").definedBy("..scheduler..")
+        .optionalLayer("Health").definedBy("..health..")
         .layer("Client").definedBy("..client..")
         .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
         .whereLayer("Operation").mayOnlyBeAccessedByLayers("Controller")
-        .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation")
-        .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "..health..");
+        .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler")
+        .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler")
+        .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health");
+        // layer names, not package patterns, go in mayOnlyBeAccessedByLayers; code outside every layer that touches a layer is a violation,
+        // so give each real top-level package (scheduler, health, …) a layer or an ignoreDependency;
 
     @ArchTest static final ArchRule noCycles =
         slices().matching("{{basePackage}}.(*)..").should().beFreeOfCycles();

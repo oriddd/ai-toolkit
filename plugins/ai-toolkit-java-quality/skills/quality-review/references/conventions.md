@@ -13,8 +13,8 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
     and force the caller to unwrap.
 
 9b. **No `@EnableXxx` on `@SpringBootApplication`.**
-    `@EnableScheduling`, `@EnableAsync`, `@EnableCaching`,
-    `@EnableConfigurationPropertiesScan` must live on dedicated
+    `@EnableScheduling`, `@EnableAsync` and `@EnableCaching`
+    must live on dedicated
     `@Configuration` classes (`SchedulingConfig`, `AsyncConfig`, …) so
     test slices can opt out. See `spring-boot-conventions` §7b.
 

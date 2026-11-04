@@ -60,7 +60,7 @@ time, tests green after every step.
    a. Write (or confirm existing) characterisation tests FIRST.
    b. Apply the refactoring.
    c. Run tests — green before moving to the next step.
-   d. Note the skill + section applied as an inline comment on the PR.
+   d. Record the skill + section applied in your final report (not as a code comment, and do not open a PR).
 
 4. VALIDATE against all 24 non-negotiables (`golden-path`) after all steps complete.
 

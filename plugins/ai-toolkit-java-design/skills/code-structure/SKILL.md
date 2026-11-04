@@ -224,14 +224,14 @@ Sections below keep their numbers but live in `references/` so this file stays s
 When applying this skill to a new module:
 
 - [ ] Create the empty package skeleton listed in §1.
-- [ ] Create `<ServiceName>Application.java` with `@SpringBootApplication`,
-      `@ComponentScan`, `@PropertySource("classpath:application.yaml")`.
+- [ ] Create `<ServiceName>Application.java` with `@SpringBootApplication` only — Boot already scans the package (with the exclude filters
+      test slices need) and loads `application.yaml`; a bare `@ComponentScan` would drop those filters and `@PropertySource` cannot read YAML.
       **Never** put `@EnableScheduling` / `@EnableAsync` / `@EnableCaching`
       here — each goes on its own dedicated `@Configuration` class
       (`SchedulingConfig`, `AsyncConfig`, `CachingConfig`) so test slices
       can opt out. See `spring-boot-conventions` §7b.
 - [ ] Add `application.yaml` with `server.port`, `server.servlet.context-path`,
-      actuator exposure (`prometheus,health,info,httptrace`), and
+      actuator exposure (`prometheus,health,info`), and
       `management.endpoint.health.probes.enabled: true`.
 - [ ] Add `logback-spring.xml` aligned with `spring-boot-starter-logging`.
 - [ ] Create `exception/constants/ExceptionMessages.java`.

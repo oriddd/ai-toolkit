@@ -20,21 +20,22 @@ Standard REST calls should return within 1-2 seconds. For operations that take l
 ### Step 1: Submit
 `POST /exports`
 - Returns **`202 Accepted`**.
-- Body includes a `jobId` and a `Location` header to the status endpoint.
+- Body includes a `jobId`; the `Operation-Location` header points at the status endpoint (same contract as `api-design` §2).
 
 ### Step 2: Poll
 `GET /exports/{jobId}`
-- Returns the current state: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`.
+- Returns the current state: `RUNNING`, `SUCCEEDED`, `FAILED` (the same states `api-design` uses; add `PENDING` only if you queue before starting).
 
-**Optimization**: Use `Wait-For` or `Prefer: respond-async` headers to allow "long polling" where the server holds the request until the state changes or a timeout occurs.
+**Optimization**: long polling — let the client send `Prefer: wait=<seconds>` (RFC 7240) and hold the request until the state changes or the wait expires. (`Prefer: respond-async` is the opposite: it asks the server to answer `202` instead of waiting. There is no standard `Wait-For` header.)
 
 ### Step 3: Result
-- Once status is `COMPLETED`, the body contains a URL to retrieve the artifact (e.g., `GET /exports/{jobId}/download`).
+- Once status is `SUCCEEDED`, the body contains a URL to retrieve the artifact (e.g., `GET /exports/{jobId}/download`).
 
 ## 2. Notification: Webhooks
 
 Instead of forcing the client to poll, let them provide a `callbackUrl`.
 - Once the job is done, the service makes a `POST` request to the `callbackUrl`.
+- **SSRF guard**: the URL is attacker-supplied. Accept `https` only, register and verify it when the subscription is created (or allow-list hosts), resolve the host and refuse private / loopback / link-local addresses, and never follow redirects.
 - **Security**: Sign the webhook payload (e.g., HMAC-SHA256) so the client can verify it came from us. Include a `X-Hub-Signature` header.
 
 ### 2b. Callback Reliability
