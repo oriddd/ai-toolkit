@@ -1,6 +1,9 @@
 ---
 name: unit-tests
-description: Generate meaningful, high-coverage JUnit 5 + Mockito unit tests for Spring Boot classes. Use whenever a new class is created in src/main/java or whenever coverage on an existing class is below the Jacoco threshold. Produces tests that exercise happy path (positive tests), every error/exception branch (negative tests), and edge cases — not just line coverage. Follows methodName_Condition_ExpectedResult naming convention.
+description: >
+  Java / Spring Boot JUnit 5 + Mockito unit tests — positive, negative and edge cases, every error branch,
+  methodName_Condition_ExpectedResult naming, Jacoco threshold. Use when a class is created or changed in
+  src/main/java, or coverage is below the threshold.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [code-structure, testable-code-principles]

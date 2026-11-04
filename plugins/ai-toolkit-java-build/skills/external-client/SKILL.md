@@ -1,7 +1,9 @@
 ---
 name: external-client
 description: >
-  Java / Spring Boot: Generate an SDK-style integration package for an external service (HTTP, gRPC, message broker, file store). Produces the canonical five-layer sub-package — Service (domain facade), CoreService (orchestrator), Client (thin transport), handler/request (RequestBuilder + FilterMapBuilder), handler/response (ResponseParser + ResponseVerifier), Config (transport bean), Constants — so callers see a single domain-friendly service instead of WebClient or SDK noise. Apply whenever a new downstream dependency is introduced.
+  Java / Spring Boot: SDK-style package for a downstream service (HTTP, gRPC, broker, file store) — Service facade,
+  CoreService, thin Client, request builders, response parsers/verifiers, Config. Use when a new downstream dependency
+  or external API is introduced.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]

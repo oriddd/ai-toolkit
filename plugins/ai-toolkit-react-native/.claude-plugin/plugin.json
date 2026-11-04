@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-react-native",
   "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "oriddd"
   },
@@ -20,6 +20,7 @@
     "ai-toolkit-react-native-build",
     "ai-toolkit-react-native-quality",
     "ai-toolkit-react-native-ops",
-    "ai-toolkit-workflow"
+    "ai-toolkit-workflow",
+    "ai-toolkit-docs"
   ]
 }

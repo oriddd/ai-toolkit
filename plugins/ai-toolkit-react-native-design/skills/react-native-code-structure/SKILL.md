@@ -1,6 +1,9 @@
 ---
 name: react-native-code-structure
-description: Apply the canonical React Native feature-based folder layout, TypeScript strict config, path aliases, dependency direction and naming (screens, components, hooks, services, api) when creating or refactoring an app. Every module is a small single-purpose LEGO brick named so it documents itself. Use when adding a screen, component, hook or feature folder. NOT for server/client state or data fetching (use `react-native-state-and-data`) and NOT for error or validation design (use `react-native-error-handling`, `react-native-input-validation`).
+description: >
+  React Native feature-based layout — TypeScript strict, path aliases, dependency direction, naming for screens,
+  components, hooks, services and api. Use before adding a screen, component, hook or feature folder. State and data
+  fetching live in `react-native-state-and-data`.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-state-and-data]

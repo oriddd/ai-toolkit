@@ -1,6 +1,9 @@
 ---
 name: messaging
-description: Wire async messaging (Kafka or RabbitMQ) into a Spring Boot service with the canonical patterns — idempotent consumer, transactional outbox for producer-side atomicity, dead-letter topic with redelivery policy, schema management (Avro/Protobuf/JSON-Schema), consumer concurrency, exactly-once semantics. Use whenever a service publishes or consumes domain events or commands.
+description: >
+  Java / Spring Boot Kafka or RabbitMQ — idempotent consumer, transactional outbox, dead-letter topic and redelivery,
+  schema management (Avro/Protobuf/JSON-Schema), concurrency, exactly-once. Use when a service publishes or consumes
+  events or commands.
 tier: should
 applies_to: [event, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]

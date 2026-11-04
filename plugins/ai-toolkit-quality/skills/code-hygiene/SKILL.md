@@ -1,6 +1,9 @@
 ---
 name: code-hygiene
-description: Keep a diff minimal and self-explanatory — no comments or docs that restate the code, no dead code, no speculative abstraction, no unrelated churn, and no redundant or meaningless tests. Use when reviewing your own diff before declaring a task done, when about to add a comment, Javadoc/docstring or test, and when trimming tests that exist only to raise coverage.
+description: >
+  Keep a diff minimal and self-explanatory — no comments restating code, no dead code, no speculative abstraction, no
+  unrelated churn, no redundant tests. Use when reviewing your own diff before saying done, and before adding a
+  comment, docstring or test.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [completion-gate]

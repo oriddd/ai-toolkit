@@ -91,6 +91,6 @@ The graph must stay acyclic and shallow:
   `python-*` and `react-native-*` skills carry a unique prefix, so those names may stay bare.
 - Every routing table stays under 400 words (injected every session) and names only existing skills; a Java row carries its
   phase letter, e.g. `code-structure` (d). Validated by `tools/validate-skills.sh`.
-- Skill descriptions are capped at 600 characters, must contain a `Use when` trigger and must name their language
+- Skill descriptions are capped at 300 characters, must contain a `Use when` trigger and must name their language
   (Java: Java / Spring / Maven; Python; React Native).
 - Plugins are cached by `version` — bump it when a plugin's content changes (`tools/check-versions.sh`, enforced in CI).

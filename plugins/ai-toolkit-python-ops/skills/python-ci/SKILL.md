@@ -1,6 +1,9 @@
 ---
 name: python-ci
-description: Generate the Continuous Integration setup for a Python 3.12 service — a GitHub Actions workflow using uv with dependency caching and separate lint, type, unit and integration gates, plus a multi-stage, non-root, reproducible Dockerfile. Use when bootstrapping a repo or migrating a service onto the standard pipeline. Not for the lint/type rule configuration itself (use `python-static-analysis`) or runtime telemetry (use `python-observability`).
+description: >
+  Python 3.12 CI — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a
+  multi-stage, non-root Dockerfile. Use when bootstrapping a repo or moving a service onto the standard pipeline. Lint
+  rules live in `python-static-analysis`.
 tier: must
 applies_to: [rest, worker, cli, library]
 depends_on: [python-static-analysis, python-unit-tests]

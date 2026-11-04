@@ -1,6 +1,9 @@
 ---
 name: react-native-unit-tests
-description: Write meaningful Jest + React Native Testing Library unit tests for components, hooks, schemas and mappers, with behaviour-focused queries, MSW for network, fakes over mocks, positive/negative/edge cases and a coverage threshold. Use when a new component, hook, schema or service is created or coverage drops below the threshold. NOT for full-device user journeys (use `react-native-e2e-tests`) and NOT for lint/type gates (use `react-native-static-analysis`).
+description: >
+  React Native unit tests with Jest + React Native Testing Library — behaviour-focused queries, MSW for network, fakes
+  over mocks, positive/negative/edge cases, coverage threshold. Use when a component, hook, schema or service is
+  created or coverage drops.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-state-and-data, react-native-error-handling]

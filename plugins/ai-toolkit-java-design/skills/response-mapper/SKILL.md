@@ -1,6 +1,9 @@
 ---
 name: response-mapper
-description: Wire API versioning and response projection mapping into a Spring Boot REST API using the Strategy + Handler + Registry pattern. A MapperHandler resolves the target version/projection from the request (Accept header, URI, query param), routes to the right MapperStrategy via a registry, and returns a tailored DTO. Add new versions or projections by adding one MapperStrategy — handler and registry never change. Apply when APIs must support multiple versions or different projections of the same entity. For the `?layout=` field-set parameter use `response-layout`.
+description: >
+  Java / Spring Boot API versioning and response projections via Strategy + Handler + Registry — version resolved from
+  Accept header, URI or query param; one MapperStrategy per version. Use when an API serves several versions or
+  projections. For ?layout= use `response-layout`.
 tier: should
 applies_to: [rest, monolith]
 depends_on: [code-structure, spring-boot-conventions, strategy-registry-pattern]

@@ -1,6 +1,8 @@
 ---
 name: python-static-analysis
-description: Mechanically enforce style and catch bug classes in Python — ruff (lint + format), mypy --strict, pre-commit hooks and one pyproject.toml configuration, all wired so any violation breaks the build and cannot be skipped. Use when a repo is created, a tool is configured or a lint/type error needs resolving. Not for test design (use `python-unit-tests`) or pipeline wiring beyond the commands themselves (use `python-ci`).
+description: >
+  Python static analysis — ruff lint and format, mypy --strict, pre-commit, one pyproject.toml, all breaking the
+  build. Use when a repo is created, a tool is configured, or a lint or type error needs resolving.
 tier: must
 applies_to: [rest, worker, cli, library]
 depends_on: [python-code-structure]

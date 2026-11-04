@@ -1,6 +1,9 @@
 ---
 name: component-tests
-description: Generate Spring Boot component (slice) tests that boot the full application context with a dedicated test profile, replace external collaborators (HTTP clients, file stores, permission handlers) with deterministic test doubles, and exercise the public HTTP API end-to-end via TestRestTemplate. Use when adding a new REST endpoint or use case to a microservice.
+description: >
+  Java / Spring Boot component tests — boot the full context with a test profile, replace external collaborators with
+  deterministic doubles, exercise the HTTP API end to end via TestRestTemplate. Use when adding a REST endpoint or use
+  case.
 tier: must
 applies_to: [rest, monolith]
 depends_on: [unit-tests]

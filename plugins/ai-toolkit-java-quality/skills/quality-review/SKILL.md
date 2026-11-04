@@ -1,7 +1,9 @@
 ---
 name: quality-review
 description: >
-  Java / Spring Boot: Run a SOLID / clean-code / testability / project-conventions review on a class, package, or pull request. Produces a structured report flagging violations of the project's quality bar (SRP, OCP, ISP, DIP, lego-brick packaging, SDK-style client wrapping, testability anti-patterns like static methods/global state, exception/logging/concurrency conventions, test meaningfulness, positive & negative test coverage) with concrete fix suggestions. Use before opening a PR or when refactoring legacy code into the project standard.
+  Java / Spring Boot code review of a class, package or PR — SOLID, clean code, LEGO-brick packaging, testability
+  anti-patterns, exception/logging/concurrency conventions, test quality and coverage — with concrete fixes. Use
+  before opening a PR or when refactoring legacy code.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [unit-tests, static-analysis, testable-code-principles]

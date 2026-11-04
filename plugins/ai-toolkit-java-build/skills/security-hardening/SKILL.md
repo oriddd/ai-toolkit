@@ -1,6 +1,8 @@
 ---
 name: security-hardening
-description: Cross-cutting security beyond authentication & authorization — input validation, OWASP Top 10 checklist tailored to Spring Boot, CORS, rate limiting, secret management at rest and in transit, dependency vulnerability scanning, container image signing, security headers. Use whenever a service exposes a public endpoint or handles sensitive data.
+description: >
+  Java / Spring Boot security beyond authn/authz — OWASP Top 10 checklist, CORS, security headers, secret management,
+  dependency scanning, image signing. Use when a service exposes a public endpoint or handles sensitive data.
 tier: must
 applies_to: [rest, monolith]
 depends_on: [permissions]

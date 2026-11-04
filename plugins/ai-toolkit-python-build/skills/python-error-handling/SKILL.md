@@ -1,6 +1,9 @@
 ---
 name: python-error-handling
-description: Wire a clean error contract for a FastAPI service — a typed exception hierarchy, a static error-code and message catalogue, and ONE exception handler mapping every error to an RFC 7807 application/problem+json response. Use when raising, adding or mapping any exception or error response — never raise bare Exception/ValueError or HTTPException from business code. Not for field-level request validation rules (use `python-input-validation`) or log/trace emission (use `python-observability`).
+description: >
+  Python / FastAPI error contract — typed exception hierarchy, error-code and message catalogue, ONE handler mapping
+  errors to RFC 7807 problem+json. Use when raising, adding or mapping any exception or error response. For request
+  validation use `python-input-validation`.
 tier: must
 applies_to: [rest, worker, cli, library]
 depends_on: [python-code-structure]

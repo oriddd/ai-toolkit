@@ -1,6 +1,9 @@
 ---
 name: react-native-ci
-description: Generate the GitHub Actions CI/CD setup for a React Native app, with cached installs, required lint/type/test gates, EAS Build or Fastlane builds, versioning and build numbers, and an OTA update stance. Use when bootstrapping a pipeline, adding a release path or changing build/versioning. NOT for the lint/test rules themselves (use `react-native-static-analysis`, `react-native-unit-tests`) and NOT for runtime monitoring (use `react-native-observability`).
+description: >
+  React Native CI/CD on GitHub Actions — cached installs, lint/type/test gates, EAS Build or Fastlane, versioning and
+  build numbers, OTA update stance. Use when bootstrapping a pipeline, adding a release path, or changing build or
+  versioning.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-static-analysis, react-native-unit-tests]

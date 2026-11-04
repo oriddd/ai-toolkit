@@ -1,6 +1,9 @@
 ---
 name: ci
-description: Generate the Continuous Integration setup (Jenkinsfile, Dockerfile, Maven build) for a generic Java 21 / Spring Boot microservice. Produces vendor-neutral artifacts using only public Spring Boot, Maven and Jenkins primitives. Use when bootstrapping a new repo or migrating an existing service onto a standard pipeline. Jenkins only; for GitHub Actions use `github-actions-ci`.
+description: >
+  Java 21 / Spring Boot CI with Jenkins — declarative Jenkinsfile, multi-stage Dockerfile, Maven build. Use when
+  bootstrapping a repo or moving a service onto a standard Jenkins pipeline. For GitHub Actions use
+  `github-actions-ci`.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [static-analysis]

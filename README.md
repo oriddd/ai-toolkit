@@ -13,7 +13,7 @@ before code is written.
 ```
 
 Installing a language's plugin (`ai-toolkit-java`, `-python`, `-react-native`) pulls in its design, build, quality and ops plugins plus the neutral
-`workflow` and `quality` plugins (and `docs` for Java) through plugin dependencies. A single phase plugin installs on its own too and brings only what its skills depend on. A language's routing table is injected only when the project
+`workflow`, `quality` and `docs` plugins through plugin dependencies. A single phase plugin installs on its own too and brings only what its skills depend on. A language's routing table is injected only when the project
 is that language (detected from `pom.xml`, `pyproject.toml`, `package.json` with react-native, …). **Install only the
 languages you use** — every installed skill adds its description to each session. Details, team-wide setup, updates,
 Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./setup/claude-code/README.md).

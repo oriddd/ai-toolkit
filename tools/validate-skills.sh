@@ -343,8 +343,8 @@ for name, (path, fm) in sorted(skill_fm.items()):
         if dep not in skill_fm:
             err(f"{rel}: depends_on names unknown skill `{dep}`")
     desc = fm.get("description", "")
-    if len(desc) > 600:
-        err(f"{rel}: description is {len(desc)} chars (limit 600) — the skill listing is budgeted, long descriptions get truncated")
+    if len(desc) > 300:
+        err(f"{rel}: description is {len(desc)} chars (limit 300) — the skill listing is budgeted, long descriptions get truncated")
     if name.lower() in BUILTIN_NAMES and name not in BUILTIN_OVERLAP_OK:
         err(f"{rel}: skill name `{name}` collides with a Claude Code built-in")
     for lang, markers in LANG_MARKER.items():

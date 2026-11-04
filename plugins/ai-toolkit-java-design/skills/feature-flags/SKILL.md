@@ -1,7 +1,9 @@
 ---
 name: feature-flags
 description: >
-  Java / Spring Boot: Implement feature toggles (flags) to decouple deployment from release. Covers local configuration toggles, remote flag providers (Unleash, LaunchDarkly), and the "Toggle-at-the-Edge" vs "Toggle-in-Logic" patterns. Includes guidance on flag lifecycle management to prevent technical debt. Use when a change must be toggled at runtime or released dark.
+  Java / Spring Boot feature toggles — local config toggles, remote providers (Unleash, LaunchDarkly),
+  toggle-at-the-edge vs toggle-in-logic, flag lifecycle and cleanup. Use when a change must be toggled at runtime or
+  released dark.
 tier: should
 applies_to: [rest, event, monolith]
 depends_on: [code-structure, pluggable-architecture]

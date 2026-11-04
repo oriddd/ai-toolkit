@@ -1,6 +1,9 @@
 ---
 name: python-unit-tests
-description: Write meaningful pytest unit tests for Python services — positive, negative and edge cases, `method_condition_expectedResult` naming, fixtures, hand-written fakes at the boundary instead of mocking the class under test, parametrize for tables, and a coverage threshold that fails the build. Use whenever a new module is created or a behaviour changes. Not for tests needing a real database or broker (use `python-integration-tests`) or lint/type gates (use `python-static-analysis`).
+description: >
+  Python pytest unit tests — positive, negative and edge cases, method_condition_expectedResult naming, fixtures,
+  fakes at the boundary, parametrize, coverage threshold. Use when a module is created or a behaviour changes. Real
+  DB/broker tests live in `python-integration-tests`.
 tier: must
 applies_to: [rest, worker, cli, library]
 depends_on: [python-code-structure]

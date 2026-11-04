@@ -1,6 +1,9 @@
 ---
 name: code-structure
-description: Apply the canonical Java/Spring Boot package hierarchy and design patterns (Strategy + Registry, OncePerRequestFilter for metrics, Recorder pattern, Operation/Service/Controller layering) when creating or refactoring a microservice. Every class is a LEGO brick — small, focused, independently testable; names document the code. Use when creating or editing ANY Java class, package, controller, service or operation in a Spring Boot service — load it before writing code. For validators also apply `input-validation`, and for runtime-selected behaviour also `strategy-registry-pattern`.
+description: >
+  Java / Spring Boot package hierarchy and layering — controller/operation/service, filter + recorder; every class a
+  small, testable LEGO brick. Runtime-selected behaviour: `strategy-registry-pattern`. Use before creating or editing
+  ANY Java class, package, controller, service or operation.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [testable-code-principles]

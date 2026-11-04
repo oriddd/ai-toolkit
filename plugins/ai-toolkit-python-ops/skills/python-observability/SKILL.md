@@ -1,6 +1,9 @@
 ---
 name: python-observability
-description: Wire the three observability pillars into a Python/FastAPI service — structlog JSON logs with contextvars correlation IDs, OpenTelemetry distributed traces, and prometheus-client metrics with low-cardinality labels. Use when creating a service or when production gaps prevent debugging. Not for error-to-HTTP mapping (use `python-error-handling`) or container/pipeline setup (use `python-ci`).
+description: >
+  Python / FastAPI observability — structlog JSON logs with contextvars correlation IDs, OpenTelemetry traces,
+  prometheus-client metrics with low-cardinality labels. Use when creating a service or when production issues cannot
+  be debugged.
 tier: should
 applies_to: [rest, worker]
 depends_on: [python-code-structure]

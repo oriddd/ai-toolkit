@@ -1,6 +1,9 @@
 ---
 name: react-native-observability
-description: Wire observability into a React Native app with Sentry crash and performance monitoring, structured logging, analytics behind an interface, PII scrubbing and release health. Use when adding crash reporting, tracking events, logging or performance tracing, or when production issues cannot be diagnosed. NOT for mapping errors to user messages (use `react-native-error-handling`) and NOT for build pipelines (use `react-native-ci`).
+description: >
+  React Native observability — Sentry crash and performance monitoring, structured logging, analytics behind an
+  interface, PII scrubbing, release health. Use when adding crash reporting, events, logging or tracing, or when
+  production issues cannot be diagnosed.
 tier: should
 applies_to: [mobile]
 depends_on: [react-native-error-handling, react-native-security, react-native-ci]

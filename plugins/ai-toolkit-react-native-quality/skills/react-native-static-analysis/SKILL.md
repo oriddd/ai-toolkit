@@ -1,6 +1,8 @@
 ---
 name: react-native-static-analysis
-description: Mechanically enforce style and catch bug classes in a React Native repo with TypeScript strict, ESLint flat config, Prettier, boundary rules, lint-staged and husky, all breaking the build in CI. Use when bootstrapping a repo, changing lint/tsc config, or when a violation appears. NOT for writing tests (use `react-native-unit-tests`) and NOT for pipeline wiring beyond the gate commands (use `react-native-ci`).
+description: >
+  React Native static analysis — TypeScript strict, ESLint flat config, Prettier, boundary rules, lint-staged and
+  husky, all breaking the CI build. Use when bootstrapping a repo, changing lint or tsc config, or fixing a violation.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure]

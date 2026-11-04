@@ -1,6 +1,9 @@
 ---
 name: cd
-description: Generate a vendor-neutral Helm chart to deploy a Java/Spring Boot microservice to Kubernetes, with hardened security context, liveness/readiness probes on Actuator, an HPA, a ServiceMonitor for Prometheus, and a credentials Secret. Environment-specific image registries, shared ConfigMaps, and platform integrations belong in your own overrides. Use when adding or changing the Kubernetes/Helm deployment of a service.
+description: >
+  Java / Spring Boot Helm chart for Kubernetes — hardened security context, Actuator liveness/readiness probes, HPA,
+  Prometheus ServiceMonitor, credentials Secret, umbrella-chart registry support. Use when adding or changing the
+  Kubernetes/Helm deployment of a service.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [ci]

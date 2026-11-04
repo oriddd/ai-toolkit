@@ -1,6 +1,9 @@
 ---
 name: pr-description
-description: Write and update pull request descriptions on Bitbucket Server so reviewers immediately understand what changed, why, and how to verify it — structured sections (problem, solution, key changes, testing, notes), fetching the current PR via the REST API, replacing the description atomically with optimistic locking, and a checklist to verify completeness before pushing. Use whenever creating a new PR, updating an existing description, or summarising a branch's changes for a reviewer.
+description: >
+  Pull request descriptions on Bitbucket Server — problem, solution, key changes, testing, notes; fetch and update the
+  PR atomically via the REST API with optimistic locking. Use when creating a PR, updating its description, or
+  summarising a branch for reviewers.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [git-commit-conventions]

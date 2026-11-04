@@ -1,6 +1,9 @@
 ---
 name: health-indicator
-description: Interactive (HITL) skill that adds a Spring Boot Actuator readiness HealthIndicator for a downstream dependency. Prompts the developer for the dependency name, base URL, readiness endpoint, expected success status code, and probe interval, then wires the indicator into the `readiness` health group and the Helm chart. Use when adding a readiness check for a downstream dependency.
+description: >
+  Java / Spring Boot Actuator readiness HealthIndicator for a downstream dependency, wired into the readiness group
+  and Helm chart; asks for name, URL, endpoint, status and interval. Use when adding a readiness check for a
+  downstream dependency.
 tier: should
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [cd, observability]

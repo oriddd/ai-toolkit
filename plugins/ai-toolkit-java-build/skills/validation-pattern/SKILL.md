@@ -1,6 +1,9 @@
 ---
 name: validation-pattern
-description: Background theory and rationale for input validation in Spring Boot microservices — Jakarta Bean Validation (ConstraintValidator) for field/parameter-level rules and Spring Validator for object/cross-field rules. Covers the separation of concerns (annotations, validators, domain rule beans), custom constraint authoring, annotation attribute propagation, constraint violation messaging, and testing strategies. Apply whenever validation logic needs to be externalized from business code; to write or change an actual validator, apply `input-validation`.
+description: >
+  Java / Spring Boot: background and rationale for input validation — why rules live in annotations, validators and
+  rule beans, message design and testing strategy. Use when deciding how to externalize validation from business code;
+  to write a validator apply `input-validation`.
 tier: foundational
 applies_to: [rest, event, monolith]
 depends_on: [code-structure, spring-boot-conventions]

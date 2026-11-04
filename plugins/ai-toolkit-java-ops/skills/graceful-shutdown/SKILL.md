@@ -1,6 +1,8 @@
 ---
 name: graceful-shutdown
-description: Wire graceful shutdown into a Spring Boot service so Kubernetes pod terminations drain in-flight requests, async work, message consumers, and outbound clients without dropped requests or stuck transactions. Use whenever a new service is created or when a deployment shows 5xx spikes during rolling updates.
+description: >
+  Java / Spring Boot graceful shutdown — drain in-flight requests, async work, consumers and clients on Kubernetes pod
+  termination. Use when a new service is created or a rolling update shows 5xx spikes.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: []

@@ -1,7 +1,9 @@
 ---
 name: static-analysis
 description: >
-  Java / Spring Boot: Mechanically enforce code style and catch bug classes — Spotless (formatter), SpotBugs (bug patterns), Error-Prone (compile-time bug patterns), NullAway (null-safety), Sonar quality profile, Checkstyle for project-specific rules. Wires every tool into Maven so violations break the build. Use whenever a new repo is created.
+  Java / Spring Boot static analysis wired into Maven so violations break the build — Spotless, SpotBugs, Error-Prone,
+  NullAway, Checkstyle, Sonar profile. Use when a repo is created or a lint, format or analysis rule is added or
+  fails.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: []

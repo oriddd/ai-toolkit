@@ -1,7 +1,9 @@
 ---
 name: pluggable-architecture
 description: >
-  Java / Spring Boot: Treat every external technology integration (cache, database, metrics backend, message broker, object store, secret manager, identity provider, …) as a swappable lego-brick behind a stable port interface, selectable and composable purely by configuration. Domain and application code depend only on ports; concrete vendor adapters are wired by Spring conditional beans and can be replaced, or run several-at-once, without touching business logic. Apply this skill before writing ANY code that talks to an external tool or technology.
+  Java / Spring Boot ports and adapters — every external technology (cache, DB, broker, metrics, object store,
+  secrets, identity) behind a port, with adapters chosen by configuration via conditional beans. Use before writing
+  ANY code that talks to an external tool or technology.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [code-structure, spring-boot-conventions]

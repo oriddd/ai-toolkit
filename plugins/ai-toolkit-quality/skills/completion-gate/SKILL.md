@@ -1,6 +1,9 @@
 ---
 name: completion-gate
-description: The definition of done for any implementation task — never commit or push until the user asks, then before reporting done prove the build passes, all tests pass, static analysis is clean, the diff meets the language standards, changed code is meaningfully covered with no redundant tests, hygiene is clean and the Sonar gate passes, with evidence for each. Use when finishing any code change end-to-end, before saying a task is done or ready, and after every fix made during that check.
+description: >
+  Definition of done — never commit until asked; before saying done, prove build, full tests, static analysis,
+  language standards, meaningful coverage, hygiene and Sonar with evidence. Use when finishing any code change, before
+  reporting it done, and after every fix made during the check.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [code-hygiene, sonar-quality-gate]

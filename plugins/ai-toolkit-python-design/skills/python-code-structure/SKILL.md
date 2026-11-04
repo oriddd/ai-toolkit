@@ -1,6 +1,9 @@
 ---
 name: python-code-structure
-description: Apply the canonical Python 3.12 service layout (src layout, api/operations/services/clients/models/config layers, pydantic-settings, constructor injection, one-way dependency direction) where every module is a small single-purpose LEGO brick named so it documents itself. Use when creating or editing ANY Python module, package, service or use case in a FastAPI/worker/CLI service — load it before writing code. Not for HTTP routing details (use `python-fastapi-conventions`), validation rules (use `python-input-validation`) or database access (use `python-persistence`).
+description: >
+  Python 3.12 service layout — src layout, api/operations/services/clients/models/config layers, pydantic-settings,
+  constructor injection, one-way dependencies. Use before creating or editing ANY Python module, package, service or
+  use case in a FastAPI, worker or CLI service.
 tier: must
 applies_to: [rest, worker, cli, library]
 depends_on: []

@@ -1,7 +1,9 @@
 ---
 name: resilience-patterns
 description: >
-  Java / Spring Boot: Beyond simple retries — implement advanced stability patterns using Resilience4j (Bulkheads, Timeouts, Rate Limiters) and architectural strategies (Fallback, Sidecar, Fail-fast) to protect the service from cascading failures in a distributed system. Use when a downstream call needs timeouts, bulkheads, fallbacks or circuit breakers. Rate limiting itself lives in `rate-limiting`.
+  Java / Spring Boot stability with Resilience4j — timeouts, bulkheads, circuit breakers, fallbacks, fail-fast. Use
+  when a downstream call needs protection from slow or failing dependencies or cascading failures. For rate limiting
+  use `rate-limiting`.
 tier: must
 applies_to: [rest, event, monolith]
 depends_on: [external-client]

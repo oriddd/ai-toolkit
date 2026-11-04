@@ -1,6 +1,9 @@
 ---
 name: domain-modeling
-description: Tactical Domain-Driven Design vocabulary every Java microservice should adopt — Bounded Context, Aggregate Root, Entity, Value Object, Domain Event, Domain Service, Repository, Anti-Corruption Layer (ACL), Specification. Optional but encouraged when the service represents a non-trivial business concept. Use during initial design or when adding a new aggregate to an existing service.
+description: >
+  Java / Spring Boot tactical DDD — bounded context, aggregate root, entity, value object, domain event, domain
+  service, repository, anti-corruption layer, specification. Use during initial design or when adding a new aggregate
+  to a service.
 tier: should
 applies_to: [rest, event, monolith]
 depends_on: [code-structure]

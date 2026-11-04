@@ -1,7 +1,9 @@
 ---
 name: project-types
 description: >
-  Java / Spring Boot: Meta-skill — picks the right combination of skills for the **kind** of project being created. Covers four canonical microservice shapes (synchronous REST, event-driven, scheduler / batch, library / SDK) plus a "monolith-with-microservice-bones" starter. Use as the entry point before invoking `create-repo`.
+  Java / Spring Boot meta-skill — picks the skill set for the kind of service: synchronous REST, event-driven,
+  scheduler/batch, library/SDK, or monolith with microservice bones. Use as the entry point before invoking
+  `create-repo`.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: []

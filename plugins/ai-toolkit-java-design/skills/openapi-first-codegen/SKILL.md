@@ -1,13 +1,9 @@
 ---
 name: openapi-first-codegen
 description: >
-  Drive controllers and DTOs from an OpenAPI 3 contract at the repo root
-  (`api.yaml`) using `openapi-generator-maven-plugin`. Covers the plugin
-  setup (Spring Boot 3 / Jakarta), where generated sources land, how to
-  exclude them from coverage and static analysis, the
-  `controller implements <ApiName>Api` pattern, and the rule that generated
-  DTOs may never leak past the controller. Use when a service exposes an
-  HTTP API and wants the spec to be the single source of truth.
+  Java / Spring Boot OpenAPI-first — generate controllers and DTOs from api.yaml with openapi-generator-maven-plugin,
+  exclude generated code from coverage and analysis, keep generated DTOs inside the controller. Use when the spec
+  should be the single source of truth.
 tier: should
 applies_to: [rest]
 depends_on: [api-design]

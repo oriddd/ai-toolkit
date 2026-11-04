@@ -1,6 +1,8 @@
 ---
 name: documentation-and-adr
-description: Ship documentation as code — README, CONTRIBUTING, ARCHITECTURE (C4 levels 1–3 in PlantUML / Structurizr), Architecture Decision Records (ADRs) under `docs/adr/`, and auto-generated artifacts (PUML class diagram, sequence diagrams per use case). Use whenever a repo is created or a non-trivial design choice is made.
+description: >
+  Docs as code — README, CONTRIBUTING, ARCHITECTURE (C4 in PlantUML/Structurizr), ADRs under docs/adr/, generated
+  class and sequence diagrams. Use when a repo is created or a non-trivial design choice is made.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [uml-diagram]

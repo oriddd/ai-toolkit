@@ -1,7 +1,9 @@
 ---
 name: testable-code-principles
 description: >
-  Java / Spring Boot: Foundational principles for writing testable code - LEGO Bricks (small, focused, self-explanatory components), SDK-like design (document through names not comments), SOLID principles mapped to testability, and avoiding testability anti-patterns (static methods, global state, hidden side effects). Use before writing any new class or when reviewing code quality. Principles only — the concrete package layout and templates live in `code-structure`.
+  Java / Spring Boot testability principles — small LEGO-brick classes, names over comments, SOLID mapped to testing,
+  no static methods, global state or hidden side effects. Use before writing a new class or when reviewing code
+  quality. Package layout lives in `code-structure`.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: []

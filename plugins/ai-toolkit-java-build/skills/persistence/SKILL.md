@@ -1,6 +1,9 @@
 ---
 name: persistence
-description: Wire the persistence layer of a Spring Boot service — Spring Data JPA repositories, JPA entities (records vs classes), Flyway migrations, transaction boundaries, optimistic locking, JPA auditing, soft deletes, and the Repository/Specification patterns. Use whenever a new service needs durable storage or a new aggregate is added to an existing one.
+description: >
+  Java / Spring Boot persistence — Spring Data JPA repositories and entities, Flyway migrations, transaction
+  boundaries, optimistic locking, auditing, soft deletes, Specifications. Use when a service needs durable storage or
+  a new entity, aggregate, migration or query.
 tier: should
 applies_to: [rest, event, monolith]
 depends_on: [code-structure, pluggable-architecture]

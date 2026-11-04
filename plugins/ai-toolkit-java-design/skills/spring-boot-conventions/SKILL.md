@@ -1,6 +1,9 @@
 ---
 name: spring-boot-conventions
-description: Standard Spring Boot 3 idioms every Java microservice should adopt — typed @ConfigurationProperties over @Value, profile management, conditional beans, JSR-380 validation, springdoc OpenAPI, pagination contract, @Async + named TaskExecutor, caching, idempotency, application events. Use whenever a Spring Boot feature is about to be used so the project converges on one canonical style.
+description: >
+  Java / Spring Boot 3 idioms — @ConfigurationProperties over @Value, profiles, conditional beans, @Async with named
+  executors, caching, pagination, idempotency, application events. Use whenever a Spring Boot feature is about to be
+  used.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure]

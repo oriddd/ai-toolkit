@@ -1,6 +1,9 @@
 ---
 name: integration-tests
-description: Drive a Spring Boot microservice against real downstream dependencies (DB, broker, S3-compatible object store, mocked HTTP) using Testcontainers, with strict Surefire/Failsafe segregation (unit vs component vs integration) and an opt-in contract-testing flow (Pact / Spring Cloud Contract). Use when component tests are insufficient because the behaviour under test depends on the actual semantics of a downstream system.
+description: >
+  Java / Spring Boot integration tests against real dependencies (DB, broker, object store, mocked HTTP) with
+  Testcontainers, Surefire/Failsafe split, optional Pact contracts. Use when behaviour depends on real downstream
+  semantics that component tests cannot prove.
 tier: should
 applies_to: [rest, event, monolith]
 depends_on: [component-tests]

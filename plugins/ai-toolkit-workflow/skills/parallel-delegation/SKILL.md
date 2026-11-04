@@ -1,6 +1,9 @@
 ---
 name: parallel-delegation
-description: Decide when and how to hand work to subagents so independent pieces run in parallel without conflicts — what is safe to delegate, how to brief a subagent that cannot see the conversation, file-ownership rules, and how to verify what comes back. Use when a task spans two or more independent units (layers, classes, tests, docs, review) or before dispatching any subagent; skip it for small single-file changes.
+description: >
+  When and how to hand work to subagents in parallel without conflicts — what is safe to delegate, how to brief a
+  subagent, file ownership, verifying results. Use when a task spans two or more independent units or before
+  dispatching any subagent; skip for small single-file changes.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: []

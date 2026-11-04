@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-docs",
   "description": "Language-neutral documentation — ADRs and docs-as-code, UML/Mermaid diagrams, and project context templates with a validator.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": {
     "name": "oriddd"
   },

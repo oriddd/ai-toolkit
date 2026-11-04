@@ -1,6 +1,9 @@
 ---
 name: response-layout
-description: Wire layout query parameter support (?layout=summary/detailed/full) into a Spring Boot REST endpoint using the Strategy + Handler + Registry pattern. A LayoutHandler resolves the layout type from the request, routes to the appropriate LayoutStrategy via a registry, and returns a tailored DTO with the requested field set. Add new layouts by adding one new LayoutStrategy — the handler and registry never change. Apply when endpoints must return different field sets based on client requirements. Use for the `?layout=` field-set parameter; for API versions or projections use `response-mapper`.
+description: >
+  Java / Spring Boot ?layout= parameter (summary/detailed/full) via Strategy + Handler + Registry — one LayoutStrategy
+  per field set. Use when an endpoint must return different field sets on request. For API versions or projections use
+  `response-mapper`.
 tier: should
 applies_to: [rest, monolith]
 depends_on: [code-structure, spring-boot-conventions, strategy-registry-pattern]

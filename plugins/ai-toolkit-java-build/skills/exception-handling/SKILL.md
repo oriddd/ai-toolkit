@@ -1,6 +1,9 @@
 ---
 name: exception-handling
-description: Wire a clean error contract for a Spring Boot microservice — a typed domain exception hierarchy, a static ExceptionMessages catalogue, and a @RestControllerAdvice that maps each exception to an RFC 7807 ProblemDetail response with the correct HTTP status. Uses only stock Spring Boot (3.x ProblemDetail support). No private libraries required. Use when throwing, adding or mapping any exception or error response — never throw a raw RuntimeException — exceptions extend the project hierarchy.
+description: >
+  Java / Spring Boot error contract — typed domain exception hierarchy, static ExceptionMessages catalogue,
+  @RestControllerAdvice mapping each exception to an RFC 7807 ProblemDetail. Use when throwing, adding or mapping any
+  exception or error response; never throw a raw RuntimeException.
 tier: must
 applies_to: [rest, event, monolith]
 depends_on: [code-structure]

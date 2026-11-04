@@ -1,6 +1,9 @@
 ---
 name: release-versioning
-description: Standardize the release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG generation (release-please or semantic-release), git tag = artifact version, deprecation policy. Use for both deployable services (image tag = version) and libraries (Maven artifact version), tying directly into the `ci` and `sdk-publishing` skills.
+description: >
+  Release lifecycle — Conventional Commits, Semantic Versioning, automated CHANGELOG (release-please or
+  semantic-release), git tag = artifact version, deprecation policy. Use when releasing a service or library or
+  setting up its versioning.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [git-commit-conventions]

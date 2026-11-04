@@ -1,7 +1,9 @@
 ---
 name: adapter-contract-tests
 description: >
-  Java / Spring Boot: Prove the lego-brick contract — write one shared, vendor-neutral abstract test suite (a TCK) per port interface, then run it against EVERY adapter (Redis vs Infinispan, Prometheus vs Datadog, Postgres vs Oracle, …) so that swapping a provider cannot change business behaviour. Each adapter subclasses the suite, supplies its own instance (often via Testcontainers), and must pass identical assertions. Use whenever a port gains a new adapter or an existing adapter changes.
+  Java / Spring Boot adapter contract tests — one abstract, vendor-neutral suite (TCK) per port, subclassed by every
+  adapter (often with Testcontainers) so swapping a provider cannot change behaviour. Use when a port gains a new
+  adapter or an adapter changes.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [pluggable-architecture, unit-tests]

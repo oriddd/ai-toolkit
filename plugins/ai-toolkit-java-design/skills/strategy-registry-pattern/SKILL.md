@@ -1,6 +1,9 @@
 ---
 name: strategy-registry-pattern
-description: Foundational architectural pattern for implementing pluggable, extensible behavior in Spring Boot microservices. Uses Strategy + Registry + Handler/Filter to achieve Open/Closed Principle — add new behavior by adding new strategy classes, never by modifying existing dispatcher code. Apply when you have multiple implementations of the same concern that are selected at runtime based on context (URI pattern, caller type, query parameter, API version, etc.). Foundation for `response-layout`, `response-mapper` and `permissions`; do not use it for plain validation (use `input-validation`).
+description: >
+  Java / Spring Boot Strategy + Registry + Handler for runtime-selected behaviour — add a strategy class, never edit
+  the dispatcher (Open/Closed). Use when several implementations are chosen at runtime by URI, caller, parameter or
+  version. Not for plain validation.
 tier: foundational
 applies_to: [rest, event, monolith]
 depends_on: [code-structure, spring-boot-conventions]

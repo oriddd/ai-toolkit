@@ -1,6 +1,9 @@
 ---
 name: python-input-validation
-description: Implement all input validation in a Python service with pydantic v2 — Field constraints and validated types for per-field rules, model validators for cross-field rules, injectable rule objects for rules that need data or collaborators, custom messages, and a single validation layer. Use when adding or changing any validation rule — never write ad-hoc if/raise guards in routers, operations or services when a model or rule can own the contract. Not for turning failures into HTTP responses (use `python-error-handling`) or persistence constraints (use `python-persistence`).
+description: >
+  Python input validation with pydantic v2 — Field constraints and validated types, model validators for cross-field
+  rules, injectable rule objects, custom messages. Use when adding or changing any validation rule; never ad-hoc
+  if/raise guards in routers or services.
 tier: must
 applies_to: [rest, worker, cli]
 depends_on: [python-code-structure, python-error-handling]

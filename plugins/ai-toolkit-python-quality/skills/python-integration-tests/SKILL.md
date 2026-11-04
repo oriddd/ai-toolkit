@@ -1,6 +1,9 @@
 ---
 name: python-integration-tests
-description: Test a Python service against real infrastructure with testcontainers-python (PostgreSQL, Redis, Kafka, ...) and strict pytest-marker segregation between unit and integration suites, including Alembic migration checks and full-app API tests. Use when behaviour depends on real database/broker semantics (SQL, constraints, locking, serialization) that fakes cannot prove. Not for fast logic tests (use `python-unit-tests`) or repository design (use `python-persistence`).
+description: >
+  Python integration tests with testcontainers-python (PostgreSQL, Redis, Kafka) and pytest markers separating unit
+  from integration, including Alembic migration checks. Use when behaviour depends on real database or broker
+  semantics that fakes cannot prove.
 tier: should
 applies_to: [rest, worker]
 depends_on: [python-unit-tests, python-persistence]

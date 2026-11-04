@@ -1,6 +1,9 @@
 ---
 name: observability
-description: Wire the three observability pillars — metrics (Micrometer + Prometheus), structured JSON logs with MDC correlation IDs, and distributed traces (OpenTelemetry) — into a Spring Boot service. Defines SLI/SLO conventions and a Filter + Recorder pattern for per-request domain metrics. Use whenever a new service is created or when observability gaps prevent debugging in production.
+description: >
+  Java / Spring Boot observability — Micrometer + Prometheus metrics, JSON logs with MDC correlation IDs,
+  OpenTelemetry traces, SLI/SLO conventions. Use when a new service is created or production issues cannot be
+  debugged. Per-endpoint timers live in `request-metrics`.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure, pluggable-architecture]

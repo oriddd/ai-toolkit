@@ -1,6 +1,9 @@
 ---
 name: git-commit-conventions
-description: Write and sequence git commits so history stays reviewable and bisectable — Conventional Commit prefixes (feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert), small single-purpose commits, the rule that every commit compiles on its own, subject/body formatting, staging and amend workflow, commit-msg hook and interactive rebase clean-up, plus a squash-vs-preserve policy for pull requests. Use whenever creating a commit, splitting work into logical commits, or preparing a feature branch for review.
+description: >
+  Git commits that stay reviewable and bisectable — Conventional Commit prefixes, small single-purpose commits that
+  each build, subject/body format, commit-msg hook, squash-vs-preserve policy. Use when creating a commit, splitting
+  work into commits, or preparing a branch for review.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: []

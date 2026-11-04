@@ -1,6 +1,9 @@
 ---
 name: create-repo
-description: Human-in-the-loop scaffolder that creates a brand-new Java/Spring Boot microservice repository. Prompts the user for project metadata, then applies the ci, cd and code-structure skills to produce a fully working repo (Jenkinsfile, Dockerfile, pom.xml, Helm chart, package skeleton, application.yaml, README, .gitignore, renovate.json). Use only to scaffold a brand-new repository, never for changes to an existing one.
+description: >
+  Java / Spring Boot repository scaffolder — asks for project metadata, then applies ci, cd and code-structure to
+  produce Jenkinsfile, Dockerfile, pom.xml, Helm chart, package skeleton and README. Use only to create a brand-new
+  repository, never to change an existing one.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]

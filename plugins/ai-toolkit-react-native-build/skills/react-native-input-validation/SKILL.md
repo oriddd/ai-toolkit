@@ -1,6 +1,9 @@
 ---
 name: react-native-input-validation
-description: Implement all input validation in a React Native app with zod schemas in a validation layer, react-hook-form integration, cross-field rules and schemas shared with API types. Use when adding a form, a field rule, or parsing any external data (API, deep link, storage). NOT for ad-hoc `if` checks inside components or handlers (those are the anti-pattern), and NOT for turning failures into user messages (use `react-native-error-handling`).
+description: >
+  React Native input validation with zod schemas in a validation layer, react-hook-form, cross-field rules, schemas
+  shared with API types. Use when adding a form or field rule, or parsing external data (API, deep link, storage).
+  Never ad-hoc if checks in components.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-error-handling]

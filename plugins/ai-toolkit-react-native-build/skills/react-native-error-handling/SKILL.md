@@ -1,6 +1,9 @@
 ---
 name: react-native-error-handling
-description: Wire a clean error contract for a React Native app, with a typed AppError hierarchy, a message catalogue, API-error-to-AppError mapping in exactly one place, error boundaries and a reporting hook. Use when throwing, mapping, displaying or reporting any failure. NOT for validating user input (use `react-native-input-validation`) and NOT for crash/analytics tooling setup (use `react-native-observability`).
+description: >
+  React Native error contract — typed AppError hierarchy, message catalogue, API-error mapping in one place, error
+  boundaries, reporting hook. Use when throwing, mapping, displaying or reporting any failure. For input rules use
+  `react-native-input-validation`.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-state-and-data]

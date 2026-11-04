@@ -1,6 +1,9 @@
 ---
 name: react-native-state-and-data
-description: Apply the canonical data layer for React Native, with server state in TanStack Query behind a single api-client layer, client state in Zustand, query-key conventions, optimistic updates and an offline/retry stance. Use when a screen needs remote data, a mutation, a cache, or shared UI/session state. NOT for folder layout (use `react-native-code-structure`), NOT for mapping failures to user messages (use `react-native-error-handling`).
+description: >
+  React Native data layer — server state in TanStack Query behind one api client, client state in Zustand, query-key
+  conventions, optimistic updates, offline/retry stance. Use when a screen needs remote data, a mutation, a cache, or
+  shared UI/session state.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure]

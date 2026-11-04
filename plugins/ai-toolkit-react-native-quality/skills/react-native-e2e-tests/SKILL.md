@@ -1,6 +1,9 @@
 ---
 name: react-native-e2e-tests
-description: Write Maestro end-to-end flows for a React Native app with stable test IDs, deterministic test data, and a clear split between what belongs in E2E and in unit tests. Use when a critical user journey needs device-level verification or a flow is flaky. NOT for component or hook logic (use `react-native-unit-tests`) and NOT for CI runner setup (use `react-native-ci`).
+description: >
+  React Native end-to-end tests with Maestro — stable test IDs, deterministic test data, a clear E2E vs unit split.
+  Use when a critical user journey needs device-level verification or a flow is flaky. Component and hook logic lives
+  in `react-native-unit-tests`.
 tier: should
 applies_to: [mobile]
 depends_on: [react-native-unit-tests, react-native-code-structure]

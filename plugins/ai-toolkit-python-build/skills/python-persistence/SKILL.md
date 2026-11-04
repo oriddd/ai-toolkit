@@ -1,6 +1,9 @@
 ---
 name: python-persistence
-description: Wire the persistence layer of a Python service with SQLAlchemy 2.0 (typed Mapped models, async sessions) and Alembic migrations — repository per aggregate behind a Protocol, a single transaction/unit-of-work boundary, optimistic locking, and ORM models that never leak past the repository. Use when adding durable storage, a new entity/aggregate, a migration or a query. Not for validating input (use `python-input-validation`), mapping the resulting errors to HTTP (use `python-error-handling`) or running against a real database in tests (use `python-integration-tests`).
+description: >
+  Python persistence with SQLAlchemy 2.0 (typed models, async sessions) and Alembic — repository per aggregate behind
+  a Protocol, one unit-of-work boundary, optimistic locking. Use when adding storage, an entity, a migration or a
+  query.
 tier: should
 applies_to: [rest, worker]
 depends_on: [python-code-structure, python-error-handling]

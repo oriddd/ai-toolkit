@@ -1,6 +1,9 @@
 ---
 name: sdk-publishing
-description: Producer-side of the lego-brick principle. Turn an internal module into a reusable Spring Boot library / starter — auto-configuration with @ConditionalOnMissingBean defaults, configuration metadata for IDE autocomplete, semantic versioning, minimal API surface, deprecation policy. Use when extracting shared code into its own artifact (a "client SDK", a "domain library", an in-house starter).
+description: >
+  Java / Spring Boot library or starter — auto-configuration with @ConditionalOnMissingBean defaults, configuration
+  metadata, minimal API surface, semantic versioning, deprecation policy. Use when extracting shared code into its own
+  artifact (client SDK, domain library, in-house starter).
 tier: should
 applies_to: [library]
 depends_on: [release-versioning, static-analysis]

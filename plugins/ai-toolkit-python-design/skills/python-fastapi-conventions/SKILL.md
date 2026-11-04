@@ -1,6 +1,9 @@
 ---
 name: python-fastapi-conventions
-description: Apply FastAPI conventions for a REST service — thin routers, Depends-based injection, explicit response models, one pagination contract, problem+json error responses, URL conventions and lifespan-managed resources. Use when adding or changing any endpoint, router, dependency or app factory in a FastAPI service. Not for package layout (use `python-code-structure`), the exception-to-problem mapping itself (use `python-error-handling`) or request validation rules (use `python-input-validation`).
+description: >
+  Python FastAPI conventions — thin routers, Depends injection, explicit response models, one pagination contract,
+  problem+json errors, lifespan-managed resources. Use when adding or changing an endpoint, router, dependency or app
+  factory. Layout lives in `python-code-structure`.
 tier: must
 applies_to: [rest]
 depends_on: [python-code-structure]

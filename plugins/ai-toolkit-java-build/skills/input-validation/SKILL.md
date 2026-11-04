@@ -1,6 +1,9 @@
 ---
 name: input-validation
-description: The skill to APPLY when writing or changing any Spring Boot input validator — Jakarta Bean Validation (ConstraintValidator) for field/parameter rules and Spring Validator for object/cross-field rules. Covers custom annotation authoring, validators with injected domain rule beans, custom violation messages, ValidationConfig @ControllerAdvice registration via @InitBinder, and the canonical package layout. Use whenever a new validation rule is required — never write ad-hoc if/throw guards in controllers, operations, or services. Background theory lives in `validation-pattern`.
+description: >
+  Java / Spring Boot input validation — Jakarta ConstraintValidator for field/parameter rules, Spring Validator for
+  cross-field rules, custom annotations, injected rule beans, @InitBinder registration. Use when writing or changing
+  any validation rule; no ad-hoc guards. Theory: `validation-pattern`.
 tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, spring-boot-conventions, validation-pattern]

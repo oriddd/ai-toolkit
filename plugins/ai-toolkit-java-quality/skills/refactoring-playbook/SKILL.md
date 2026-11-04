@@ -1,7 +1,9 @@
 ---
 name: refactoring-playbook
 description: >
-  Java / Spring Boot: Step-by-step migrations from common anti-patterns to the canonical patterns shipped by the other skills — `@Value` → `@ConfigurationProperties` record, `if/else` on type → Strategy + Handler, `RestTemplate` → `RestClient` / `WebClient` + Decorator, anaemic service → DDD Aggregate, hand-rolled retry → Resilience4j, `@MockBean` everywhere → `@TestConfiguration` + boundary fakes. Use during a quality review or before a major version bump.
+  Java / Spring Boot step-by-step migrations — @Value to @ConfigurationProperties, type switches to Strategy +
+  Handler, RestTemplate to RestClient/WebClient, hand-rolled retry to Resilience4j, @MockBean to boundary fakes. Use
+  during a quality review or before a major version bump.
 tier: may
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [quality-review]

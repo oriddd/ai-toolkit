@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `cd`: generated charts read the image registry from `global.imageRegistry` when an umbrella chart sets it, falling back to `image.registry`.
+- Skill descriptions shortened to at most 300 characters (validator limit lowered from 600) so a full language install fits the skill-listing budget better — Java install from ~23k to ~14k characters.
+- `ai-toolkit-python` and `ai-toolkit-react-native` now depend on `ai-toolkit-docs`, which `completion-gate` uses for its docs step.
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed — review pass

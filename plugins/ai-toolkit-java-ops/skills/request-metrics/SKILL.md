@@ -1,6 +1,9 @@
 ---
 name: request-metrics
-description: Implement per-request domain metrics in a Spring Boot microservice with the Filter + Recorder + Parser pattern. One OncePerRequestFilter times every request, resolves the metric name from a URI-pattern map, delegates to a use-case MetricsRecorder, and emits a Micrometer Timer tagged by pluggable parsers (method, status, client ID, domain tags). Add a metric by adding one MetricsRecorder — filter and registry never change. Apply whenever a new timed, domain-meaningful endpoint metric is needed. Use for per-endpoint timers only; logging, tracing and general metric wiring is `observability`.
+description: >
+  Java / Spring Boot per-endpoint Micrometer timers via Filter + Recorder + Parser — one OncePerRequestFilter, one
+  MetricsRecorder per use case, pluggable tag parsers. Use when adding a timed, domain-meaningful endpoint metric.
+  General logs, traces and metrics wiring is `observability`.
 tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, observability, spring-boot-conventions, strategy-registry-pattern]

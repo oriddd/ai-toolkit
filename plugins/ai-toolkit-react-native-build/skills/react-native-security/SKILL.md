@@ -1,6 +1,9 @@
 ---
 name: react-native-security
-description: Apply mobile security baselines for a React Native app, with secure token storage in Keychain/Keystore, no secrets in the JS bundle, deep-link and input validation, a TLS and pinning stance, and logging without PII. Use when storing credentials, handling deep links, adding config or keys, or adding logs. NOT for form rules (use `react-native-input-validation`) and NOT for crash reporting setup (use `react-native-observability`).
+description: >
+  React Native security baseline — tokens in Keychain/Keystore, no secrets in the JS bundle, deep-link validation, TLS
+  and pinning stance, PII-free logging. Use when storing credentials, handling deep links, adding config or keys, or
+  adding logs.
 tier: must
 applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-input-validation]

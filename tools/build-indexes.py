@@ -165,8 +165,8 @@ def render_generated_skills():
     if os.path.exists(ps):
         t = open(ps, encoding="utf-8").read()
         fm = ("---\nname: pattern-selection\n"
-              "description: >\n  Java / Spring Boot: choose the smallest pattern that fits the actual scale — scale-based decision tables for external clients, operations and layers, red flags of over-engineering, and when to ask the developer. "
-              "Use before introducing any new layer, pattern, client package or abstraction, and when a design feels heavier than the problem.\n"
+              "description: >\n  Java / Spring Boot: choose the smallest pattern that fits the actual scale — decision tables for clients, operations and layers, over-engineering red flags. "
+              "Use before introducing any new layer, pattern, client package or abstraction.\n"
               "tier: must\napplies_to: [rest, event, scheduler, library, monolith]\ndepends_on: [code-structure]\n"
               "ships_templates: false\nhitl: true\nversion: 1.0\nlast_reviewed: 2026-11-03\n---\n\n")
         skill_dir = os.path.join(ROOT, "plugins", "ai-toolkit-java-design", "skills", "pattern-selection")

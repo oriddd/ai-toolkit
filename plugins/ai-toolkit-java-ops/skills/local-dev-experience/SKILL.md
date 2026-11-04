@@ -1,7 +1,9 @@
 ---
 name: local-dev-experience
 description: >
-  Java / Spring Boot: Make the inner loop reproducible in under 5 minutes — docker-compose for downstream dependencies, Makefile/Justfile commands, .devcontainer for VS Code / JetBrains Gateway, .editorconfig, pre-commit hooks (format, lint, test fast, secrets scan). Use whenever a repo is created so any new contributor can be productive in an hour.
+  Java / Spring Boot inner loop in under 5 minutes — docker-compose for dependencies, Makefile/Justfile,
+  .devcontainer, .editorconfig, pre-commit hooks (format, lint, fast tests, secrets scan). Use when a repo is created
+  or local setup is slow or unreliable.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: []

@@ -1,6 +1,9 @@
 ---
 name: permissions
-description: Wire authentication & authorization into a Spring Boot microservice using the Strategy + Handler pattern. Adds a PermissionsHandler that dispatches by a "caller context" (the type of authenticated principal — user, service-account, external system, etc.) to a pluggable PermissionsCheckStrategy, plus matching unit tests. Vendor-neutral — the caller-context type and the authorization back-end are plug-points. Use when adding authorization to an endpoint or operation — never inline `if (principal.isAdmin)`.
+description: >
+  Java / Spring Boot authorization via Strategy + Handler — a PermissionsHandler dispatches by caller context (user,
+  service account, external system) to pluggable PermissionsCheckStrategy beans. Use when adding authorization to an
+  endpoint or operation; never inline role checks.
 tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, strategy-registry-pattern]

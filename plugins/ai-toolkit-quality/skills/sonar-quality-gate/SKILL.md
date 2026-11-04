@@ -1,6 +1,9 @@
 ---
 name: sonar-quality-gate
-description: Run the project's SonarQube/SonarCloud analysis on your change and drive the new-code quality gate to green — bugs, vulnerabilities, code smells, security hotspots, duplication and coverage — without suppressing findings, and report honestly when Sonar cannot be reached. Use when the completion gate reaches its Sonar check, when a pipeline's Sonar gate failed, or when asked whether a change will pass Sonar.
+description: >
+  Drive the SonarQube/SonarCloud new-code quality gate to green — bugs, vulnerabilities, smells, hotspots,
+  duplication, coverage — without suppressing findings; report honestly if Sonar is unreachable. Use when the
+  completion gate reaches Sonar or a pipeline's Sonar gate fails.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [completion-gate]

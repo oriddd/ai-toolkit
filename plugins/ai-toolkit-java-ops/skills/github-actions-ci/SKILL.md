@@ -1,7 +1,8 @@
 ---
 name: github-actions-ci
 description: >
-  Java / Spring Boot: Alternative to the Jenkins-based `ci` skill — GitHub Actions workflows for build / test / image / release / dependency-scan. Vendor-neutral; uses only the public GitHub-hosted runners and standard actions. Pair with `ci` (Jenkins) by picking one per repo, not both. Use only when the repo builds on GitHub Actions; for Jenkins use `ci`.
+  Java / Spring Boot CI on GitHub Actions — build, test, image, release and dependency-scan workflows on GitHub-hosted
+  runners. Use only when the repo builds on GitHub Actions; for Jenkins use `ci`. Pick one per repo.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [static-analysis]
