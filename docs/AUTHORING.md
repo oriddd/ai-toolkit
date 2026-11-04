@@ -13,6 +13,7 @@ plugins/
     ├── .claude-plugin/plugin.json  ← name, description, version
     ├── skills/<skill-name>/
     │   ├── SKILL.md                ← required
+    │   ├── references/             ← optional, deep-dive sections loaded on demand (see §3b)
     │   └── templates/              ← optional, only if SKILL.md ships files
     ├── agents/<agent>.md           ← agents only (ai-toolkit-java-agents)
     └── hooks/                      ← optional (<lang>-design: language routing hook; workflow: neutral rules)
@@ -64,6 +65,21 @@ A SKILL.md should contain, in roughly this order:
 7. **Cross-references** — bullet list linking the other skills this
    skill leans on (use relative links: `../<other>/SKILL.md`).
 
+## 3b. Keep SKILL.md small — move deep dives to `references/`
+
+A skill's body is loaded in full every time it is invoked, and `depends_on` chains invoke several at once.
+Keep `SKILL.md` to what must always be read; move code-heavy sections that are needed only when building one
+part into `references/<topic>.md`.
+
+- **Stays in `SKILL.md`:** frontmatter, *When to use*, any HITL / decision gate, the layout and layering
+  overview, Do / Don't, cross-references and templates. Target **under ~12 KB**.
+- **Moves to `references/`:** per-layer walkthroughs, long code samples, tests, growth paths.
+- **Keep section numbers stable.** Other skills and `BACKEND_GUILD.md` cite `skill §N`; leave the `## N.` headings
+  in the reference file and list every moved section in a reference-map table in `SKILL.md`
+  (section, topic, *load when*, link). Say "load only the file you need".
+- Link with relative paths (`](./references/<file>.md)`); `tools/check-links.py` verifies them. A reference file
+  links back with `](../SKILL.md)` and has no frontmatter.
+
 ## 4. Templating syntax
 
 When a skill ships template files under `templates/`, the **only**
@@ -92,6 +108,7 @@ Before opening a PR that adds or modifies a SKILL.md:
 - [ ] Folder name = `name` in frontmatter.
 - [ ] `description:` is one paragraph and explains *when* to use the skill.
 - [ ] Any `](./templates/<file>)` link resolves to a real file.
+- [ ] `SKILL.md` is under ~12 KB, or its deep-dive sections are in `references/` with a reference map (§3b).
 - [ ] `templates/` files use only `{{placeholder}}` syntax.
 - [ ] `README.md` has a new row.
 - [ ] `REGISTRY.md` has a new row (and updated total).

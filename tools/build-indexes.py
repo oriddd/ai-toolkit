@@ -126,6 +126,25 @@ def section(text, start_prefix):
     """Return the '## ' section whose heading starts with start_prefix (up to the next '## ')."""
     m = re.search(r"^## " + re.escape(start_prefix) + r".*?(?=^## |\Z)", text, re.S | re.M)
     return m.group(0).rstrip() + "\n" if m else ""
+PATTERN_SELECTION_REFERENCES = [
+    ("refactoring-path-and-examples.md", "Red flags, refactoring path and examples",
+     ["Red Flags", "The Refactoring Path", "Examples from Real World"],
+     "judging whether a design is over-engineered, planning a refactor, or looking for worked examples"),
+    ("anti-patterns.md", "Anti-patterns to avoid", ["Anti-Patterns to Avoid"], "reviewing a design for anti-patterns"),
+]
+def split_sections(text):
+    """Split markdown into (preamble, ['## ' sections]) — headings inside code fences are ignored."""
+    pre, secs, fence = [], [], False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fence = not fence
+        if not fence and line.startswith("## "):
+            secs.append([line])
+        elif secs:
+            secs[-1].append(line)
+        else:
+            pre.append(line)
+    return "\n".join(pre), ["\n".join(s) for s in secs]
 def render_generated_skills():
     """Ship repo-level standards documents inside the plugins so installed agents can load them."""
     out = {}
@@ -148,8 +167,32 @@ def render_generated_skills():
               "Use before introducing any new layer, pattern, client package or abstraction, and when a design feels heavier than the problem.\n"
               "tier: must\napplies_to: [rest, event, scheduler, library, monolith]\ndepends_on: [code-structure, external-client]\n"
               "ships_templates: false\nhitl: true\nversion: 1.0\nlast_reviewed: 2026-11-03\n---\n\n")
-        out[os.path.join(ROOT, "plugins", "ai-toolkit-java-design", "skills", "pattern-selection", "SKILL.md")] = (
-            fm + GENERATED_NOTE.format(src="docs/PATTERN_SELECTION_GUIDE.md") + "\n\n" + t)
+        skill_dir = os.path.join(ROOT, "plugins", "ai-toolkit-java-design", "skills", "pattern-selection")
+        pre, secs = split_sections(t)
+        moved = {}
+        for fname, title, prefixes, when in PATTERN_SELECTION_REFERENCES:
+            picked = [s for s in secs if any(s.startswith("## " + p) for p in prefixes)]
+            moved[fname] = picked
+            out[os.path.join(skill_dir, "references", fname)] = (
+                "# Pattern Selection — " + title + "\n\nPart of the [`pattern-selection`](../SKILL.md) skill. "
+                + GENERATED_NOTE.format(src="docs/PATTERN_SELECTION_GUIDE.md") + "\n\n"
+                + "\n\n".join(s.rstrip() for s in picked) + "\n")
+        moved_blocks = {id(s) for picked in moved.values() for s in picked}
+        rows = "".join("| " + ", ".join(p for p in prefixes) + " | " + when + " | [`" + fname + "`](./references/" + fname + ") |\n"
+                       for fname, _, prefixes, when in PATTERN_SELECTION_REFERENCES)
+        ref_map = ("## Reference map — load only the part you are working on\n\n"
+                   "These sections live in `references/` so this file stays small. Read only the file you need.\n\n"
+                   "| Sections | Load when | File |\n| --- | --- | --- |\n" + rows)
+        kept, placed = [], False
+        for s in secs:
+            if id(s) in moved_blocks:
+                if not placed:
+                    kept.append(ref_map)
+                    placed = True
+            else:
+                kept.append(s.rstrip() + "\n")
+        out[os.path.join(skill_dir, "SKILL.md")] = (
+            fm + GENERATED_NOTE.format(src="docs/PATTERN_SELECTION_GUIDE.md") + "\n\n" + pre.rstrip() + "\n\n" + "\n".join(kept))
     return out
 
 def render_shipped_names():
