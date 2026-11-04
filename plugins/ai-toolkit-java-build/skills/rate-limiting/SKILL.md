@@ -41,16 +41,20 @@ resilience4j:
 ### 2b. Local Rate Limiting with Bucket4j
 
 ```java
-Bucket bucket = Bucket.builder()
-    .addLimit(Bandwidth.classic(10, Refill.intervally(10, Duration.ofMinutes(1))))
-    .build();
+// one bucket PER CLIENT (a single shared bucket would let one caller starve everyone) — key it by client id / api key
+private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+
+Bucket bucket = buckets.computeIfAbsent(clientId, id -> Bucket.builder()
+    .addLimit(limit -> limit.capacity(10).refillIntervally(10, Duration.ofMinutes(1)))   // Bandwidth.classic / Refill are deprecated in Bucket4j 8.x
+    .build());
 
 if (bucket.tryConsume(1)) {
     return executeRequest();
 } else {
-    throw new TooManyRequestsException();
+    throw new TooManyRequestsException();   // map it to 429 + Retry-After in your @RestControllerAdvice — no shipped template does
 }
 ```
+In-memory buckets are per instance; use the distributed variant below when the limit must hold across pods.
 
 ## 3. Distributed Rate Limiting (Multi-Node)
 

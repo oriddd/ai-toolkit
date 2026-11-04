@@ -68,9 +68,10 @@ public class EditableProductIdValidator
             return rejectWith(ctx, "Product ID must not be blank");
         }
 
+        // a local / cached rule bean — never a database or remote call in the request path (input-validation SKILL: domain rule beans)
         final String productType = productLookupService.getProductType(productId);
         if (StringUtils.isBlank(productType)) {
-            return rejectWith(ctx, String.format("Type for product '%s' could not be determined", productId));
+            return rejectWith(ctx, String.format("Type for product '%s' could not be determined", escape(productId)));
         }
 
         if (productEditabilityRule.isEditable(productType)) {
@@ -78,7 +79,7 @@ public class EditableProductIdValidator
         }
 
         // Use the captured messageTemplate with runtime values
-        return rejectWith(ctx, String.format(messageTemplate, productId, productType));
+        return rejectWith(ctx, String.format(messageTemplate, escape(productId), escape(productType)));
     }
 
     /**
@@ -90,6 +91,14 @@ public class EditableProductIdValidator
         ctx.buildConstraintViolationWithTemplate(message).addConstraintViolation();
         return false;
     }
+
+    /**
+     * The message is a Bean Validation *template*: `{...}` and `${...}` in it are interpolated. Request data (a path variable
+     * here) is attacker-controlled, so escape it before it goes into a template — otherwise `${...}` is evaluated and echoed back.
+     */
+    private static String escape(final String runtimeValue) {
+        return runtimeValue == null ? "" : runtimeValue.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").replace("$", "\\$");
+    }
 }
 ```
 
@@ -99,8 +108,10 @@ Rules:
   annotated element — that is where `destinationCountry`, `shippingMethod`, and
   other annotation parameters live.
 - **`isValid()`** must return `false` + call `rejectWith(...)` when invalid, or
-  return `true` when valid. Never throw inside `isValid()` — Jakarta catches
-  exceptions and treats them as validation failures, masking the real error.
+  return `true` when valid. Never throw inside `isValid()` for an expected
+  failure — Hibernate Validator wraps it in `jakarta.validation.ValidationException`, which is **not** a violation and surfaces as a `500`.
+  Catch what you expect and return `false`.
+- **Never put request data into a violation template unescaped** (see `escape` above): `{...}` / `${...}` would be interpolated.
 - Use `ctx.disableDefaultConstraintViolation()` + `buildConstraintViolationWithTemplate()`
   whenever you compute the message at runtime (runtime values in the template).
   Skip it only when the annotation's static `message` is sufficient.
@@ -132,9 +143,10 @@ public class ProductController {
 }
 ```
 
-- `@Validated` on the controller class enables Spring's method-level validation
-  proxying; without it, `@EditableProductId` on a `@PathVariable` is silently
-  ignored.
+- `@Validated` on the controller class enables Spring's AOP method-validation proxy. **Spring Boot < 3.2:** without it, `@EditableProductId` on a
+  `@PathVariable` is silently ignored. **Spring Boot 3.2+ (Spring Framework 6.1):** controller parameter constraints are validated without it and a
+  failure raises `HandlerMethodValidationException` (a `400` via `ResponseEntityExceptionHandler`). Class-level `@Validated` switches to the AOP path,
+  which raises `ConstraintViolationException` instead — it needs an explicit `400` handler (see the `exception-handling` template).
 - `@Valid` on `@RequestBody` triggers nested Jakarta validation of DTO fields.
 - Both `@Validated` (parameter constraints) and `@Valid` (nested DTO constraints)
   can be active on the same method.

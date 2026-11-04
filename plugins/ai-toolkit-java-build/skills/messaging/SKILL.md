@@ -93,16 +93,21 @@ public class InvoiceService {
 
 @Component
 public class OutboxRelay {
-    @Scheduled(fixedDelay = 200)
+    @Scheduled(fixedDelayString = "${outbox.relay.delay:200ms}")      // property-driven, never a literal
+    @Transactional
     public void publishPending() {
-        outboxRepo.fetchPending(100).forEach(this::publishAndMarkSent);
+        // FOR UPDATE SKIP LOCKED: several instances can run the relay without publishing the same row twice
+        outboxRepo.fetchPendingForUpdateSkipLocked(100).forEach(row -> {
+            kafkaTemplate.send(row.topic(), row.key(), row.payload()).join();   // wait for the broker ack before marking
+            row.markPublished();
+        });
     }
 }
 ```
 
 - A dedicated `outbox` table in the same DB as the entity.
 - A `@Scheduled` (or **Debezium CDC** for high throughput) relay polls
-  unsent rows and publishes them, marking them `SENT`.
+  unpublished rows (`publishedAt IS NULL`) and publishes them, setting `publishedAt` only after the broker has acknowledged the send.
 - The relay is **idempotent**: if the broker accepts the event but the
   mark-as-sent fails, the next tick re-publishes it. Consumers must handle
   this (see below).
@@ -110,9 +115,9 @@ public class OutboxRelay {
 ### Outbox Performance & Clean-up
 
 For high-throughput services, the outbox table can grow rapidly:
-1. **Indexes**: Ensure `status` and `createdAt` are indexed.
+1. **Indexes**: Ensure `publishedAt` (a partial index on the unpublished rows works well) and `createdAt` are indexed.
 2. **Partitioning**: Consider Postgres table partitioning by `createdAt` (e.g., one partition per day).
-3. **Retention**: Run a background job to delete `SENT` records older than 7 days.
+3. **Retention**: Run a background job to delete records published more than 7 days ago.
 4. **Batching**: The relay should fetch and publish in batches of 100-500 to minimize overhead.
 
 ## 4. Consumer — idempotent + at-least-once
@@ -127,14 +132,22 @@ public class InvoiceCreatedConsumer {
     private final ProcessedEventRepository processed;
     private final FooService service;
 
-    @KafkaListener(topics = "invoices", groupId = "foo-service",
-                   containerFactory = "kafkaListenerContainerFactory")
-    public void on(ConsumerRecord<String, InvoiceCreatedEvent> rec) {
-        var eventId = rec.headers().lastHeader("event-id").value();
+    @KafkaListener(topics = "invoices", groupId = "foo-service")
+    public void on(ConsumerRecord<String, InvoiceCreatedEvent> rec, Acknowledgment ack) {
+        var eventId = new String(rec.headers().lastHeader("event-id").value(), StandardCharsets.UTF_8);
+        service.handleOnce(eventId, rec.value());   // @Transactional: dedupe insert + business effect commit together
+        ack.acknowledge();                          // only after the transaction committed
+    }
+}
+
+@Service
+public class FooService {
+    @Transactional
+    public void handleOnce(String eventId, InvoiceCreatedEvent event) {
         if (!processed.tryRecord(eventId)) {
-            return;                              // already handled — skip
+            return;                                 // already handled — skip
         }
-        service.handle(rec.value());
+        handle(event);
     }
 }
 ```
@@ -149,22 +162,26 @@ public class InvoiceCreatedConsumer {
 
 ## 5. Dead-letter topic
 
-After **N retries** with exponential backoff, send to a `<topic>.DLT` and
-emit a **metric + alert** so an operator notices. Default values:
+After **N retries** with exponential backoff, send to a `<topic>-dlt` (Spring Kafka's default suffix) and
+emit a **metric + alert** so an operator notices. Default values (Spring Boot 3.2+ non-blocking retry topics):
 
 ```yaml
 spring:
   kafka:
     listener:
+      ack-mode: manual
+      concurrency: 3
       missing-topics-fatal: false
-    retries.max-attempts: 5
-    retries.backoff:
-      initial-interval: 1s
-      multiplier: 2
-      max-interval: 30s
+    retry:
+      topic:
+        enabled: true
+        attempts: 5
+        delay: 1s
+        multiplier: 2
+        max-delay: 30s
 ```
 
-A DLT message has a `dlt-reason` header explaining the failure. A redrive
+A DLT record carries `kafka_dlt-exception-fqcn`, `kafka_dlt-exception-message` and `kafka_dlt-original-topic` headers explaining the failure. A redrive
 operator tool replays from DLT after a fix.
 
 ## 6. Concurrency & ordering

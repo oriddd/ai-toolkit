@@ -1,0 +1,21 @@
+package {{basePackage}}.permission;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class PermissionsRegistry {
+    // Spring injects ALL PermissionsCheckStrategy beans automatically
+    private final List<PermissionsCheckStrategy> strategies;
+
+    public PermissionsCheckStrategy getStrategy(final CallerContext callerContext) {
+        return strategies.stream()
+                .filter(s -> s.supportedContexts().contains(callerContext))
+                .findFirst()
+                .orElse(null);
+    }
+}

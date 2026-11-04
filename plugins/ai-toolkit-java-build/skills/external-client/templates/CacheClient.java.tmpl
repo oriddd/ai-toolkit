@@ -1,12 +1,18 @@
 package {{basePackage}}.client.cache;
 import org.springframework.stereotype.Component;
+import java.time.Duration;
 import org.springframework.web.reactive.function.client.WebClient;
 @Component
 public class CacheClient {
     private final WebClient webClient;
-    public CacheClient(WebClient cacheWebClient) { this.webClient = cacheWebClient; }
+    private final Duration timeout;
+    public CacheClient(WebClient cacheWebClient, CacheClientConfig config) {
+        this.webClient = cacheWebClient;
+        this.timeout = config.getTimeout();
+    }
+    /** Returns null when the cache has no body for the key — the caller must handle that. */
     public CacheEntryResponse fetch(String key) {
         return webClient.get().uri("/cache/{key}", key)
-                .retrieve().bodyToMono(CacheEntryResponse.class).block();
+                .retrieve().bodyToMono(CacheEntryResponse.class).block(timeout);
     }
 }

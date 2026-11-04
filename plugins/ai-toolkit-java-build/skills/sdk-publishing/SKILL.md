@@ -36,7 +36,7 @@ my-foo-spring-boot-starter/
 └── src/main/
     ├── java/<basePackage>/
     │   ├── api/              # public interfaces + DTOs (the contract)
-    │   ├── internal/         # implementations (package-private classes; do not export)
+    │   ├── internal/         # implementations (public classes in a package that is not exported / documented as internal)
     │   └── autoconfigure/
     │       └── FooAutoConfiguration.java
     └── resources/META-INF/
@@ -78,10 +78,16 @@ public class FooAutoConfiguration {
         return new FooClientImpl(builder.baseUrl(props.baseUrl()).build(), props);
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    public FooHealthIndicator fooHealthIndicator(FooClient client) {
-        return new FooHealthIndicator(client);
+    // Optional integration in a nested class: the outer class is only guarded by WebClient, so a bean method returning an actuator type
+    // directly in it would fail with NoClassDefFoundError when actuator is not on the consumer's classpath.
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(HealthIndicator.class)
+    static class HealthConfiguration {
+        @Bean
+        @ConditionalOnMissingBean
+        public FooHealthIndicator fooHealthIndicator(FooClient client) {
+            return new FooHealthIndicator(client);
+        }
     }
 }
 ```
@@ -114,8 +120,9 @@ The `api/` package contains:
 - A single `*Properties` `@ConfigurationProperties` record.
 - A single `*Exception` hierarchy.
 
-The `internal/` package contains every implementation. Classes there are
-**package-private** so consumers cannot accidentally depend on them.
+The `internal/` package contains every implementation. The auto-configuration lives in a *different* package (`autoconfigure`), so these classes
+must be `public` to be instantiated there — package-private would not compile. Keep consumers out by **not exporting** the package (JPMS
+`exports` list, or an `@API(status = INTERNAL)` / Javadoc `@hidden` marker) and by never returning an `internal` type from `api/`.
 
 Use **JPMS** (`module-info.java`) when feasible to make this mechanical:
 

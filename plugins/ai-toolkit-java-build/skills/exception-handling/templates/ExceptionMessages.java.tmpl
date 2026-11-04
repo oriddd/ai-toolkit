@@ -22,4 +22,10 @@ public final class ExceptionMessages {
         return new ForbiddenException("ERR-FORBIDDEN",
             "Access denied to '%s'.".formatted(action));
     }
+    public static ForbiddenException callerContextNotFound() {
+        return new ForbiddenException("ERR-FORBIDDEN", "No caller context could be resolved.");
+    }
+    public static ForbiddenException unrecognizedCallerContext(Object context) {
+        return new ForbiddenException("ERR-FORBIDDEN", "Unrecognized caller context: %s".formatted(context));
+    }
 }

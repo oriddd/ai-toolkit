@@ -45,7 +45,7 @@ public class Invoice {
     private String id;                              // application-assigned UUID, never auto-incremented
 
     @Version
-    private long version;                            // optimistic locking — mandatory
+    private Long version;                            // optimistic locking — mandatory; a wrapper, never `long` (see rules)
 
     @Column(nullable = false)
     private String name;
@@ -68,14 +68,17 @@ public class Invoice {
 Rules:
 - **Application-assigned IDs** (UUID v7 or ULID) — never DB sequences. Makes
   inserts non-blocking and IDs stable across environments.
+- **`@Version` is a `Long` wrapper**, not a primitive `long`: Spring Data decides "new vs existing" from a null version. With an assigned id
+  and a primitive version it falls back to the id check, treats the entity as existing, runs `merge()` (an extra SELECT) and never fills `createdAt` / `createdBy`.
 - **`@Version`** on every aggregate root. Concurrent updates fail with
   `OptimisticLockingFailureException` — caught by the
-  `@RestControllerAdvice` and mapped to `409 Conflict`.
+  `@RestControllerAdvice` and mapped to `409 Conflict` — add an `@ExceptionHandler(OptimisticLockingFailureException.class)` returning `409`; the
+  catch-all handler would otherwise turn it into a `500`.
 - **Enums stored as `STRING`**, never ordinal (renaming breaks history).
 - **JPA auditing** (`@EnableJpaAuditing` + `AuditorAware<String>`) fills
   `createdAt/Updated/By` automatically.
-- **Soft delete** with a `@Where(clause = "deleted_at is null")` flag if
-  hard-delete is forbidden by domain rules; otherwise hard-delete.
+- **Soft delete** with `@SQLRestriction("deleted_at is null")` (Hibernate 6.3+; `@Where` is deprecated) and an `@SQLDelete` that sets `deleted_at`,
+  if hard-delete is forbidden by domain rules; otherwise hard-delete.
 - **No bidirectional relationships** unless absolutely required; prefer a
   separate repository lookup. Bidirectional `@OneToMany` is a footgun.
 

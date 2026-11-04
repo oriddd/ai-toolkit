@@ -12,9 +12,16 @@ public class FooClientConfig {
 
     @Bean
     public WebClient fooWebClient(
-            @Value("${foo-service.base-url}") final String baseUrl) {
+            @Value("${foo-service.base-url}") final String baseUrl,
+            @Value("${foo-service.timeouts.connect-ms}") final int connectMs,
+            @Value("${foo-service.timeouts.read-ms}") final long readMs) {
+        // WebClient has no response timeout by default — without these a hung dependency hangs the caller
+        final HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectMs)
+                .responseTimeout(Duration.ofMillis(readMs));
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 // add auth filters, codecs, etc. here — never in the Client
                 .build();
     }
@@ -38,7 +45,7 @@ public class FooClient {
     }
 
     public FooSearchResponseDto search(final FooSearchRequestDto request) {
-        log.debug("Foo search request: {}", request);
+        log.debug("Foo search request sent (queryId={})", request.getQueryId());   // never log the request or response body: it carries PII
         return fooWebClient.post()
                 .uri(searchEndpoint)
                 .body(BodyInserters.fromValue(request))
@@ -52,8 +59,8 @@ public class FooClient {
             return response.toEntity(String.class).flatMap(err ->
                     Mono.error(new FooWebClientException(
                             MessageFormat.format(
-                                    "Foo service call failed. Status: {0}, Body: {1}",
-                                    err.getStatusCode(), err.getBody()),
+                                    "Foo service call failed. Status: {0}",   // the body can hold PII — never put it in the message
+                                    err.getStatusCode()),
                             err)));
         }
         return response.bodyToMono(type);
@@ -64,6 +71,7 @@ public class FooClient {
 Rules:
 - Use `exchangeToMono` + a private `handleResponse` method — this lets you
   read the error body **and** the status before throwing the domain exception.
+- **Every call has a timeout**: set the connect and response timeouts on the `HttpClient` (see `FooClientConfig`), never an unbounded `.block()`.
 - **Always translate non-2xx to a domain exception** before it escapes the
   `client/` package.
 - Call `.block()` at the `Client` boundary — callers see a synchronous API.
@@ -106,7 +114,7 @@ public class FooResponseParser {
         if (verifier.hasInvoices(response)) {
             return response.getInvoices().getFirst();
         }
-        log.error("No invoices in response: {}", response);
+        log.error("No invoices in response (totalHits={})", response == null ? null : response.getTotalHits());
         return null;
     }
 

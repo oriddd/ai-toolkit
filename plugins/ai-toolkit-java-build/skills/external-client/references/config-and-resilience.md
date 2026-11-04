@@ -35,9 +35,12 @@ resilience4j:
   retry.instances.foo-service:
     maxAttempts: 3
     waitDuration: 200ms
+    enableExponentialBackoff: true          # without this the multiplier below is ignored
     exponentialBackoffMultiplier: 2
     retryExceptions:
-      - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+      # the exception your *Client* translates a transient failure (5xx, timeout) into — Retry never sees the raw
+      # WebClientResponseException because handleResponse() has already wrapped it
+      - com.example.client.foo.FooUnavailableException
 ```
 
 ```java
@@ -51,6 +54,8 @@ private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throw
 ```
 
 Rules:
+- Aspect order is Retry → CircuitBreaker → …, so Retry sees what the circuit-breaker fallback throws. Throw the retryable
+  exception only for transient failures; a non-retryable error must surface as a different domain exception.
 - Retry only **idempotent** operations (`GET`, count-only `POST`). Never retry
   state-mutating operations unless the producer supports idempotency keys.
 - The fallback method **always** throws a domain exception — never returns a

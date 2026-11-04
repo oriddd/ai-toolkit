@@ -4,16 +4,16 @@ import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
 import org.springframework.retry.annotation.Backoff;
 /**
- * Pair `@RetryableTopic` with `@DltHandler` on a consumer to wire
- * exponential-backoff retries and a final DLQ. Apply on the same class
- * that hosts the `@KafkaListener`.
+ * Annotation recipe, not a bean: copy `@RetryableTopic` onto the `@KafkaListener` method of your consumer
+ * (e.g. IdempotentConsumer) and add the `@DltHandler` method to that same class. Spring then creates the
+ * retry topics and the final `<topic>-dlt` topic. Without a `@KafkaListener` on the annotated method
+ * `@RetryableTopic` does nothing.
  */
 public class DlqHandler {
     @RetryableTopic(
-        attempts = "4",
-        backoff = @Backoff(delay = 1000, multiplier = 2.0),
-        topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
-        dltTopicSuffix = ".dlq"
+        attempts = "5",
+        backoff = @Backoff(delay = 1000, multiplier = 2.0, maxDelay = 30000),
+        topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE
     )
     public void onMessage(String payload) { /* delegate to IdempotentConsumer */ }
     @DltHandler

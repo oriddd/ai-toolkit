@@ -30,12 +30,23 @@ Identify any fields that contain Personally Identifiable Information (PII):
 Use a custom `@Mask` annotation on DTO fields and a corresponding Jackson `JsonSerializer` or a Logback/Log4j2 pattern converter to mask these fields.
 
 ```java
+@Retention(RetentionPolicy.RUNTIME)
+@JacksonAnnotationsInside
+@JsonSerialize(using = MaskingSerializer.class)   // without this the annotation does nothing
+public @interface Mask {}
+
 public record UserProfile(
     String id,
     @Mask String email,
     @Mask String phoneNumber
-) {}
+) {
+    // A Jackson serializer never runs for `log.info("{}", profile)` — that calls toString(), the usual way PII reaches logs.
+    @Override public String toString() { return "UserProfile[id=" + id + "]"; }
+}
 ```
+
+> Do not register `@Mask` on the ObjectMapper that serializes real API responses — it would mask what clients legitimately receive.
+> Use it with a dedicated mapper for log / audit output, and keep PII records' `toString()` free of PII.
 
 #### Jackson Masking Implementation
 ```java
@@ -46,7 +57,7 @@ public class MaskingSerializer extends JsonSerializer<String> {
             gen.writeNull();
             return;
         }
-        gen.writeString(value.replaceAll(".(?=.{4})", "*"));
+        gen.writeString(value.isEmpty() ? value : value.charAt(0) + "***");   // keep nothing that identifies the person (not the last 4 characters of an email)
     }
 }
 ```
@@ -66,6 +77,9 @@ public class UserEntity {
 ```
 
 **Key Rotation**: Ensure your `EncryptionConverter` supports multiple key versions to allow for background migration/rotation.
+
+**Searchability**: randomised AES makes the column impossible to query or index (`WHERE email = ?` finds nothing). If you must look records up by an encrypted
+field, store a separate deterministic **blind index** (an HMAC of the normalised value, with its own key) in an indexed column and query that.
 
 ## 4. Right to be Forgotten (Deletion/Anonymization)
 

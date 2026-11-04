@@ -263,4 +263,6 @@ maps the exception to a status code.
 ## 4. Templates
 
 - [`PermissionsHandler.java.tmpl`](./templates/PermissionsHandler.java.tmpl) — Central permission dispatcher.
+- [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl) — Routes a `CallerContext` to its strategy.
+- [`PermissionsCheckStrategy.java.tmpl`](./templates/PermissionsCheckStrategy.java.tmpl) — The strategy SPI.
 - [`SecurityConfig.java.tmpl`](./templates/SecurityConfig.java.tmpl) — Spring Security baseline for the service.

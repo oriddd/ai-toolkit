@@ -2,7 +2,10 @@ package {{basePackage}}.client.cache;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import io.netty.channel.ChannelOption;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 import java.time.Duration;
 @Configuration
 @ConfigurationProperties(prefix = "client.cache")
@@ -15,6 +18,12 @@ public class CacheClientConfig {
     public void setTimeout(Duration timeout) { this.timeout = timeout; }
     @Bean
     WebClient cacheWebClient() {
-        return WebClient.builder().baseUrl(baseUrl).build();
+        // WebClient has no response timeout by default; without these a hung dependency hangs the caller
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) timeout.toMillis())
+                .responseTimeout(timeout);
+        return WebClient.builder().baseUrl(baseUrl)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
     }
 }

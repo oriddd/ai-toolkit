@@ -2,6 +2,7 @@ package {{basePackage}}.config;
 import org.springframework.context.annotation.*;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.Optional;
 @Configuration
@@ -9,7 +10,10 @@ import java.util.Optional;
 public class AuditConfig {
     @Bean
     AuditorAware<String> auditorAware() {
+        // Spring Data's AuditorAware is a security-facing SPI, so this is the one other class that reads SecurityContextHolder;
+        // allow it in the `securityHolderLivesInPermissionOnly` ArchUnit rule (code-structure §4i).
         return () -> Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .filter(a -> a.isAuthenticated() && !(a instanceof AnonymousAuthenticationToken))
                 .map(a -> a.getName())
                 .or(() -> Optional.of("system"));
     }

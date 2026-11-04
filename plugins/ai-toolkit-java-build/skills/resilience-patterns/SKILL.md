@@ -67,6 +67,9 @@ If a dependency is known to be down (Circuit Breaker is OPEN), fail the request 
 ## 5. Fallback Strategies
 
 When a call fails or is rejected by a bulkhead/circuit-breaker, provide a safe alternative:
+> These value-returning fallbacks are only for **non-critical, read-only enrichment**. A transport in an `external-client` package never returns a
+> silent default: its fallback throws a domain exception so the outage is visible (`external-client` Do / Don't).
+
 - **Cached Value**: Return the last known good value from a cache.
 - **Static Default**: Return a safe "empty" or "default" state.
 - **Stubbed Response**: Return a hardcoded response (only if appropriate for the domain).

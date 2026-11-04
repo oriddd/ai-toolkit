@@ -44,6 +44,8 @@ single round if your tool supports it.
 | 11 | Does it call other this services via HTTP? | yes → include `client/` package |
 | 12 | Resource requests / limits (CPU + memory)? | `1/2 CPU`, `4Gi/8Gi` mem |
 | 13 | Max replicas for HPA? | `5` |
+| 14 | One-sentence service description for the README? | `{{serviceDisplayName}} service` → `oneLineDescription` |
+| 15 | Non-root UID / GID the pod runs as (must be able to read the image's files)? | `1000` → `runAsUser`, `runAsGroup`, `fsGroup` |
 | 14 | External dependencies (MinIO, Kafka, Redis, Postgres, Elasticsearch…)? | none |
 | 15 | Additional system packages required in the Docker image? | none |
 | 16 | Initial Git remote URL (to `git remote add origin`)? | skip |
@@ -124,7 +126,7 @@ Always create these files at the repo root:
 - **`README.md`** – use [`templates/README.md.tmpl`](./templates/README.md.tmpl);
   populate the title, service description, build/run sections.
 - **`.gitignore`** – use [`templates/.gitignore.tmpl`](./templates/gitignore.tmpl).
-- **`renovate.json`** – `{"extends":["config:base"]}`.
+- **`renovate.json`** – `{"extends":["config:recommended"]}` (`config:base` is the old name).
 - **`.editorconfig`** – use [`templates/.editorconfig.tmpl`](./templates/editorconfig.tmpl).
 - **`CODEOWNERS`** (`.github/CODEOWNERS`) – single line: `* <codeowner>`.
 - **`src/main/resources/logback-spring.xml`** – minimal config wiring

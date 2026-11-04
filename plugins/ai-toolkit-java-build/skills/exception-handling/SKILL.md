@@ -157,7 +157,7 @@ Rules:
 | Caller is authenticated but not allowed for this resource | `<Domain>ForbiddenException` |
 | Resource genuinely does not exist | `<Domain>NotFoundException` |
 | Downstream dependency returned an error / timed out | `<Domain>Exception` wrapping the cause (→ 500) |
-| Programmer error (precondition violation inside the service) | `IllegalStateException` / `IllegalArgumentException` (mapped by stock `ResponseEntityExceptionHandler`) |
+| Programmer error (precondition violation inside the service) | `IllegalStateException` / `IllegalArgumentException` (not handled by `ResponseEntityExceptionHandler`, which only covers Spring MVC exceptions — they reach the catch-all handler and become a logged `500`, which is right for a bug) |
 
 ## Tests
 
@@ -176,6 +176,11 @@ not just `FooException`. The HTTP mapping depends on the exact subclass.
 
 Component tests (see `component-tests`) prove the end-to-end status
 mapping for the full matrix (`200 / 400 / 403 / 404 / 500`).
+
+> **About the shipped templates.** They implement one concrete variant: an **unchecked** `BaseDomainException` that carries an
+> `errorCode`, messages built with `String.formatted` in `ExceptionMessages`, and a single `GlobalExceptionHandler`. That differs from the
+> checked, field-free, `MessageFormat` default described above — answer question 2 first and follow **one** model per service. If you keep the
+> checked default, a checked exception does not roll back `@Transactional` unless you declare `rollbackFor`.
 
 ## Do / Don't
 

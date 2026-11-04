@@ -6,12 +6,12 @@ import java.time.Instant;
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 public abstract class BaseEntity {
-    @Version private long version;
+    @Version private Long version;   // wrapper type: null means "new", so auditing sets createdAt/createdBy even with assigned ids
     @CreatedDate      private Instant createdAt;
     @LastModifiedDate private Instant updatedAt;
     @CreatedBy        private String createdBy;
     @LastModifiedBy   private String updatedBy;
-    public long getVersion()       { return version; }
+    public Long getVersion()       { return version; }
     public Instant getCreatedAt()  { return createdAt; }
     public Instant getUpdatedAt()  { return updatedAt; }
     public String getCreatedBy()   { return createdBy; }

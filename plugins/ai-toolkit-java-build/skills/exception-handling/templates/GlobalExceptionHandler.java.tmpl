@@ -1,4 +1,7 @@
 package {{basePackage}}.exception;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -6,6 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     @ExceptionHandler(NotFoundException.class)
     public ProblemDetail onNotFound(NotFoundException e) { return build(HttpStatus.NOT_FOUND, e); }
     @ExceptionHandler(ConflictException.class)
@@ -14,8 +18,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail onBadRequest(BadRequestException e) { return build(HttpStatus.BAD_REQUEST, e); }
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail onForbidden(ForbiddenException e) { return build(HttpStatus.FORBIDDEN, e); }
+    /** Bean Validation failures on @PathVariable / @RequestParam (class-level @Validated) arrive as this exception, not as a Spring MVC one. */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ProblemDetail onConstraintViolation(ConstraintViolationException e) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed.");
+        pd.setProperty("errorCode", "ERR-BAD-REQUEST");
+        return pd;
+    }
     @ExceptionHandler(Exception.class)
-    public ProblemDetail onUnexpected(Exception e) {
+    public ProblemDetail onUnexpected(Exception e) throws Exception {
+        // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.
+        if (e.getClass().getName().startsWith("org.springframework.security.")) {
+            throw e;
+        }
+        log.error("Unhandled exception", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         pd.setProperty("errorCode", "ERR-INTERNAL");

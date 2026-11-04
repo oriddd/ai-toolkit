@@ -5,7 +5,11 @@ import java.time.Duration;
 /** Translates remote DTOs into the domain model — keeps DTO types out of services. */
 @Component
 public class CacheEntryAdapter {
+    /** Returns null for a null response (CacheClient.fetch returns null on an empty body). */
     public CacheEntry toDomain(CacheEntryResponse r) {
+        if (r == null) {
+            return null;
+        }
         return new CacheEntry(r.key(), r.value(), Duration.ofMillis(r.ttlMillis()));
     }
 }
