@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-react-native-agents",
   "description": "React Native task agents that compose the react-native-* skills — new screen, feature, refactor, code review and the parallel test-writer worker (draft). Requires the react-native-* plugins.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -16,7 +16,10 @@
     "react-native"
   ],
   "dependencies": [
+    "ai-toolkit-docs",
     "ai-toolkit-react-native-design",
-    "ai-toolkit-docs"
+    "ai-toolkit-react-native-build",
+    "ai-toolkit-react-native-quality",
+    "ai-toolkit-react-native-ops"
   ]
 }

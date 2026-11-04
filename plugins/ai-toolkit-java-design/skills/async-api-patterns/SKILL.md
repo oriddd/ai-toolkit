@@ -4,7 +4,7 @@ description: >
   Java / Spring Boot: Handle long-running operations (> 2s) in a RESTful way. Covers the "Submit-Poll-Result" pattern, Webhooks, and SSE (Server-Sent Events). Includes guidance on job state management, cleanup of abandoned jobs, and designing for idempotency. Use when an endpoint would run longer than ~2 seconds or must return a job handle instead of blocking.
 tier: should
 applies_to: [rest, event, monolith]
-depends_on: [code-structure, persistence]
+depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0

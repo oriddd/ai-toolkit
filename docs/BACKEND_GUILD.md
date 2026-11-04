@@ -150,16 +150,13 @@ graph LR
   code_structure --> validation_pattern
   spring_boot_conventions --> validation_pattern
   code_structure --> api_design
-  exception_handling --> api_design
   code_structure --> async_api_patterns
-  persistence --> async_api_patterns
   testable_code_principles --> code_structure
   code_structure --> domain_modeling
   code_structure --> feature_flags
   pluggable_architecture --> feature_flags
   api_design --> openapi_first_codegen
   code_structure --> pattern_selection
-  external_client --> pattern_selection
   code_structure --> pluggable_architecture
   spring_boot_conventions --> pluggable_architecture
   code_structure --> response_layout
@@ -224,7 +221,6 @@ graph LR
   react_native_input_validation --> react_native_security
   react_native_state_and_data --> react_native_code_structure
   react_native_code_structure --> react_native_state_and_data
-  react_native_error_handling --> react_native_state_and_data
   react_native_static_analysis --> react_native_ci
   react_native_unit_tests --> react_native_ci
   react_native_error_handling --> react_native_observability

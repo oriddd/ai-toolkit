@@ -4,7 +4,7 @@ description: >
   Java / Spring Boot: choose the smallest pattern that fits the actual scale — scale-based decision tables for external clients, operations and layers, red flags of over-engineering, and when to ask the developer. Use before introducing any new layer, pattern, client package or abstraction, and when a design feels heavier than the problem.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
-depends_on: [code-structure, external-client]
+depends_on: [code-structure]
 ships_templates: false
 hitl: true
 version: 1.0

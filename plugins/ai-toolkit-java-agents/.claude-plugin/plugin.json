@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-java-agents",
   "description": "Java task agents that compose the Java skills — new endpoint, feature, Kafka consumer, metric, client, validation, refactor, code review, repo scaffold, context update, and the parallel test-writer worker. Requires the java-* plugins.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -16,8 +16,11 @@
     "java"
   ],
   "dependencies": [
-    "ai-toolkit-java-design",
     "ai-toolkit-docs",
+    "ai-toolkit-java-design",
+    "ai-toolkit-java-build",
+    "ai-toolkit-java-quality",
+    "ai-toolkit-java-ops",
     "ai-toolkit-java-scaffold"
   ]
 }

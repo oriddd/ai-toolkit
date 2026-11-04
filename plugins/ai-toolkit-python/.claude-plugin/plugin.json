@@ -1,0 +1,25 @@
+{
+  "name": "ai-toolkit-python",
+  "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
+  "version": "0.1.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/oriddd/ai-toolkit",
+  "homepage": "https://github.com/oriddd/ai-toolkit",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "engineering-standards",
+    "meta",
+    "python"
+  ],
+  "dependencies": [
+    "ai-toolkit-python-design",
+    "ai-toolkit-python-build",
+    "ai-toolkit-python-quality",
+    "ai-toolkit-python-ops",
+    "ai-toolkit-workflow"
+  ]
+}

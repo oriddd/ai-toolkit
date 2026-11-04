@@ -194,6 +194,28 @@ else:
         for m in re.finditer(r"\]\(\.\./([a-z0-9-]+)/SKILL\.md", read(path)):
             if seen.get(m.group(1)) != pname:
                 err(f"{os.path.relpath(path, root)}: link to `{m.group(1)}` crosses plugin boundary — reference it by name instead")
+    # Plugin dependencies: every cross-plugin `depends_on` must be covered by a (transitive) plugin dependency; no cycles
+    pdeps = {}
+    for pname, pdir in listed.items():
+        mf = os.path.join(pdir, ".claude-plugin", "plugin.json")
+        pdeps[pname] = json.loads(read(mf)).get("dependencies", []) if os.path.exists(mf) else []
+        for d in pdeps[pname]:
+            if d not in listed: err(f"{pname}: dependency `{d}` is not a plugin in this marketplace")
+    def _closure(p, acc=None):
+        acc = set() if acc is None else acc
+        for d in pdeps.get(p, []):
+            if d not in acc:
+                acc.add(d); _closure(d, acc)
+        return acc
+    for p in pdeps:
+        if p in _closure(p): err(f"{p}: plugin dependencies form a cycle")
+    for path in all_skills:
+        pname = path.split(os.sep)[-4]
+        dm = re.search(r"^depends_on:\s*\[(.*?)\]", read(path), re.M)
+        for dep in [x.strip() for x in (dm.group(1).split(",") if dm else []) if x.strip()]:
+            owner = seen.get(dep)
+            if owner and owner != pname and owner not in _closure(pname):
+                err(f"{os.path.relpath(path, root)}: depends_on `{dep}` lives in {owner}, which {pname} does not depend on (add it to plugin.json dependencies)")
     agent_names = {os.path.basename(a)[:-3] for a in glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md"))}
     for agent in glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md")):
         rel = os.path.relpath(agent, root)

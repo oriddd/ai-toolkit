@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — plugin dependencies match what skills need
+- Install a language with its new meta plugin: `ai-toolkit-java`, `ai-toolkit-python` or `ai-toolkit-react-native`
+  (manifest-only; they depend on the language's design, build, quality and ops plugins plus the neutral ones).
+  `ai-toolkit-<lang>-design` no longer pulls in its siblings. Existing installs keep what they already have.
+- Every plugin now declares the plugins its skills' `depends_on` need, so a phase plugin installed on its own brings
+  its prerequisites (for example `ai-toolkit-java-build` also installs design, ops, quality and workflow).
+  The graph is acyclic: design → quality → ops → build.
+- Four `depends_on` entries that pointed from a design skill back at a build skill (`api-design`, `async-api-patterns`,
+  `pattern-selection`, React Native `state-and-data`) are removed; the skills still mention them in prose.
+- `validate-skills.sh` fails a cross-plugin `depends_on` that its plugin does not declare, a dependency on an unknown plugin,
+  and any dependency cycle.
+- Plugin versions: Java phase plugins `1.2.0`, Python / React Native phase plugins `0.2.0`; new meta plugins `1.0.0` (Java) and `0.1.0` (drafts).
+
 ## [2.0.0] - 2026-11-04
 
 ### Changed — skills load on demand

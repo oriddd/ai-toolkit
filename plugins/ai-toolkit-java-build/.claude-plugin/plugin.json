@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-java-build",
   "description": "Java 21 / Spring Boot implementation phase — exceptions, validation, permissions, persistence, messaging, external clients, resilience, security and privacy.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -14,5 +14,11 @@
     "engineering-standards",
     "build",
     "java"
+  ],
+  "dependencies": [
+    "ai-toolkit-java-design",
+    "ai-toolkit-java-ops",
+    "ai-toolkit-java-quality",
+    "ai-toolkit-workflow"
   ]
 }

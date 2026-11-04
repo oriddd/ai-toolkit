@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-react-native-quality",
   "description": "React Native quality phase: Jest and RNTL unit tests, static analysis gates and Maestro E2E (draft)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -14,5 +14,9 @@
     "engineering-standards",
     "quality",
     "react-native"
+  ],
+  "dependencies": [
+    "ai-toolkit-react-native-design",
+    "ai-toolkit-react-native-build"
   ]
 }

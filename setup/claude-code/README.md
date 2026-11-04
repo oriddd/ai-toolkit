@@ -8,21 +8,21 @@ finished.
 
 ```
 /plugin marketplace add oriddd/ai-toolkit
-/plugin install ai-toolkit-java-design@ai-toolkit      # or ai-toolkit-python-design / ai-toolkit-react-native-design
+/plugin install ai-toolkit-java@ai-toolkit             # or ai-toolkit-python / ai-toolkit-react-native
 /plugin install ai-toolkit-java-agents@ai-toolkit      # optional: task agents for that language
 /reload-plugins
 ```
 
-Installing a language's `-design` plugin pulls in everything that language needs through plugin dependencies. You do not
+Installing a language's plugin pulls in everything that language needs through plugin dependencies. You do not
 install the phase plugins one by one.
 
 | You install | You also get (dependencies) |
 | --- | --- |
-| `ai-toolkit-java-design` | `-java-build`, `-java-quality`, `-java-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
-| `ai-toolkit-python-design` | `-python-build`, `-python-quality`, `-python-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
-| `ai-toolkit-react-native-design` | `-react-native-build`, `-react-native-quality`, `-react-native-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
-| `ai-toolkit-<lang>-agents` | `ai-toolkit-<lang>-design` (and everything above), `ai-toolkit-docs`; the Java agents also `ai-toolkit-java-scaffold` |
-| `ai-toolkit-java-scaffold` | `ai-toolkit-java-design`, `ai-toolkit-docs` |
+| `ai-toolkit-java` | `-java-design`, `-java-build`, `-java-quality`, `-java-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
+| `ai-toolkit-python` | `-python-design`, `-python-build`, `-python-quality`, `-python-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
+| `ai-toolkit-react-native` | `-react-native-design`, `-react-native-build`, `-react-native-quality`, `-react-native-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
+| `ai-toolkit-<lang>-agents` | that language's design, build, quality and ops plugins, `ai-toolkit-docs`; the Java agents also `ai-toolkit-java-scaffold` |
+| `ai-toolkit-java-scaffold` | `-java-design`, `-java-ops`, `ai-toolkit-docs` |
 | `ai-toolkit-docs` | `ai-toolkit-workflow` (and so `ai-toolkit-quality`) |
 | `ai-toolkit-workflow` | `ai-toolkit-quality` |
 | `ai-toolkit-quality` | — |
@@ -31,11 +31,11 @@ A language's routing table is injected only when the project is that language (`
 `pyproject.toml` / `requirements*.txt` / `setup.cfg` / `Pipfile`, or a `package.json` that contains `react-native`).
 Detection looks at the project root only.
 
-## Install a language as a set
+## Phase plugins on their own
 
-Skills lean on skills in sibling plugins — for example the `java-build` skills cite `code-structure` from `java-design`.
-Install a language through its `-design` plugin, which depends on its siblings and pulls them in. Installing `-build`,
-`-ops` or `-quality` on its own works, but the references to sibling skills will not resolve.
+Each phase plugin declares the plugins its skills depend on, so `ai-toolkit-java-build` alone also installs
+`-java-design`, `-java-ops`, `-java-quality` and `ai-toolkit-workflow`. The order is design → quality → ops → build; `-design` depends on
+nothing. `validate-skills.sh` fails a skill dependency its plugin does not declare, and any dependency cycle.
 
 ## For a whole team
 
@@ -43,7 +43,7 @@ Register the marketplace once in the repository so everyone is prompted to insta
 
 ```
 claude plugin marketplace add oriddd/ai-toolkit --scope project     # writes .claude/settings.json — commit it
-claude plugin install ai-toolkit-java-design@ai-toolkit --scope project
+claude plugin install ai-toolkit-java@ai-toolkit --scope project
 ```
 
 The settings keys behind this are `extraKnownMarketplaces` and `enabledPlugins`. Each contributor still runs the

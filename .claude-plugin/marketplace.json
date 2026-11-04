@@ -15,6 +15,12 @@
       "category": "development"
     },
     {
+      "name": "ai-toolkit-java",
+      "source": "./plugins/ai-toolkit-java",
+      "description": "Java 21 / Spring Boot — installs the whole Java toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-java-agents`) and the repo scaffolder (`ai-toolkit-java-scaffold`) stay optional.",
+      "category": "development"
+    },
+    {
       "name": "ai-toolkit-java-agents",
       "source": "./plugins/ai-toolkit-java-agents",
       "description": "Java task agents that compose the Java skills — new endpoint, feature, Kafka consumer, metric, client, validation, refactor, code review, repo scaffold, context update, and the parallel test-writer worker. Requires the java-* plugins.",
@@ -29,7 +35,7 @@
     {
       "name": "ai-toolkit-java-design",
       "source": "./plugins/ai-toolkit-java-design",
-      "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Install this first for Java.",
+      "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Part of the `ai-toolkit-java` set.",
       "category": "development"
     },
     {
@@ -51,6 +57,12 @@
       "category": "development"
     },
     {
+      "name": "ai-toolkit-python",
+      "source": "./plugins/ai-toolkit-python",
+      "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
+      "category": "development"
+    },
+    {
       "name": "ai-toolkit-python-agents",
       "source": "./plugins/ai-toolkit-python-agents",
       "description": "Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker (draft). Requires the python-* plugins.",
@@ -65,7 +77,7 @@
     {
       "name": "ai-toolkit-python-design",
       "source": "./plugins/ai-toolkit-python-design",
-      "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft)",
+      "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft) Part of the `ai-toolkit-python` set.",
       "category": "development"
     },
     {
@@ -87,6 +99,12 @@
       "category": "development"
     },
     {
+      "name": "ai-toolkit-react-native",
+      "source": "./plugins/ai-toolkit-react-native",
+      "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
+      "category": "development"
+    },
+    {
       "name": "ai-toolkit-react-native-agents",
       "source": "./plugins/ai-toolkit-react-native-agents",
       "description": "React Native task agents that compose the react-native-* skills — new screen, feature, refactor, code review and the parallel test-writer worker (draft). Requires the react-native-* plugins.",
@@ -101,7 +119,7 @@
     {
       "name": "ai-toolkit-react-native-design",
       "source": "./plugins/ai-toolkit-react-native-design",
-      "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft)",
+      "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft) Part of the `ai-toolkit-react-native` set.",
       "category": "development"
     },
     {

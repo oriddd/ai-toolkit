@@ -3,7 +3,7 @@ name: api-design
 description: REST API design rules every Spring Boot service publishes — resource modelling, HTTP-verb semantics, status code catalogue, URL conventions, versioning (URI vs media-type), pagination + filtering + sorting, deprecation headers, error format (RFC 7807 ProblemDetail), HATEOAS posture, OpenAPI-first vs code-first. Use whenever a new endpoint is designed or an existing API is reviewed.
 tier: must
 applies_to: [rest, monolith]
-depends_on: [code-structure, exception-handling]
+depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0

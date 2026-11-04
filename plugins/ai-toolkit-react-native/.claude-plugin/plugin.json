@@ -1,0 +1,25 @@
+{
+  "name": "ai-toolkit-react-native",
+  "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
+  "version": "0.1.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/oriddd/ai-toolkit",
+  "homepage": "https://github.com/oriddd/ai-toolkit",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "engineering-standards",
+    "meta",
+    "react-native"
+  ],
+  "dependencies": [
+    "ai-toolkit-react-native-design",
+    "ai-toolkit-react-native-build",
+    "ai-toolkit-react-native-quality",
+    "ai-toolkit-react-native-ops",
+    "ai-toolkit-workflow"
+  ]
+}

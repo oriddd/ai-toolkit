@@ -72,13 +72,15 @@ Python: `rest`, `worker`, `cli`, `library`; React Native: `mobile`).
 Plugins declare `dependencies` in `plugin.json` (bare names, same marketplace; Claude Code installs them with the plugin).
 The graph must stay acyclic and shallow:
 
-- `ai-toolkit-<lang>-design` depends on that language's `-build`, `-quality`, `-ops` and on `ai-toolkit-workflow` (Java also on
-  `ai-toolkit-docs`) — installing the design plugin is installing the language.
-- `ai-toolkit-<lang>-agents` depends on `ai-toolkit-<lang>-design` and `ai-toolkit-docs` (the Java agents also on `ai-toolkit-java-scaffold`).
-- `ai-toolkit-docs` depends on `ai-toolkit-workflow`, which depends on `ai-toolkit-quality`; the `-build`, `-quality`, `-ops` plugins of a
-  language and `ai-toolkit-quality` depend on nothing.
+- A plugin depends on **every plugin its skills' `depends_on` name** and nothing more; the validator fails a missing dependency and any cycle.
+  So `-design` depends on nothing, `-quality` on `-design` (Python / React Native also `-build`), `-ops` on `-design` and `-quality`, and
+  `-build` on what its skills need (Java: design, ops, quality, workflow). A skill never lists a skill from a *later* phase in `depends_on`;
+  mention it in prose instead.
+- `ai-toolkit-<lang>` (java, python, react-native) is a manifest-only plugin that depends on that language's four phase plugins and
+  `ai-toolkit-workflow` (Java also `ai-toolkit-docs`) — installing it is installing the language.
+- `ai-toolkit-<lang>-agents` depends on that language's four phase plugins and `ai-toolkit-docs` (Java also `ai-toolkit-java-scaffold`).
+- `ai-toolkit-docs` depends on `ai-toolkit-workflow`, which depends on `ai-toolkit-quality`, which depends on nothing.
 - References between skills of different plugins are by **name** only (never relative links) — the validator enforces it.
-  Soft references to a sibling phase are fine because installing `-design` brings the siblings along.
 
 ## Names, routing and agents at runtime
 

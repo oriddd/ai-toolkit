@@ -31,11 +31,11 @@ docs/    → indexes, guild rules, LANGUAGE_CONTRACT      tools/ → validators 
 ```
 /plugin marketplace add <git-url-or-path-to-this-repo>
 /plugin install ai-toolkit-workflow@ai-toolkit
-/plugin install ai-toolkit-python-design@ai-toolkit      # pick your language
+/plugin install ai-toolkit-python@ai-toolkit             # pick your language
 ```
 
 The `*-design` plugin's SessionStart hook injects task→skill routing only for projects of that
-language. Installing a `-design` plugin already pulls in that language's `-build`, `-quality` and `-ops`; each `<lang>-agents` plugin depends on the design plugin.
+language. Installing `ai-toolkit-<lang>` already pulls in that language's `-design`, `-build`, `-quality` and `-ops`; each `<lang>-agents` plugin depends on all four.
 
 ---
 

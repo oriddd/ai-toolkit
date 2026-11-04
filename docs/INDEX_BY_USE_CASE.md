@@ -34,7 +34,7 @@ This index helps you find the right skills to read based on the task you are per
 
 ## Other languages and cross-cutting tasks
 
-The table above is the Java / Spring Boot map. Install the language's plugins; its `*-design` plugin
+The table above is the Java / Spring Boot map. Install `ai-toolkit-<lang>`; its `*-design` plugin
 injects a routing table at session start.
 
 | If you want to… | Python | React Native |

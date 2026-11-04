@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-python-design",
-  "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft) Installing it also installs the language's build, quality and ops plugins and the neutral workflow and quality plugins.",
-  "version": "0.1.0",
+  "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft) Part of the `ai-toolkit-python` set — install that to get the whole language.",
+  "version": "0.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -14,11 +14,5 @@
     "engineering-standards",
     "design",
     "python"
-  ],
-  "dependencies": [
-    "ai-toolkit-python-build",
-    "ai-toolkit-python-quality",
-    "ai-toolkit-python-ops",
-    "ai-toolkit-workflow"
   ]
 }

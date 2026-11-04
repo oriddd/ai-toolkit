@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-react-native-ops",
   "description": "React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability (draft)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "oriddd"
   },
@@ -14,5 +14,10 @@
     "engineering-standards",
     "ops",
     "react-native"
+  ],
+  "dependencies": [
+    "ai-toolkit-react-native-design",
+    "ai-toolkit-react-native-build",
+    "ai-toolkit-react-native-quality"
   ]
 }
