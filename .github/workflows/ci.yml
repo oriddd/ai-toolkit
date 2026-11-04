@@ -1,0 +1,61 @@
+name: ci
+
+# Every PR must keep the catalogue consistent: validators, link check, hook behaviour tests,
+# git modes / line endings, plugin version bumps and Claude Code's own manifest validation.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check-versions needs the merge base
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML (strict frontmatter parsing)
+        run: python3 -m pip install pyyaml
+      - name: Validators (skills, agents, plugins, language contract)
+        run: bash tools/validate-skills.sh
+      - name: Generated docs are in sync
+        run: python3 tools/build-indexes.py --check
+      - name: Relative links
+        run: python3 tools/check-links.py
+      - name: Hook behaviour (commit guard, session start, detectors, wiring)
+        run: bash tools/test-hooks.sh
+      - name: Git modes and line endings
+        run: bash tools/check-repo-hygiene.sh
+      - name: Plugin version bump when content changed
+        if: github.event_name == 'pull_request'
+        run: bash tools/check-versions.sh "origin/${{ github.base_ref }}"
+
+  claude-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Claude Code CLI (pinned)
+        run: npm install -g @anthropic-ai/claude-code@2.1.309
+      - name: Validate marketplace and every plugin (warnings fail the build)
+        run: |
+          set -u
+          fail=0
+          for target in . plugins/*/; do
+            out="$(claude plugin validate "$target" 2>&1)"; rc=$?
+            echo "== $target"; echo "$out" | tail -3
+            if [ $rc -ne 0 ] || echo "$out" | grep -Eq 'Found [0-9]+ (warning|error)'; then fail=1; fi
+          done
+          exit $fail

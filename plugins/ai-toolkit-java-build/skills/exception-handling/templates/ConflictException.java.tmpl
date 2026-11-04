@@ -1,0 +1,5 @@
+package {{basePackage}}.exception;
+public class ConflictException extends BaseDomainException {
+    public ConflictException(String errorCode, String message) { super(errorCode, message); }
+    public ConflictException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

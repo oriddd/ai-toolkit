@@ -1,0 +1,24 @@
+FROM {{baseImage}} AS runner
+
+ARG APP_USER_NAME
+ARG APP_USER_ID
+
+USER root
+RUN adduser -D "$APP_USER_NAME" -u "$APP_USER_ID"
+# Optional: extra system packages
+# RUN apk add --no-cache {{extraSystemPackages}}
+USER $APP_USER_NAME
+
+EXPOSE {{appPort}}
+
+WORKDIR /app
+
+COPY --chown=$APP_USER_ID target/extracted_jar/dependencies/ .
+COPY --chown=$APP_USER_ID target/extracted_jar/spring-boot-loader/ .
+COPY --chown=$APP_USER_ID target/extracted_jar/snapshot-dependencies/ .
+COPY --chown=$APP_USER_ID target/extracted_jar/application/ .
+
+ENV JAVA_OPTS="-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -Dlog4j2.formatMsgNoLookups=true"
+
+CMD ["sh", "-c", "java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
+

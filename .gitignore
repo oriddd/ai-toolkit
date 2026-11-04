@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# JetBrains / IDE
+.idea/
+*.iml
+
+# Editors
+.vscode/
+
+# Accidental shell session captures
+typescript
+typescript-*
+
+# OS / temp
+*.log
+*.tmp
+
+# Local release blocklist — keep it out of the repository
+.publication-blocklist
+

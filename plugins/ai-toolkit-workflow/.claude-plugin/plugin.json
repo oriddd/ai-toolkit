@@ -1,0 +1,11 @@
+{
+  "name": "ai-toolkit-workflow",
+  "description": "Language-neutral delivery workflow — Conventional Commits, PR descriptions, release versioning and parallel delegation to subagents. Works with any stack; install it everywhere.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "dependencies": [
+    "ai-toolkit-quality"
+  ]
+}

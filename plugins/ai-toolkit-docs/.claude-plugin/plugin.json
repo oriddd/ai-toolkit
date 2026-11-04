@@ -1,0 +1,11 @@
+{
+  "name": "ai-toolkit-docs",
+  "description": "Language-neutral documentation — ADRs and docs-as-code, UML/Mermaid diagrams, and project context templates with a validator.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "dependencies": [
+    "ai-toolkit-workflow"
+  ]
+}

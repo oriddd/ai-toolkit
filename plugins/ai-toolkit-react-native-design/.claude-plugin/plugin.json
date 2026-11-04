@@ -1,0 +1,14 @@
+{
+  "name": "ai-toolkit-react-native-design",
+  "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft) Installing it also installs the language's build, quality and ops plugins and the neutral workflow and quality plugins.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "dependencies": [
+    "ai-toolkit-react-native-build",
+    "ai-toolkit-react-native-quality",
+    "ai-toolkit-react-native-ops",
+    "ai-toolkit-workflow"
+  ]
+}

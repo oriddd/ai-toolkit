@@ -1,0 +1,24 @@
+image:
+  registry: {{imageRegistry}}
+  repository: {{chartName}}
+  pullPolicy: IfNotPresent
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: {{autoscaling.maxReplicas}}
+  targetCPUUtilizationPercentage: 500
+
+resources:
+  requests:
+    memory: "{{resources.requests.memory}}"
+    cpu: "{{resources.requests.cpu}}"
+    ephemeral-storage: "1Mi"
+  limits:
+    memory: "{{resources.limits.memory}}"
+    cpu: "{{resources.limits.cpu}}"
+    ephemeral-storage: "2Gi"
+
+logLevel: INFO
+
+# Add service-specific config blocks below (libraries, integrations, etc.)
+

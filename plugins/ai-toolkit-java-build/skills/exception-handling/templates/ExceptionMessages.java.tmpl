@@ -1,0 +1,25 @@
+package {{basePackage}}.exception;
+/**
+ * Static catalogue of error codes + message templates. Every domain
+ * exception is constructed via a method in this class — never with an
+ * inline string. Makes the catalogue greppable for support / runbooks.
+ */
+public final class ExceptionMessages {
+    private ExceptionMessages() {}
+    public static NotFoundException resourceNotFound(String type, String id) {
+        return new NotFoundException("ERR-NOT-FOUND",
+            "%s with id '%s' was not found.".formatted(type, id));
+    }
+    public static ConflictException versionConflict(String type, String id) {
+        return new ConflictException("ERR-CONFLICT",
+            "%s '%s' was modified concurrently.".formatted(type, id));
+    }
+    public static BadRequestException invalidField(String field, String reason) {
+        return new BadRequestException("ERR-BAD-REQUEST",
+            "Field '%s' is invalid: %s".formatted(field, reason));
+    }
+    public static ForbiddenException accessDenied(String action) {
+        return new ForbiddenException("ERR-FORBIDDEN",
+            "Access denied to '%s'.".formatted(action));
+    }
+}

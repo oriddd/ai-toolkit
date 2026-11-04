@@ -1,0 +1,5 @@
+package {{basePackage}}.exception;
+public class NotFoundException extends BaseDomainException {
+    public NotFoundException(String errorCode, String message) { super(errorCode, message); }
+    public NotFoundException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

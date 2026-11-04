@@ -1,0 +1,5 @@
+package {{basePackage}}.exception;
+public class BadRequestException extends BaseDomainException {
+    public BadRequestException(String errorCode, String message) { super(errorCode, message); }
+    public BadRequestException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

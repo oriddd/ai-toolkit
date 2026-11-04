@@ -1,0 +1,11 @@
+# Pin line endings: hook and tool scripts must be LF or they fail on Windows (autocrlf) clones.
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.tmpl text eol=lf
+*.png binary

@@ -1,0 +1,28 @@
+package {{basePackage}}.messaging;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.stereotype.Component;
+/**
+ * Idempotent consumer skeleton — replace `processEvent` and the
+ * dedup-store calls with project specifics. Retry / DLQ topology lives
+ * in application.yaml under `spring.kafka.*` + RetryTopicConfiguration.
+ */
+@Component
+public class IdempotentConsumer {
+    @KafkaListener(topics = "${kafka.topics.example.name}",
+                   groupId = "${kafka.topics.example.group-id}")
+    public void onMessage(String payload, Acknowledgment ack) {
+        String eventId = extractEventId(payload);
+        if (alreadyProcessed(eventId)) {
+            ack.acknowledge();
+            return;
+        }
+        processEvent(payload);
+        markProcessed(eventId);
+        ack.acknowledge();
+    }
+    private String extractEventId(String payload) { /* TODO */ return payload; }
+    private boolean alreadyProcessed(String eventId) { /* TODO */ return false; }
+    private void processEvent(String payload) { /* TODO */ }
+    private void markProcessed(String eventId) { /* TODO */ }
+}

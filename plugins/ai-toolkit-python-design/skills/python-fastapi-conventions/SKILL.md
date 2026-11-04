@@ -1,0 +1,134 @@
+---
+name: python-fastapi-conventions
+description: Apply FastAPI conventions for a REST service — thin routers, Depends-based injection, explicit response models, one pagination contract, problem+json error responses, URL conventions and lifespan-managed resources. Use when adding or changing any endpoint, router, dependency or app factory in a FastAPI service. Not for package layout (use `python-code-structure`), the exception-to-problem mapping itself (use `python-error-handling`) or request validation rules (use `python-input-validation`).
+tier: must
+applies_to: [rest]
+depends_on: [python-code-structure]
+ships_templates: false
+hitl: false
+version: 1.0
+last_reviewed: 2026-11-03
+---
+
+# Python FastAPI Conventions Skill
+## When to use
+Whenever you add or change an HTTP endpoint, a router, a `Depends` provider or the application factory.
+
+## Layout
+
+```
+src/my_service/
+├── main.py                    # create_app(), lifespan, router registration
+└── api/
+    ├── dependencies.py        # Depends providers (the only place that builds the object graph per request)
+    ├── errors.py              # exception handlers (see `python-error-handling`)
+    └── routers/
+        ├── orders.py          # one router per resource
+        └── health.py
+```
+
+## Dependencies
+```toml
+dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.8", "pydantic-settings>=2.4"]
+```
+
+## 1. Thin routers
+A route function parses input (already validated by its model), calls **one** operation/service and
+returns a response model. No business rules, no `try/except` for domain errors, no DB sessions.
+
+```python
+router = APIRouter(prefix="/v1/orders", tags=["orders"])
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=OrderResponse)
+async def create_order(
+    body: CreateOrderRequest,
+    operation: Annotated[CreateOrderOperation, Depends(get_create_order_operation)],
+) -> OrderResponse:
+    return await operation.execute(body)
+```
+
+## 2. Dependencies are the injection seam
+Providers live in `api/dependencies.py`, are typed with `Annotated`, and return `Protocol`-typed
+collaborators. Singletons (engine, session factory, HTTP clients) come from `request.app.state`, set in the
+lifespan; per-request objects (unit of work, current user) are built here. Never share one session
+across requests. Tests swap providers with `app.dependency_overrides`.
+
+```python
+def get_uow_factory(request: Request) -> Callable[[], SqlUnitOfWork]:
+    factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return partial(SqlUnitOfWork, factory)          # `python-persistence`: a new session per unit of work
+
+def get_order_service(
+    uow_factory: Annotated[Callable[[], SqlUnitOfWork], Depends(get_uow_factory)],
+) -> OrderService:
+    return OrderService(uow_factory)                # the service opens `async with uow_factory() as uow`
+```
+
+## 3. Explicit response models
+Every route declares `response_model` (or a return annotation) with a pydantic model separate from
+the persistence model; never return ORM objects or `dict`. Use `response_model_exclude_none=True` only
+deliberately. Declare error statuses in `responses={404: {"model": ProblemDetail}}`.
+
+## 4. Pagination contract
+One shape for every collection endpoint: `GET /v1/orders?limit=50&cursor=...` (or `page`/`size` if
+offset paging is justified). Limits are bounded; the maximum is enforced, not trusted.
+
+```python
+class Page[T](BaseModel):
+    items: list[T]
+    next_cursor: str | None = None
+    total: int | None = None
+
+class PageParams(BaseModel):
+    limit: int = Field(default=50, ge=1, le=200)
+    cursor: str | None = None
+```
+
+## 5. Errors are problem+json
+Every non-2xx body is RFC 7807 `application/problem+json` produced by the handlers registered by
+`python-error-handling` (domain errors, validation, framework 404/405 and the catch-all 500). Routers never build error responses by hand and never raise `HTTPException`.
+
+## 6. URL conventions
+- Plural, lowercase, kebab-case nouns: `/v1/purchase-orders/{order_id}`; no verbs in paths.
+- Version in the path prefix (`/v1`); breaking change means `/v2`, never a silent change.
+- Verbs: `GET` safe, `PUT` full replace (idempotent), `PATCH` partial, `DELETE` idempotent, `POST` create (201 + `Location`).
+- Sub-resources at most two levels deep; filters are query parameters.
+- Long work returns `202 Accepted` with a status resource.
+
+## 7. Lifespan, not startup events
+Create and close shared resources (DB engine, HTTP clients) in one `lifespan`, attach to `app.state`.
+The session *factory* is the shared object; sessions and units of work are created per request (section 2).
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = AppSettings()
+    engine = create_async_engine(settings.db.url)
+    app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    yield
+    await engine.dispose()
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="my-service", lifespan=lifespan)
+    register_exception_handlers(app)
+    app.include_router(orders.router)
+    return app
+```
+
+`create_app()` is a factory so tests build isolated apps; tests must run the lifespan
+(`with TestClient(app)` or `asgi-lifespan`, see `python-unit-tests`), otherwise `app.state` is empty. Add `/health/live` and `/health/ready`.
+
+## Do / Don't
+- ✅ `async def` routes only when everything awaited inside is async; otherwise `def` (runs in the threadpool).
+- ✅ Separate request, response and persistence models.
+- ✅ Use `Annotated[..., Depends(...)]`; override dependencies in tests.
+- ❌ `@app.on_event`, global `app = FastAPI()` with side effects at import time.
+- ❌ Blocking calls (`requests`, sync DB driver) inside `async def`.
+- ❌ `HTTPException` in services, or returning `JSONResponse` error dicts from routes.
+- ❌ Unbounded list endpoints.
+
+## Cross-references
+- `python-code-structure` — where routers sit and what they may import.
+- `python-error-handling` — the exception-to-problem+json mapping.
+- `python-input-validation` — request models and rule objects.
+- `python-observability` — request logging, metrics and tracing middleware.

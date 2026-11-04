@@ -1,0 +1,16 @@
+package {{basePackage}}.permission;
+
+import {{basePackage}}.exception.{{Domain}}ForbiddenException;
+// Replace with your project's CallerContext enum (see SKILL.md)
+import {{basePackage}}.permission.CallerContext;
+
+import java.util.List;
+
+public interface PermissionsCheckStrategy {
+
+    void verifyPermissions(final String {{primaryId}}, final String {{secondaryId}})
+            throws {{Domain}}ForbiddenException;
+
+    List<CallerContext> supportedContextTypes();
+}
+

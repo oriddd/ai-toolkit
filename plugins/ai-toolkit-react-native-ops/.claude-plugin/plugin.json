@@ -1,0 +1,8 @@
+{
+  "name": "ai-toolkit-react-native-ops",
+  "description": "React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability (draft)",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  }
+}

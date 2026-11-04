@@ -1,0 +1,12 @@
+{
+  "name": "ai-toolkit-python-agents",
+  "description": "Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker (draft). Requires the python-* plugins.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "dependencies": [
+    "ai-toolkit-python-design",
+    "ai-toolkit-docs"
+  ]
+}

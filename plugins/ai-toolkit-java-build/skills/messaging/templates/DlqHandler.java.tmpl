@@ -1,0 +1,23 @@
+package {{basePackage}}.messaging;
+import org.springframework.kafka.annotation.DltHandler;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
+import org.springframework.retry.annotation.Backoff;
+/**
+ * Pair `@RetryableTopic` with `@DltHandler` on a consumer to wire
+ * exponential-backoff retries and a final DLQ. Apply on the same class
+ * that hosts the `@KafkaListener`.
+ */
+public class DlqHandler {
+    @RetryableTopic(
+        attempts = "4",
+        backoff = @Backoff(delay = 1000, multiplier = 2.0),
+        topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
+        dltTopicSuffix = ".dlq"
+    )
+    public void onMessage(String payload) { /* delegate to IdempotentConsumer */ }
+    @DltHandler
+    public void onDlt(String payload) {
+        // Log + alert. Never throw — DLT is the terminal queue.
+    }
+}

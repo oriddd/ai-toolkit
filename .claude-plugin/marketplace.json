@@ -1,0 +1,126 @@
+{
+  "name": "ai-toolkit",
+  "metadata": {
+    "description": "Engineering standards as Claude Code plugins, organised by delivery phase and language — skills, task agents and routing hooks.",
+    "version": "1.0.0"
+  },
+  "owner": {
+    "name": "oriddd"
+  },
+  "plugins": [
+    {
+      "name": "ai-toolkit-docs",
+      "source": "./plugins/ai-toolkit-docs",
+      "description": "Language-neutral documentation — ADRs and docs-as-code, UML/Mermaid diagrams, and project context templates with a validator.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-agents",
+      "source": "./plugins/ai-toolkit-java-agents",
+      "description": "Java task agents that compose the Java skills — new endpoint, feature, Kafka consumer, metric, client, validation, refactor, code review, repo scaffold, context update, and the parallel test-writer worker. Requires the java-* plugins.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-build",
+      "source": "./plugins/ai-toolkit-java-build",
+      "description": "Java 21 / Spring Boot implementation phase — exceptions, validation, permissions, persistence, messaging, external clients, resilience, security and privacy.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-design",
+      "source": "./plugins/ai-toolkit-java-design",
+      "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Install this first for Java.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-ops",
+      "source": "./plugins/ai-toolkit-java-ops",
+      "description": "Java 21 / Spring Boot build-and-run phase — Jenkins and GitHub Actions CI, Helm CD, observability, request metrics, health indicators, graceful shutdown, local dev.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-quality",
+      "source": "./plugins/ai-toolkit-java-quality",
+      "description": "Java 21 / Spring Boot quality phase — unit/component/integration/contract tests, static analysis, quality review and refactoring playbook.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-java-scaffold",
+      "source": "./plugins/ai-toolkit-java-scaffold",
+      "description": "Java 21 / Spring Boot new-repository scaffolding — project-type selection and the create-repo scaffolder.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-python-agents",
+      "source": "./plugins/ai-toolkit-python-agents",
+      "description": "Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker (draft). Requires the python-* plugins.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-python-build",
+      "source": "./plugins/ai-toolkit-python-build",
+      "description": "Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation and SQLAlchemy 2.0 persistence. (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-python-design",
+      "source": "./plugins/ai-toolkit-python-design",
+      "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-python-ops",
+      "source": "./plugins/ai-toolkit-python-ops",
+      "description": "Python ops phase — GitHub Actions with uv, hardened Dockerfile, structlog, OpenTelemetry and Prometheus observability. (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-python-quality",
+      "source": "./plugins/ai-toolkit-python-quality",
+      "description": "Python quality phase — pytest unit and integration tests, ruff and mypy static analysis. (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-quality",
+      "source": "./plugins/ai-toolkit-quality",
+      "description": "Language-neutral definition of done — the completion gate (build, tests, static analysis, standards, coverage, Sonar, no commit until asked), code hygiene (no needless comments, dead code or redundant tests) and the Sonar quality gate.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-react-native-agents",
+      "source": "./plugins/ai-toolkit-react-native-agents",
+      "description": "React Native task agents that compose the react-native-* skills — new screen, feature, refactor, code review and the parallel test-writer worker (draft). Requires the react-native-* plugins.",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-react-native-build",
+      "source": "./plugins/ai-toolkit-react-native-build",
+      "description": "React Native build phase: typed error handling, schema-based input validation and mobile security (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-react-native-design",
+      "source": "./plugins/ai-toolkit-react-native-design",
+      "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-react-native-ops",
+      "source": "./plugins/ai-toolkit-react-native-ops",
+      "description": "React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-react-native-quality",
+      "source": "./plugins/ai-toolkit-react-native-quality",
+      "description": "React Native quality phase: Jest and RNTL unit tests, static analysis gates and Maestro E2E (draft)",
+      "category": "development"
+    },
+    {
+      "name": "ai-toolkit-workflow",
+      "source": "./plugins/ai-toolkit-workflow",
+      "description": "Language-neutral delivery workflow — Conventional Commits, PR descriptions, release versioning and parallel delegation to subagents. Works with any stack; install it everywhere.",
+      "category": "development"
+    }
+  ]
+}

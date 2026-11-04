@@ -1,0 +1,12 @@
+{
+  "name": "ai-toolkit-java-scaffold",
+  "description": "Java 21 / Spring Boot new-repository scaffolding — project-type selection and the create-repo scaffolder.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  },
+  "dependencies": [
+    "ai-toolkit-java-design",
+    "ai-toolkit-docs"
+  ]
+}

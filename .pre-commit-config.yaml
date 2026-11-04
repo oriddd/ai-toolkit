@@ -1,0 +1,27 @@
+# Optional: run the same fast gates locally before each commit.  pip install pre-commit && pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: validate-skills
+        name: validate skills, agents, plugins
+        entry: bash tools/validate-skills.sh
+        language: system
+        pass_filenames: false
+        files: ^(plugins|docs|tools)/
+      - id: check-links
+        name: relative links resolve
+        entry: python3 tools/check-links.py
+        language: system
+        pass_filenames: false
+        types: [markdown]
+      - id: test-hooks
+        name: hook behaviour tests
+        entry: bash tools/test-hooks.sh
+        language: system
+        pass_filenames: false
+        files: ^(plugins/.*/hooks/|tools/test-hooks\.sh)
+      - id: repo-hygiene
+        name: git modes and line endings
+        entry: bash tools/check-repo-hygiene.sh
+        language: system
+        pass_filenames: false

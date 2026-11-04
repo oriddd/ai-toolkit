@@ -1,0 +1,8 @@
+{
+  "name": "ai-toolkit-quality",
+  "description": "Language-neutral definition of done — the completion gate (build, tests, static analysis, standards, coverage, Sonar, no commit until asked), code hygiene (no needless comments, dead code or redundant tests) and the Sonar quality gate.",
+  "version": "1.0.0",
+  "author": {
+    "name": "oriddd"
+  }
+}
