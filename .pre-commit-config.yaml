@@ -1,4 +1,7 @@
-# Optional: run the same fast gates locally before each commit.  pip install pre-commit && pre-commit install
+# Optional: run the same fast gates locally before each commit, and the publication gate before each push.
+#   pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
 repos:
   - repo: local
     hooks:
@@ -7,7 +10,7 @@ repos:
         entry: bash tools/validate-skills.sh
         language: system
         pass_filenames: false
-        files: ^(plugins|docs|tools)/
+        files: ^(plugins|docs|tools|\.claude-plugin)/|^[^/]+$
       - id: check-links
         name: relative links resolve
         entry: python3 tools/check-links.py
@@ -25,3 +28,17 @@ repos:
         entry: bash tools/check-repo-hygiene.sh
         language: system
         pass_filenames: false
+      - id: check-versions
+        name: plugin version bumped when content changed
+        entry: bash tools/check-versions.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: prepare-for-publish
+        name: publication gate (junk files, confidential terms, history)
+        entry: bash prepare-for-publish.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

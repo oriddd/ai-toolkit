@@ -4,6 +4,16 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 
 ### C. Cross-cutting conventions
 
+9. **Exceptions** — Throw-site uses a domain exception from the project's
+   **unchecked** hierarchy (`BaseDomainException` → `BadRequestException`,
+   `ForbiddenException`, `NotFoundException`, …), built by an
+   `ExceptionMessages` factory method that supplies the error code and the
+   `MessageFormat`-formatted message (guild #4). The HTTP
+   mapping lives only in the `@RestControllerAdvice`. (See
+   `exception-handling`.) Flag any `throw new RuntimeException("…")`
+   in business code, any inline error string, any exception type outside the
+   hierarchy, and `throws` clauses for domain exceptions.
+
 9a. **Nullable fetch → filtered stream.** Any collaborator whose
     contract documents `null` on error (graceful degradation) must be
     filtered with `.filter(Objects::nonNull)` at the call-site before
@@ -30,24 +40,19 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
     switch statement or query-building expression across packages.
 
 9e. **Scheduler purity.** A `@Scheduled` bean may only depend on
-    `service/`, `repository/`, `analyzer/`, and its own logger. Flag any
+    `service/`, `repository/`, `analyzer/` (or the `job/` / `handler/`
+    packages a scheduler-type service uses, see `project-types`), and its own logger. Flag any
     scheduler that injects a `*Client`, `WebClient`, SDK stub, or reads
     infrastructure `@Value` fields directly.
 
-9. **Exceptions** — Throw-site uses a domain exception (`*Exception`,
-   `*BadRequestException`, `*ForbiddenException`, `*NotFoundException`) with
-   a `MessageFormat`-formatted message from `ExceptionMessages`. The HTTP
-   mapping lives only in the `@RestControllerAdvice`. (See
-   `exception-handling`.) Flag any `throw new RuntimeException("…")`
-   in business code or inline error string.
-
-10. **Logging** — `@Slf4j` / `@Log4j2`; no `System.out`; no logging of secrets
+10. **Logging** — `@Slf4j` (or `@Log4j2`, only when the service uses
+    `spring-boot-starter-log4j2` instead of the default Logback); no `System.out`; no logging of secrets
     or full URLs with credentials; `log.debug` for happy-path detail,
     `log.warn` for recoverable, `log.error` for unexpected with exception as
     last arg (not concatenated).
 
 11. **Constants** — Utility classes are `final` with
-    `@NoArgsConstructor(access = PRIVATE)`; magic strings live in a `*Constants`
+    `@NoArgsConstructor(access = AccessLevel.PRIVATE)` (or Lombok `@UtilityClass`); magic strings live in a `*Constants`
     class; configuration is bound through `@ConfigurationProperties` records
     (golden-path #2, `spring-boot-conventions` §1). Where a lone `@Value`
     remains for a single ungrouped key, the key lives in
@@ -60,8 +65,9 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
       `shutdownNow()`;
     - `InterruptedException` handlers restore the flag with
       `Thread.currentThread().interrupt()`.
-    `CompletableFuture` chains unwrap the cause when rethrowing (see
-    `HeavyStartupOrchestrator.awaitLicenseSettingTasksCompletion`).
+    `CompletableFuture` chains unwrap the cause when rethrowing (illustrative:
+    catch `ExecutionException` / `CompletionException` and rethrow `e.getCause()`
+    wrapped in a domain exception).
     Flag `Thread.sleep` outside of tests, raw `Thread.start()`,
     unmanaged thread pools.
 
@@ -71,4 +77,6 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 
 14. **Configuration** — every `@Value`/`@ConfigurationProperties` key has a
     matching `${ENV:default}` entry in `application.yaml`, a Helm env var,
-    and (for downstream URLs) a `HealthIndicator`.
+    and (for downstream URLs) a `HealthIndicator`. **Secrets** are the
+    exception: `${DB_PASSWORD}` with **no** default (or a secret store) — a
+    default such as `${DB_PASSWORD:changeme}` ships a credential (guild #16).

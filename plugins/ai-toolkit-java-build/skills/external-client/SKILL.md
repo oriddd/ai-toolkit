@@ -17,8 +17,10 @@ last_reviewed: 2026-07-13
 
 Every external dependency is wrapped in its own **self-contained sub-package**
 under `client/`. The package is a mini-SDK: consumers depend on **one**
-domain-friendly `*Service` facade and never see `WebClient`, `Mono`, SDK types,
-or remote DTOs. This is the **lego-brick** convention.
+domain-friendly public entry type — `<Dep>Service` in the Full 5-Layer
+pattern, `<Dep>Client` in the Simple Wrapper and Lite patterns — and never see
+`WebClient`, `RestClient`, `Mono`, SDK types, or remote DTOs. This is the
+**lego-brick** convention.
 
 ## 0. CRITICAL: Pattern Selection (Human-in-the-Loop Required)
 
@@ -95,7 +97,10 @@ client/<dep>/
         └── <Dep>ResponseVerifier.java
 ```
 
-**Example**: Elasticsearch integration, Kafka with custom protocols, AWS SDK wrappers
+**Example**: Elasticsearch integration, a vendor HTTP API with a query DSL. Kafka producers/consumers follow
+`messaging`, and technologies with swappable vendors (cache, object store, secrets — often AWS SDKs) follow
+`pluggable-architecture` (port in `spi/`, adapter in `adapter/<capability>/<vendor>/`); an adapter may use
+these client layers internally.
 
 ### When Uncertain: Start Simple, Refactor When Needed
 
@@ -110,7 +115,7 @@ client/<dep>/
 
 ```
 client/<dependency-name>/
-├── <Dep>Service.java                         # public domain facade — the only class callers import
+├── <Dep>Service.java                         # public domain facade — the only class callers import (Full pattern)
 ├── constant/
 │   └── <Dep>Constants.java                   # field names, query IDs, sentinel values
 ├── core/
@@ -164,10 +169,16 @@ do not load them all.
 
 ## Do / Don't
 
-✅ Callers import only `*Service` — never `*Client`, `*CoreService`, or any
-   remote DTO.
-✅ Use `exchangeToMono` + a private `handleResponse(response, type)` in
-   `*Client` to read error body before throwing a domain exception.
+✅ Callers import only the package's public entry type — `*Service` in the
+   Full pattern (never `*Client`, `*CoreService`), `*Client` in Simple/Lite —
+   and never any remote DTO.
+✅ Full pattern: use `exchangeToMono` + a private `handleResponse(response, type)` in
+   `*Client` to read error body before throwing a domain exception. Simple/Lite
+   use `RestClient` (`exchange` or `onStatus`) and must still map every non-2xx.
+✅ Build the transport from Boot's injected `RestClient.Builder` /
+   `WebClient.Builder` (`.clone()`), never the static `builder()`, so metrics and
+   trace propagation stay on; give each per-dependency bean a name and inject it
+   with `@Qualifier`.
 ✅ Keep `*FilterMapBuilder` as a non-Spring plain object — instantiated with
    `new` at the call site for fluent, readable filter composition.
 ✅ Split `*ResponseParser` (extract values) from `*ResponseVerifier`
@@ -191,7 +202,8 @@ do not load them all.
 - `code-structure` — layering rules and package
   conventions the `client/` sub-package follows.
 - `exception-handling` — domain exception
-  hierarchy; `*Client` throws subclasses.
+  hierarchy; `*Client` throws its subclasses (`UnavailableException` → 503,
+  `DependencyException` → 500) built by `ExceptionMessages`.
 - `resilience-patterns` — bulkheads,
   timeouts, circuit breakers beyond simple retries.
 - `health-indicator` — add a readiness
@@ -204,7 +216,17 @@ do not load them all.
 
 ## 12. Templates
 
-- [`CacheClientConfig.java.tmpl`](./templates/CacheClientConfig.java.tmpl) — Configuration for an external cache.
-- [`CacheClient.java.tmpl`](./templates/CacheClient.java.tmpl) — Thin transport implementation.
+The templates show a Simple Wrapper `RestClient` transport used **inside a
+pluggable adapter**: a remote HTTP cache service behind the `CachePort`
+(`pluggable-architecture`, guild #20). A cache is a technology capability, so
+it lives in `adapter/cache/http/` and callers depend on `spi/cache/CachePort`
+only — never a `client.cache` package. For a business downstream (catalogue,
+payments …) put the same classes in `client/<dep>/` and make `<Dep>Client`
+public with domain-named methods.
+
+- [`CacheClientConfig.java.tmpl`](./templates/CacheClientConfig.java.tmpl) — Vendor configuration: `RestClient` from Boot's builder with timeouts, creates the `CachePort` bean when `platform.cache.provider=http`.
+- [`HttpCacheProperties.java.tmpl`](./templates/HttpCacheProperties.java.tmpl) — `@ConfigurationProperties` record (`platform.cache.http.*`).
+- [`CacheClient.java.tmpl`](./templates/CacheClient.java.tmpl) — Thin transport: 404 → miss, 5xx/timeout → `UnavailableException`, other non-2xx → `DependencyException`.
 - [`CacheEntryResponse.java.tmpl`](./templates/CacheEntryResponse.java.tmpl) — Remote DTO.
-- [`CacheEntryAdapter.java.tmpl`](./templates/CacheEntryAdapter.java.tmpl) — Translation to domain model.
+- [`CacheEntryConverter.java.tmpl`](./templates/CacheEntryConverter.java.tmpl) — Translation between the remote DTO and port values.
+- [`HttpCacheAdapter.java.tmpl`](./templates/HttpCacheAdapter.java.tmpl) — The `CachePort` implementation.

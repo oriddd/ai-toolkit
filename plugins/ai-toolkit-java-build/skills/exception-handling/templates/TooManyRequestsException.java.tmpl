@@ -1,0 +1,6 @@
+package {{basePackage}}.exception;
+/** Maps to 429 — the caller exceeded its rate limit. */
+public class TooManyRequestsException extends BaseDomainException {
+    public TooManyRequestsException(String errorCode, String message) { super(errorCode, message); }
+    public TooManyRequestsException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

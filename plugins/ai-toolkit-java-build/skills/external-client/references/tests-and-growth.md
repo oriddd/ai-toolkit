@@ -12,9 +12,10 @@ Part of the [`external-client`](../SKILL.md) skill. Section numbers are stable; 
 - **`*ResponseParserTest`** — null doc, missing nested field, found nested field.
 - **`*ClientTest`** — mock `WebClient` exchange (use `MockWebServer` or
   `exchangeFunction(...)`): assert URI/body/headers built; assert domain
-  exception thrown on 4xx/5xx; assert deserialized response on 200.
+  exception thrown on 4xx/5xx (`DependencyException` / `UnavailableException`); assert deserialized response on 200.
+- **Retry test** (§10) — two 503s then a 200 → the downstream is called 3 times; a 400 → once.
 - **`*ServiceTest`** — mock `CoreService`; assert domain-language methods
-  guard blank inputs and call core methods correctly.
+  reject blank inputs with `IllegalArgumentException` and call core methods correctly.
 
 For component tests, provide a test double of the `*Service` (not the
 transport) through the shared `ComponentTestConfiguration` — tests drive domain semantics,
@@ -44,6 +45,9 @@ responsibility to its canonical top-level package instead:
 | Pure-function domain analysis | `analyzer/` | `*Calculator`, `*Analyzer` |
 | Periodic polling / monitoring | `scheduler/` | `*Scheduler`, `*Task` |
 | Public API used by `operation/` | `service/` | `*Service` (thin facade over the above) |
+
+After the split, rename the `client/<dep>/` facade from `<Dep>Service` to `<Dep>Gateway`, so `<Dep>Service`
+names only the `service/` class and the two never collide.
 
 Configuration for the dependency remains **one** `@ConfigurationProperties`
 record (or `@Configuration` bean) in `config/` — never scattered `@Value`

@@ -29,6 +29,15 @@ Run once, from anywhere:
 ln -sfn /path/to/ai-toolkit ~/.ai-toolkit
 ```
 
+On Windows (Command Prompt; needs Developer Mode or an elevated prompt), create a directory link instead:
+
+```bat
+mklink /D "%USERPROFILE%\.ai-toolkit" "C:\path\to\ai-toolkit"
+```
+
+(`mklink /J` — a junction — works without elevation for a local drive.) Then use `~/.ai-toolkit` or
+`%USERPROFILE%\.ai-toolkit` in the paths below.
+
 Verify:
 ```bash
 ls ~/.ai-toolkit/plugins/*/skills | head -5
@@ -82,6 +91,6 @@ is automatic — just `git pull` in the ai-toolkit repo. No reinstall needed.
 | --- | --- |
 | `~/.ai-toolkit` not found | Re-run: `ln -sfn /path/to/ai-toolkit ~/.ai-toolkit` (`-n` replaces an existing link instead of creating one inside it) |
 | JetBrains doesn't see the instructions | Confirm the setting was saved in the correct IDE (each IDE has its own settings) |
-| `#file` path not resolving | Use the full expanded path: `/Users/<you>/.ai-toolkit/...` instead of `~/...` |
+| `#file` path not resolving | Use the full expanded path instead of `~/...`: `/Users/<you>/.ai-toolkit/...` (macOS), `/home/<you>/.ai-toolkit/...` (Linux) or `C:\Users\<you>\.ai-toolkit\...` (Windows) |
 | Skill file not found | Run `ls ~/.ai-toolkit/plugins/*/skills` (or look the skill up in `docs/REGISTRY.md`) to check available skills |
 

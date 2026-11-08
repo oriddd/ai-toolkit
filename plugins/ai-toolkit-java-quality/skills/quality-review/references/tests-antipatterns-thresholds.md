@@ -15,20 +15,25 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 
 17. **Right boundary** — unit tests mock direct collaborators only.
     Component tests mock at the boundary (`*Client`, `PermissionsHandler`,
-    blob-store / file-store clients), not the controller/service/operation. Flag `@MockBean`
-    on the class under test or on a value object.
+    blob-store / file-store clients), not the controller/service/operation. Flag `@MockitoBean`
+    (legacy `@MockBean`) on the class under test or on a value object.
 
 18. **Determinism** — no `Thread.sleep`, no time-dependent assertions
     without a `Clock` abstraction, no random data without a seed.
 
 19. **Static / context mocking** — `MockedStatic` is opened in a
     `try-with-resources` inside the test method, never as a class field.
-    `clearInvocations` resets shared mocks in `@AfterEach`.
+    Mocks shared across tests (context-wide `@MockitoBean` / test-config beans
+    in component tests) are reset with `clearInvocations` in `@AfterEach`;
+    per-test `MockitoExtension` mocks need no reset.
 
 20. **Opt-out test configs** — heavy `@PostConstruct` work
     (license loading, cache priming, big thread pools) has a paired
     `@TestConfiguration` that replaces it with a no-op for component tests
-    (see `NoHeavyStartupTestConfig`).
+    (see `NoHeavyStartupTestConfig`), **and** the production bean is gated
+    out of the test profile (`@Profile("!component-test")` /
+    `@ConditionalOnProperty`). A `@Primary` mock alone does not stop the real
+    bean — and its `@PostConstruct` — from being created (`component-tests` §1b).
 
 21. **Positive & negative paths** — for every public method, verify tests
     exist for both the happy path (valid inputs) and negative cases (null,
@@ -104,13 +109,13 @@ junit-named edge case may justify breaking one).
 
 | Metric | Threshold | Tool |
 | --- | --- | --- |
-| F21. Cyclomatic complexity per method | **≤ 10** | SpotBugs / PMD |
+| F21. Cyclomatic complexity per method | **≤ 10** | PMD / Checkstyle `CyclomaticComplexity` |
 | F22. Method length (effective LOC, ignoring blank/`}`) | **≤ 30** | manual / Checkstyle |
-| F23. Class length | **≤ 200** (hard ceiling 300) | Checkstyle |
-| F24. Number of method parameters | **≤ 4** (use a record / parameter object beyond) | Checkstyle |
+| F23. Class length | **≤ 200** (hard ceiling 300 — the only F-item that breaks the build, via Checkstyle) | Checkstyle |
+| F24. Number of method parameters | **≤ 4** (use a record / parameter object beyond; constructors excluded — injected collaborators) | Checkstyle (warning) |
 | F25. Number of fields | **≤ 7** (sign of class doing too much) | manual |
-| F26. NCSS (non-commenting source statements) per file | **≤ 500** | PMD |
-| F27. Class fan-out (number of other types referenced) | **≤ 25** | ArchUnit slice metric |
+| F26. NCSS (non-commenting source statements) per file | **≤ 200** (500 could never fire before the F23 ceiling) | PMD / Checkstyle `JavaNCSS` |
+| F27. Class fan-out (number of other types referenced) | **≤ 25** | Checkstyle `ClassFanOutComplexity` |
 | F28. Cognitive complexity per method | **≤ 15** | SonarQube |
 | F29. Public API surface of a `client/<dep>/` sub-package | **≤ 1 facade type** that callers depend on (others may be public if returned from the facade) | manual |
 | F30. Magic literals in business code | **0** — every literal lives in a `*Constants` class or `*Properties` record | grep |
@@ -140,7 +145,7 @@ For each item, emit a row:
 
 End with a summary:
 
-- `# total`, `# pass`, `# fail`, `# warn`.
+- `# total`, `# pass`, `# warn`, `# fail`, `# n/a`.
 - Top 3 highest-impact fixes.
 - Suggested follow-up skills to run (`external-client`,
   `exception-handling`, `unit-tests`, …).

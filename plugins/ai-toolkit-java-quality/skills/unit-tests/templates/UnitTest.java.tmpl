@@ -41,22 +41,25 @@ class {{classUnderTest}}Test {
     }
 
     // ─── error branches (parameterised) ──────────────────────────
-    private record ExceptionCase(Exception thrown, Class<? extends Exception> expected) {}
+    // Domain exceptions are unchecked; Mockito rejects a checked exception the stubbed method does not declare
+    private record ExceptionCase(RuntimeException thrown, Class<? extends RuntimeException> expected) {}
 
     static Stream<ExceptionCase> exceptions() {
         return Stream.of(
                 new ExceptionCase(new IllegalStateException("x"), IllegalStateException.class)
-                // ...one per exception declared by the method...
+                // ...one per exception the method can throw...
         );
     }
 
     @ParameterizedTest
     @MethodSource("exceptions")
-    void {{methodName}}_when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) throws Exception {
+    void {{methodName}}_when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) {
         when({{collaborator1Name}}.{{stub}}(any())).thenThrow(tc.thrown());
 
         assertThatThrownBy(() -> {{instanceName}}.{{methodName}}(...)).isInstanceOf(tc.expected());
 
+        // list the downstream collaborators that must NOT run; delete this line if there are none
+        // (an empty verifyNoInteractions() throws MockitoException)
         verifyNoInteractions(/* downstream collaborators that must NOT run */);
     }
 

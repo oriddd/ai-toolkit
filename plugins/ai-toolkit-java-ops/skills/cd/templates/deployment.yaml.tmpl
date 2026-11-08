@@ -1,15 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ "{{" }} .Chart.Name {{ "}}" }}
+  name: {{ "{{" }} include "{{chartName}}.fullname" . {{ "}}" }}
+  labels:
+    {{ "{{" }}- include "{{chartName}}.labels" . | nindent 4 {{ "}}" }}
 spec:
+  {{ "{{" }}- if not .Values.autoscaling.enabled {{ "}}" }}
+  replicas: {{ "{{" }} .Values.autoscaling.minReplicas {{ "}}" }}
+  {{ "{{" }}- end {{ "}}" }}
   selector:
     matchLabels:
-      run: {{ "{{" }} .Chart.Name {{ "}}" }}
+      {{ "{{" }}- include "{{chartName}}.selectorLabels" . | nindent 6 {{ "}}" }}
   template:
     metadata:
       labels:
-        run: {{ "{{" }} .Chart.Name {{ "}}" }}
+        {{ "{{" }}- include "{{chartName}}.labels" . | nindent 8 {{ "}}" }}
+        run: {{ "{{" }} include "{{chartName}}.fullname" . {{ "}}" }}
         app: {{ "{{" }} .Chart.Name {{ "}}" }}
     spec:
       enableServiceLinks: false
@@ -23,8 +29,9 @@ spec:
         runAsUser: {{runAsUser}}
         seccompProfile:
           type: RuntimeDefault
-      serviceAccountName: {{ "{{" }} .Chart.Name {{ "}}" }}
-      terminationGracePeriodSeconds: 60   # > spring.lifecycle.timeout-per-shutdown-phase + preStop (graceful-shutdown skill)
+      serviceAccountName: {{ "{{" }} include "{{chartName}}.serviceAccountName" . {{ "}}" }}
+      automountServiceAccountToken: {{ "{{" }} .Values.serviceAccount.automount {{ "}}" }}
+      terminationGracePeriodSeconds: 60   # ≥ preStop + shutdown phases + executor waits (graceful-shutdown skill)
       containers:
         - image: {{ "{{" }} (.Values.global).imageRegistry | default .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.AppVersion {{ "}}" }}
           imagePullPolicy: {{ "{{" }} .Values.image.pullPolicy {{ "}}" }}
@@ -61,22 +68,37 @@ spec:
             periodSeconds: 10
           lifecycle:
             preStop:
-              exec:
-                command: ["sh", "-c", "sleep 5"]   # let kube-proxy / ingress drop the endpoint; needs `sh` in the image
+              sleep:
+                seconds: 5   # let kube-proxy / ingress drop the endpoint; native sleep (k8s ≥ 1.30) needs no `sh` in the image
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{ "{{" }}- with .Values.extraVolumeMounts {{ "}}" }}
+            {{ "{{" }}- toYaml . | nindent 12 {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
           ports:
             - containerPort: {{appPort}}
               name: http
               protocol: TCP
+          {{ "{{" }}- if or .Values.credentials.existingSecret .Values.credentials.values {{ "}}" }}
+          envFrom:
+            - secretRef:
+                name: {{ "{{" }} include "{{chartName}}.credentialsSecretName" . {{ "}}" }}
+          {{ "{{" }}- end {{ "}}" }}
           env:
             - name: LOG_LEVEL
               value: {{ "{{" }} .Values.logLevel | quote {{ "}}" }}
-            # {{extraEnv}}
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ "{{" }} .Values.springProfilesActive | quote {{ "}}" }}
+            {{ "{{" }}- with .Values.extraEnv {{ "}}" }}
+            {{ "{{" }}- toYaml . | nindent 12 {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{ "{{" }}- with .Values.extraVolumes {{ "}}" }}
+        {{ "{{" }}- toYaml . | nindent 8 {{ "}}" }}
+        {{ "{{" }}- end {{ "}}" }}
       hostNetwork: false
       hostPID: false
       hostIPC: false

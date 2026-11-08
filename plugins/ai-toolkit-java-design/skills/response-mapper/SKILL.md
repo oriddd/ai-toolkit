@@ -50,7 +50,8 @@ See strategy-registry-pattern for detailed component responsibilities.
 
 **Mapper-specific mapping:**
 - **Discriminator:** `ApiVersion` enum (V1 / V2 / V3), or a `Projection` enum
-- **Resolver:** Reads the target version from the `Accept` header, URI segment, or `?version=` query param
+- **Resolver:** Reads the target version from the URI segment (`/api/v2/users`, the `api-design` §3 default), or the
+  `Accept` header / `?version=` query param (§7 variation)
 - **Strategy:** Maps entity → version-specific DTO
 - **Handler:** Orchestrates resolver → registry → strategy, returns the DTO
 
@@ -63,14 +64,14 @@ public enum ApiVersion {
     V1, V2, V3;
 
     public static ApiVersion fromString(final String version) {
-        if (StringUtils.isBlank(version)) {
+        if (version == null || version.isBlank()) {
             return defaultVersion();   // unversioned requests get the pinned default, never silently the newest
         }
         try {
-            return ApiVersion.valueOf(version.toUpperCase());
+            return ApiVersion.valueOf(version.trim().toUpperCase(Locale.ROOT));   // Locale.ROOT: locale-independent
         } catch (final IllegalArgumentException e) {
-            // unknown version → reject; map to 406 Not Acceptable in the @RestControllerAdvice (exception-handling)
-            throw new UnsupportedApiVersionException(version);
+            // unknown version → reject; mapped to 406 Not Acceptable by the @RestControllerAdvice (see below)
+            throw ExceptionMessages.unsupportedApiVersion(Arrays.toString(values()));
         }
     }
 
@@ -86,7 +87,54 @@ public enum ApiVersion {
 }
 ```
 
+### `UnsupportedApiVersionException` (406)
+
+A domain exception in the `exception-handling` hierarchy (unchecked, built through the `ExceptionMessages` catalogue)
+plus its advice mapping. The `exception-handling` templates ship all three; shown here for reference:
+
+```java
+// {{basePackage}}.exception.UnsupportedApiVersionException
+public class UnsupportedApiVersionException extends BaseDomainException {
+    public UnsupportedApiVersionException(String errorCode, String message) { super(errorCode, message); }
+}
+
+// {{basePackage}}.exception.constants.ExceptionMessages
+public static UnsupportedApiVersionException unsupportedApiVersion(String supportedVersions) {
+    // lists the supported versions; never echoes the caller's raw input back
+    return new UnsupportedApiVersionException(ERR_UNSUPPORTED_API_VERSION,
+            MessageFormat.format(UNSUPPORTED_API_VERSION, supportedVersions));
+}
+// caller: ExceptionMessages.unsupportedApiVersion(Arrays.toString(ApiVersion.values()))
+
+// {{basePackage}}.exception.handler.GlobalExceptionHandler (@RestControllerAdvice)
+@ExceptionHandler(UnsupportedApiVersionException.class)
+public ProblemDetail onUnsupportedApiVersion(UnsupportedApiVersionException e) {
+    return build(HttpStatus.NOT_ACCEPTABLE, e);
+}
+```
+
 ### `MapperContextResolver`
+
+URI versioning — the `api-design` §3 default and guild rule 15 ("version in path"):
+
+```java
+@Component
+public class MapperContextResolver {
+    private static final Pattern URI_VERSION = Pattern.compile("^/api/(v\\d+)/");
+
+    public ApiVersion resolve(final HttpServletRequest request) {
+        if (request == null || request.getRequestURI() == null) {
+            return ApiVersion.defaultVersion();
+        }
+        // getRequestURI() includes server.servlet.context-path; the pattern is written without it
+        final String path = request.getRequestURI().substring(request.getContextPath().length());
+        final Matcher m = URI_VERSION.matcher(path);
+        return m.find() ? ApiVersion.fromString(m.group(1)) : ApiVersion.defaultVersion();
+    }
+}
+```
+
+**Variation — media-type versioning** (`Accept: application/vnd.example.v2+json`, the other `api-design` §3 option):
 
 ```java
 @Component
@@ -130,49 +178,55 @@ public interface MapperStrategy<E, D> {
 
 ### `MapperRegistry`
 
+One **non-generic** singleton for every entity. Spring injects every `MapperStrategy` (User, Order, …), so the
+registry indexes them by (entity type, version) and fails at startup when two strategies claim the same pair. The
+generic type is restored in one place, `find(...)`, where the key guarantees it.
+
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
-public class MapperRegistry<E, D> {
-    // One singleton for ALL entities: Spring injects every MapperStrategy (User, Order, …),
-    // so the lookup must match the entity type as well as the version.
-    private final List<MapperStrategy<E, D>> strategies;
+public class MapperRegistry {
+    private record Key(Class<?> entityType, ApiVersion version) { }
 
-    public MapperStrategy<E, D> getStrategy(final Class<?> entityType, final ApiVersion version) {
-        return strategies.stream()
-                .filter(s -> s.getEntityType().isAssignableFrom(entityType))
-                .filter(s -> s.canHandle(version))
-                .findFirst()
-                .orElse(null);
+    private final Map<Key, MapperStrategy<?, ?>> strategies;
+
+    public MapperRegistry(final List<MapperStrategy<?, ?>> strategies) {
+        this.strategies = strategies.stream().collect(Collectors.toUnmodifiableMap(
+                s -> new Key(s.getEntityType(), s.getSupportedVersion()),
+                Function.identity(),
+                (first, second) -> {
+                    throw new IllegalStateException("Two mapper strategies for " + first.getEntityType().getSimpleName()
+                            + "/" + first.getSupportedVersion() + ": " + first.getClass().getName()
+                            + ", " + second.getClass().getName());
+                }));
+    }
+
+    @SuppressWarnings("unchecked")   // safe: the key's entity type is the strategy's own getEntityType()
+    public <E> Optional<MapperStrategy<E, ?>> find(final Class<E> entityType, final ApiVersion version) {
+        return Optional.ofNullable((MapperStrategy<E, ?>) strategies.get(new Key(entityType, version)));
     }
 }
 ```
 
 ### `MapperHandler`
 
+A version the client asked for but this entity does not serve is rejected (406) — never silently answered with
+another schema:
+
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
-@Slf4j
-public class MapperHandler<E, D> {
+@RequiredArgsConstructor
+public class MapperHandler {
     private final MapperContextResolver resolver;
-    private final MapperRegistry<E, D> registry;
+    private final MapperRegistry registry;
 
-    public D handle(final E entity, final HttpServletRequest request) {
+    /** @param entityType passed explicitly — entity.getClass() can be a JPA proxy subclass */
+    public <E> Object handle(final Class<E> entityType, final E entity, final HttpServletRequest request) {
         if (entity == null) {
             return null;
         }
-        final ApiVersion version = resolver.resolve(request);
-        final MapperStrategy<E, D> strategy = registry.getStrategy(entity.getClass(), version);
-
-        if (strategy == null) {
-            log.warn("No mapper strategy for version {}, falling back to latest", version);
-            final MapperStrategy<E, D> fallback = registry.getStrategy(entity.getClass(), ApiVersion.latest());
-            if (fallback == null) {
-                throw new IllegalStateException("No mapper strategy for latest version (mandatory)");
-            }
-            return fallback.map(entity);
-        }
+        final ApiVersion version = resolver.resolve(request);   // unknown version → 406
+        final MapperStrategy<E, ?> strategy = registry.find(entityType, version)
+                .orElseThrow(() -> ExceptionMessages.unsupportedApiVersion(Arrays.toString(ApiVersion.values())));   // 406, never a silent fallback to latest()
         return strategy.map(entity);
     }
 }
@@ -197,10 +251,7 @@ public class V1UserMapperStrategy implements MapperStrategy<User, UserV1DTO> {
     @Override
     public UserV1DTO map(final User user) {
         if (user == null) return null;
-        return UserV1DTO.builder()
-                .id(user.getId())
-                .name(user.getFullName())     // V1 flattened name
-                .build();
+        return new UserV1DTO(user.getId(), user.getFullName());     // V1 flattened name
     }
 }
 ```
@@ -222,12 +273,7 @@ public class V2UserMapperStrategy implements MapperStrategy<User, UserV2DTO> {
     @Override
     public UserV2DTO map(final User user) {
         if (user == null) return null;
-        return UserV2DTO.builder()
-                .id(user.getId())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .email(user.getEmail())
-                .build();
+        return new UserV2DTO(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail());
     }
 }
 ```
@@ -249,12 +295,11 @@ public class V3UserMapperStrategy implements MapperStrategy<User, UserV3DTO> {
     @Override
     public UserV3DTO map(final User user) {
         if (user == null) return null;
-        return UserV3DTO.builder()
-                .id(user.getId())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .contact(new ContactDTO(user.getEmail(), user.getPhone()))
-                .build();
+        return new UserV3DTO(
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                new ContactDTO(user.getEmail(), user.getPhone()));
     }
 }
 ```
@@ -263,29 +308,38 @@ public class V3UserMapperStrategy implements MapperStrategy<User, UserV3DTO> {
 
 ```java
 @RestController
-@RequestMapping("/api/users")   // media-type versioning: the path carries no version (api-design §3)
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequestMapping("/api/{apiVersion:v\\d+}/users")   // URI versioning (api-design §3, guild rule 15); the resolver reads the segment
+@RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
-    private final MapperHandler<User, ?> mapperHandler;
+    private final MapperHandler mapperHandler;
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getUser(@PathVariable final String id,
-                                     final HttpServletRequest request) {
+    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(oneOf = {
+            UserV1DTO.class, UserV2DTO.class, UserV3DTO.class })))
+    public ResponseEntity<Object> getUser(@PathVariable final String id,
+                                          final HttpServletRequest request) {
         final User user = userService.getById(id);
-        final Object dto = mapperHandler.handle(user, request);
+        final Object dto = mapperHandler.handle(User.class, user, request);
         return ResponseEntity.ok(dto);
     }
 }
 ```
 
+DTOs are immutable records, e.g. `public record UserV1DTO(String id, String name) { }`.
+
 **Rules:**
-- Wildcard `?` for DTO type — handler returns the version-specific DTO
+- The response type is `Object` — the handler returns the version-specific DTO. Without the `oneOf` `@ApiResponse`
+  springdoc publishes no schema, so declare every version's DTO there (or publish one OpenAPI group per version).
+- **openapi-first:** a generated `UserApi` method has one fixed return type, so this controller cannot implement it
+  as is — generate one interface per version instead, or don't use this skill there.
+- **Media-type versioning** (§3 variation): the response varies by a request header, so add `Vary: Accept`
+  (`ResponseEntity.ok().varyBy(HttpHeaders.ACCEPT).body(dto)`), or shared caches serve one version to every client.
 - Pass `HttpServletRequest` to the handler for version resolution
 - Service returns the **entity**; mapping is a presentation-layer concern
 - Keep the version discriminator out of the service and domain layers
-- Align with the versioning scheme chosen in `api-design` §3: media type (this example,
-  `application/vnd.example.vN+json`) or URI segment (`/api/v1/users`, see the §7 variation)
+- Align with the versioning scheme chosen in `api-design` §3: URI segment (this example, `/api/v1/users`) or
+  media type (`application/vnd.example.vN+json`, the resolver variation in §3)
 
 ## 5. Adding a New Version
 
@@ -299,7 +353,7 @@ public class UserController {
 7. ✅ Update OpenAPI docs and the deprecation policy for the retired version
 
 **Zero changes needed:**
-- ❌ MapperHandler, MapperRegistry, MapperContextResolver, existing strategies
+- ❌ MapperHandler, MapperRegistry, MapperContextResolver, existing strategies, the controller (its path accepts any `v<N>`)
 
 ## 6. When to Use
 
@@ -316,54 +370,16 @@ public class UserController {
 
 ## 7. Variations
 
-### Version from URI segment
-Resolve the version from `/api/v2/users` instead of the `Accept` header:
-```java
-@Component
-public class MapperContextResolver {
-    private static final Pattern URI_VERSION = Pattern.compile("/api/(v\\d+)/");
-
-    public ApiVersion resolve(final HttpServletRequest request) {
-        final Matcher m = URI_VERSION.matcher(request.getRequestURI());
-        return m.find() ? ApiVersion.fromString(m.group(1)) : ApiVersion.defaultVersion();
-    }
-}
-```
+### Version from URI segment or `Accept` header
+The URI-segment resolver is the main example in §3; the `Accept` header resolver (media-type versioning) is shown
+there as its variation. Use exactly one scheme per API (`api-design` §3).
 
 ### Projection instead of version
 Swap the `ApiVersion` discriminator for a `Projection` enum (`SUMMARY` / `DETAILED` / `FULL`) resolved from `?projection=`. This overlaps with `response-layout` — prefer `response-layout` when the choice is purely a field-set concern, and `response-mapper` when whole schemas evolve across versions.
 
 ## 8. Testing
 
-Test each strategy in isolation (pure mapping, no Spring context) and the handler with a fake registry:
-```java
-@Test
-void handle_v1AcceptHeader_returnsV1Dto() {
-    final var request = new MockHttpServletRequest();
-    request.addHeader("Accept", "application/vnd.example.v1+json");
-
-    final Object dto = mapperHandler.handle(sampleUser, request);
-
-    assertThat(dto).isInstanceOf(UserV1DTO.class);
-}
-
-@Test
-void handle_noVersion_returnsDefaultVersion() {
-    final var request = new MockHttpServletRequest();   // no version hints
-    final Object dto = mapperHandler.handle(sampleUser, request);
-    assertThat(dto).isInstanceOf(UserV1DTO.class);       // defaultVersion(), never silently latest()
-}
-
-@Test
-void handle_unknownVersion_isRejected() {
-    final var request = new MockHttpServletRequest();
-    request.addHeader("Accept", "application/vnd.example.v9+json");
-    assertThatThrownBy(() -> mapperHandler.handle(sampleUser, request))
-            .isInstanceOf(UnsupportedApiVersionException.class);
-}
-```
-
-See strategy-registry-pattern and unit-tests for the full testing contract.
+Handler, registry and strategy tests (hand-built registry, no Spring context) — load [`references/testing.md`](./references/testing.md) when writing the tests.
 
 ---
 

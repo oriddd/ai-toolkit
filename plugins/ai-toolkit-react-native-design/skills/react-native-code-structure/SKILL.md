@@ -50,9 +50,12 @@ src/
 ## Dependencies
 
 ```json
-{ "devDependencies": { "typescript": "^5.6.0", "babel-plugin-module-resolver": "^5.0.0",
+{ "devDependencies": { "typescript": ">=5.6 <6.1", "babel-plugin-module-resolver": "^5.0.0",
   "eslint-plugin-boundaries": "^5.0.0" } }
 ```
+
+`typescript`: use the version your Expo SDK (or React Native template) ships; `typescript-eslint` supports
+TypeScript below 6.1, which sets the upper bound.
 
 ## 1. TypeScript strict and path aliases
 
@@ -65,12 +68,13 @@ src/
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
-    "baseUrl": ".",
-    "paths": { "@app/*": ["src/app/*"], "@features/*": ["src/features/*"], "@shared/*": ["src/shared/*"] }
+    "types": ["jest"],                // TypeScript 6 no longer loads every @types package by default
+    "paths": { "@app/*": ["./src/app/*"], "@features/*": ["./src/features/*"], "@shared/*": ["./src/shared/*"] }
   }
 }
 ```
 
+`paths` resolve relative to the `tsconfig.json` without `baseUrl`, which TypeScript 6 deprecates (TS5101).
 Mirror the aliases in `babel.config.js` (`module-resolver`) so Metro resolves what `tsc` resolves.
 Never use `../../../` across feature boundaries; use an alias.
 
@@ -90,6 +94,8 @@ app  ->  features  ->  shared
 
 ```tsx
 // features/orders/screens/OrdersListScreen.tsx: thin wiring, no logic
+// LoadingState and OrdersList are the app's own components (a spinner; a FlatList of OrderCard, testID="orders-list")
+type OrdersListProps = NativeStackScreenProps<OrdersParamList, 'OrdersList'>;
 const OPEN_ORDERS: OrderFilter = { status: 'open' };    // module constant: OrderFilter, see react-native-state-and-data
 
 export function OrdersListScreen({ navigation }: OrdersListProps) {
@@ -169,11 +175,19 @@ context, so tests substitute a fake and the implementation is swappable. The con
 // shared/services/storage/KeyValueStorage.ts
 export interface KeyValueStorage { get(key: string): Promise<string | null>; set(key: string, v: string): Promise<void>; }
 // shared/services/ServicesContext.tsx: infrastructure only, no feature types
-export interface Services { http: HttpClient; storage: KeyValueStorage; logger: Logger; errorReporter: ErrorReporter; }
+export interface Services { http: HttpClient; storage: KeyValueStorage; logger: Logger; errorReporter: ErrorReporter; analytics: Analytics; }
 const ServicesContext = createContext<Services | null>(null);
 export const ServicesProvider = ServicesContext.Provider;
 export const useServices = (): Services => { const s = useContext(ServicesContext); if (!s) throw new Error('ServicesProvider missing'); return s; };
-// app/providers/AppProviders.tsx: <ServicesProvider value={createServices(env)}>...</ServicesProvider>
+```
+
+```tsx
+// app/providers/AppProviders.tsx: build the services ONCE; a new object per render would re-render every
+// consumer and invalidate every useMemo([http]) downstream
+export const AppProviders = ({ env, children }: PropsWithChildren<{ env: AppEnv }>) => {
+  const [services] = useState(() => createServices(env));
+  return <ServicesProvider value={services}>{children}</ServicesProvider>;
+};
 ```
 
 Features build their own api from `useServices().http` in a hook (`useOrdersApi`, see `react-native-state-and-data`).

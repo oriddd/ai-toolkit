@@ -51,7 +51,7 @@ client/dep/
 **Promote to 5-layer when**:
 - 10+ endpoints implemented
 - Complex query DSL (Elasticsearch-style)
-- Multi-step protocols (Kafka patterns)
+- Multi-step protocols over an SDK (for Kafka / RabbitMQ producers and consumers use `messaging`, not a client package)
 - Heavy SDK abstraction needed
 
 ---
@@ -71,31 +71,37 @@ public class HealthCheckClient {
     
     public boolean isHealthy() {
         try {
-            String body = restClient.get().uri(properties.healthEndpoint())
-                .retrieve().body(String.class);
-            return body != null && body.contains("UP");
-        } catch (RestClientException e) {   // retrieve() throws on 4xx/5xx and I/O errors
+            HealthResponse health = restClient.get().uri(properties.healthEndpoint())
+                .retrieve().body(HealthResponse.class);   // retrieve() throws on 4xx/5xx
+            return health != null && "UP".equals(health.status());
+        } catch (RestClientException e) {   // non-2xx status, timeout or I/O error
             return false;
         }
     }
+
+    record HealthResponse(String status) {}
 }
+// The RestClient bean (HealthCheckClientConfig) sets connect and read timeouts
+// from HealthCheckProperties — never call a dependency without timeouts.
 ```
 
 **Full 5-Layer** (Elasticsearch integration):
 ```
-client/elasticsearch/
-├── ElasticsearchService.java           # search(), aggregate(), scroll()
+client/elasticsearch/                               # same layout as external-client §1
+├── ElasticsearchService.java                       # facade: search(), aggregate(), scroll()
+├── constant/
+│   └── ElasticsearchConstants.java
 ├── core/
-│   ├── ElasticsearchCoreService.java   # orchestrates query building
-│   └── ElasticsearchClient.java        # thin HTTP wrapper
-├── handler/
-│   ├── request/
-│   │   ├── QueryBuilder.java           # DSL query construction
-│   │   └── AggregationBuilder.java     # complex aggregations
-│   └── response/
-│       ├── SearchResponseParser.java   # extract hits, scores
-│       └── AggregationParser.java      # parse buckets
-└── constant/ElasticsearchConstants.java
+│   ├── ElasticsearchClientConfig.java              # transport bean
+│   ├── ElasticsearchClient.java                    # thin transport wrapper
+│   └── ElasticsearchCoreService.java               # orchestrates build → call → parse/verify
+└── handler/
+    ├── request/
+    │   ├── ElasticsearchRequestBuilder.java         # DSL query + aggregation construction
+    │   └── ElasticsearchFilterMapBuilder.java       # fluent filter composition
+    └── response/
+        ├── ElasticsearchResponseParser.java         # extract hits, scores, buckets
+        └── ElasticsearchResponseVerifier.java       # hasHits, isSuccess…
 ```
 
 ### ❌ Over-Engineering Examples

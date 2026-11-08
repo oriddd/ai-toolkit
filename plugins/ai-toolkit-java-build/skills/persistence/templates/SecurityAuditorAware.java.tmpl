@@ -1,0 +1,28 @@
+package {{basePackage}}.permission;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import java.util.Optional;
+/**
+ * Supplies createdBy / updatedBy for JPA auditing (persistence AuditConfig). Lives in permission/ because it reads
+ * SecurityContextHolder. Store an opaque subject id (the token's {@code sub}), never a username or e-mail (data-privacy).
+ */
+@Component("auditorAware")
+public class SecurityAuditorAware implements AuditorAware<String> {
+    static final String SYSTEM_AUDITOR = "system";
+    @Override
+    public Optional<String> getCurrentAuditor() {
+        final Optional<String> user = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .filter(a -> a.isAuthenticated() && !(a instanceof AnonymousAuthenticationToken))
+                .map(Authentication::getName);
+        if (user.isPresent()) {
+            return user;
+        }
+        // "system" only for work that is not an HTTP request (schedulers, message consumers). An unauthenticated
+        // write inside a request returns empty, so a missing auth is visible instead of hidden behind "system".
+        return RequestContextHolder.getRequestAttributes() == null ? Optional.of(SYSTEM_AUDITOR) : Optional.empty();
+    }
+}

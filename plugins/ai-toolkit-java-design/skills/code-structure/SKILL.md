@@ -13,7 +13,7 @@ version: 1.1
 last_reviewed: 2026-07-12
 ---
 
-# this Code Structure Skill
+# Code Structure
 
 Use this skill any time you create a new Java microservice, add a new
 feature, or onboard a legacy service. It defines the **package hierarchy** and
@@ -22,32 +22,56 @@ the three reference **design patterns** every service must follow.
 ## 1. Canonical package hierarchy
 
 Root package: `com.example.<domain>.<subdomain>`
-(e.g. `com.example.foo`).
+(e.g. `com.example.billing.invoice`).
 
 ```
 com.example.<domain>.<subdomain>/
 ├── <ServiceName>Application.java     # @SpringBootApplication entry-point
-├── client/        # outbound HTTP / gRPC clients to other services
-├── constant/      # shared compile-time constants
+├── client/        # outbound HTTP / gRPC clients to other services (client/<dep>/, see external-client)
+├── config/        # @Configuration classes + @ConfigurationProperties records (config/<capability>/ for pluggable wiring)
+├── constant/      # shared compile-time constants (incl. ConfigurationConstants)
 ├── controller/    # @RestController REST entry-points (thin, no business logic)
 ├── renderer/      # domain "renderer strategies" (format export / rendering)
-├── exception/     # custom exceptions + exception/constants/ExceptionMessages
-├── health/        # Spring Boot HealthIndicator implementations
+├── exception/     # custom exceptions + exception/constants/ExceptionMessages + exception/handler/GlobalExceptionHandler
+├── health/        # health/indicator/ HealthIndicator implementations + health/config/ (see health-indicator)
 ├── mapper/        # MapStruct mappers AND/OR response-mapper strategies (see Pattern A)
 ├── model/         # DTOs (request/response) and internal domain models
-├── monitor/       # metrics filter, recorders, parsers (see Pattern B)
-├── operation/     # use-case orchestrators (one class per public use case)
+├── monitor/       # metrics filter, recorder/, parser/ (see Pattern B, request-metrics)
+├── operation/     # use-case orchestrators (one class per orchestrated use case)
 ├── permission/    # authorization strategies + handler (see Pattern A)
-├── repository/    # data-access wrappers around a client/adapter (thin, per fetch shape)
+├── repository/    # data access, one method per fetch shape (see "repository/" note below)
 ├── analyzer/      # pure-function business logic (status/totals analysis)
 ├── scheduler/     # @Scheduled tasks — orchestrate only (see rule below)
-└── service/       # business logic / IO – called by operations
+├── service/       # business logic / IO – called by controllers or operations
+│
+│   # Feature packages — created only when the service uses that skill
+├── spi/           # project-owned port interfaces: spi/<capability>/ (pluggable-architecture)
+├── adapter/       # vendor adapters: adapter/<capability>/<vendor>/ (pluggable-architecture)
+├── validation/    # annotation/, validator/, rule/, config/ValidationConfig (input-validation)
+├── layout/        # response layout strategies + handler (response-layout)
+├── entity/        # JPA @Entity types (persistence)
+├── domain/        # aggregates, value objects, domain services (domain-modeling)
+├── acl/           # anti-corruption-layer translators to other contexts (domain-modeling)
+├── event/         # immutable event records — the contract (messaging, domain-modeling)
+└── messaging/     # producer/, consumer/, outbox/ (messaging)
 ```
 
-> `repository/`, `analyzer/`, and `scheduler/` are **only present when needed**
-> — do not scaffold empty packages. They exist to give background jobs,
-> data-access shapes, and pure analysis logic a home *outside* of `service/`
-> when a single service class would otherwise mix concerns.
+> Only `controller/`, `service/`, `model/`, `exception/` and `config/` exist in
+> every REST service. Every other package — including `repository/`,
+> `analyzer/`, `scheduler/` and the feature packages — is **only present when
+> needed**: do not scaffold empty packages. `repository/`, `analyzer/` and
+> `scheduler/` exist to give background jobs, data-access shapes, and pure
+> analysis logic a home *outside* of `service/` when a single service class
+> would otherwise mix concerns.
+>
+> **`repository/` has one meaning: the data-access layer, one method per fetch
+> shape.** With a database it holds Spring Data interfaces (+ Specifications,
+> see `persistence`); with a remote source it holds thin `*Fetcher` classes on
+> top of a `client/` (see §1c). Business code reaches data only through it.
+>
+> Event-driven and scheduler services rename the entry/orchestrator packages
+> (`consumer/`, `handler/`, `job/`, `producer/` — see `project-types`); the
+> same layering and ArchUnit rules apply to them.
 
 ### Layering rules
 
@@ -60,6 +84,9 @@ controller ──► operation ──► service ──► repository ──► 
                                                 │
                  scheduler ──► service / repository / analyzer  (never client directly)
 ```
+
+The controller skips `operation/` and calls exactly one `*Service` when the use
+case orchestrates nothing (guild rule 3, see §1c).
 
 ## 1b. The LEGO Bricks Principle (Foundational)
 
@@ -155,7 +182,10 @@ detailed examples of testable vs. non-testable code.
 
 Each layer in the hierarchy has a specific, focused responsibility:
 
-- **Controllers** only translate HTTP ⇄ DTO and delegate to **one** `Operation`.
+- **Controllers** only translate HTTP ⇄ DTO and delegate to **exactly one**
+  entry bean: an `Operation` when the use case orchestrates (permission check,
+  several services, response assembly), otherwise a single `*Service` call
+  (guild rule 3; see `pattern-selection` for the scale decision).
 - **Operations** orchestrate a single use case: permission check → service calls →
   response assembly. No HTTP types here.
 - **Services** are stateless beans encapsulating one domain capability.
@@ -163,7 +193,8 @@ Each layer in the hierarchy has a specific, focused responsibility:
   framework exceptions – translate to a domain `*Exception` from the
   `exception/` package.
 - **Repositories** provide **one method per fetch shape** on top of a client
-  (`fetchById`, `fetchByStatus`, `fetchOrderStatus`). They own query-building and
+  (`fetchById`, `fetchByStatus`, `fetchOrderStatus`) — Spring Data interfaces
+  for a database, `*Fetcher` classes over a client otherwise. They own query-building and
   transport-error handling; they do **not** transform DTOs or apply business
   rules. Split into multiple small classes (`*OrderListFetcher`, `*OrderDetailsFetcher`,
   `*OrderStatusFetcher`) rather than a fat repository.
@@ -175,7 +206,7 @@ Each layer in the hierarchy has a specific, focused responsibility:
   client directly, builds its own query strings, or re-implements analysis
   logic is a duplication smell → move the logic into `repository/` or
   `analyzer/` and inject it.
-- **Models** are immutable where possible (records / `@Value`).
+- **Models** are immutable where possible (records, or `@lombok.Value` — never Spring's `@Value`).
 - Cross-cutting concerns (`permission`, `monitor`, `renderer`, `analyzer`)
   live in their own packages and are wired via Spring DI.
 
@@ -184,10 +215,11 @@ Each layer in the hierarchy has a specific, focused responsibility:
 - One public class per file.
 - Suffixes are meaningful: `*Controller`, `*Operation`, `*Service`, `*Client`,
   `*Strategy`, `*Handler`, `*Registry`, `*Recorder`, `*Parser`, `*Filter`,
-  `*Config`, `*Exception`, `*Fetcher`, `*Builder`, `*Converter`,
-  `*Calculator`, `*Analyzer`, `*Scheduler`, `*Task`.
-- **Lego-brick sizing.** Prefer many small, named classes (≤ ~100 lines,
-  single responsibility) over one long orchestrator. If a class needs a
+  `*Config`, `*Properties`, `*Exception`, `*Fetcher`, `*Builder`, `*Converter`,
+  `*Calculator`, `*Analyzer`, `*Scheduler`, `*Task`, `*Port`, `*Adapter`,
+  `*Validator`, `*Rule`, `*Mapper`, `*Renderer`, `*Resolver`.
+- **Lego-brick sizing.** Prefer many small, named classes (≤ 200 LOC, aim for
+  ≤ 100 — same limit as §1b; single responsibility) over one long orchestrator. If a class needs a
   section comment like `// --- totals calculation ---` inside it, that
   section is a missing `*Calculator` / `*Fetcher` / `*Builder`.
 - Test classes mirror the package of the class under test under `src/test/java`.
@@ -207,12 +239,13 @@ Sections below keep their numbers but live in `references/` so this file stays s
   `log.debug` for happy-path detail, `log.warn` for recoverable, `log.error`
   for unexpected with the exception as the **last** argument (not
   concatenated). Never log secrets or URLs with credentials.
-- **Lombok:** prefer `@RequiredArgsConstructor(onConstructor = @__(@Autowired))`
-  for DI; avoid field injection. Pick one style per class.
+- **Lombok:** prefer plain `@RequiredArgsConstructor` for DI (a single
+  constructor needs no `@Autowired`); avoid field injection. Pick one style per class.
 - **Configuration:** All env-driven config is read from `application.yaml`
-  with `${ENV_VAR:default}` placeholders matching the Helm chart env names.
+  into `@ConfigurationProperties` records (see `spring-boot-conventions` §1)
+  with `${ENV_VAR:default}` placeholders (secrets: `${ENV_VAR}`, no default) matching the Helm chart env names.
   Keys are centralised in `constant/ConfigurationConstants`.
-- **Exceptions:** Define a base `<Domain>Exception` and subclasses
+- **Exceptions:** Define an unchecked base `<Domain>Exception extends RuntimeException` and subclasses
   (`*BadRequestException`, `*ForbiddenException`, `*NotFoundException`).
   Static messages live in `exception/constants/ExceptionMessages` and are
   formatted with `MessageFormat`. HTTP mapping happens in a single
@@ -227,14 +260,17 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 When applying this skill to a new module:
 
-- [ ] Create the empty package skeleton listed in §1.
-- [ ] Create `<ServiceName>Application.java` with `@SpringBootApplication` only — Boot already scans the package (with the exclude filters
+- [ ] Create the packages from §1 that this module populates now (never empty
+      ones); `templates/package-skeleton/` lists the usual core set.
+- [ ] Create `<ServiceName>Application.java` with `@SpringBootApplication` + `@ConfigurationPropertiesScan` only — Boot already scans the package (with the exclude filters
       test slices need) and loads `application.yaml`; a bare `@ComponentScan` would drop those filters and `@PropertySource` cannot read YAML.
+      `@ConfigurationPropertiesScan` registers the `@ConfigurationProperties` records (without it they are never bound and startup fails).
       **Never** put `@EnableScheduling` / `@EnableAsync` / `@EnableCaching`
       here — each goes on its own dedicated `@Configuration` class
       (`SchedulingConfig`, `AsyncConfig`, `CachingConfig`) so test slices
       can opt out. See `spring-boot-conventions` §7b.
-- [ ] Add `application.yaml` with `server.port`, `server.servlet.context-path`,
+- [ ] Add `application.yaml` with `spring.application.name`, `server.port`, `server.servlet.context-path`,
+      graceful shutdown (`server.shutdown: graceful`, `spring.lifecycle.timeout-per-shutdown-phase`, see `graceful-shutdown`),
       actuator exposure (`prometheus,health,info`), and
       `management.endpoint.health.probes.enabled: true`.
 - [ ] Add `logback-spring.xml` aligned with `spring-boot-starter-logging`.
@@ -244,7 +280,7 @@ When applying this skill to a new module:
 
 ## 7. Templates
 
-- [`Application.java.tmpl`](./templates/Application.java.tmpl) — `@SpringBootApplication` entry-point.
+- [`Application.java.tmpl`](./templates/Application.java.tmpl) — `@SpringBootApplication` + `@ConfigurationPropertiesScan` entry-point.
 - [`ArchitectureTest.java.tmpl`](./templates/ArchitectureTest.java.tmpl) — ArchUnit structural enforcement.
 - [`application.yaml.tmpl`](./templates/application.yaml.tmpl) — Baseline Spring configuration.
-- [`package-skeleton/`](./templates/package-skeleton/) — Folder structure with `.gitkeep` files.
+- [`package-skeleton/`](./templates/package-skeleton/) — Core folder structure with `.gitkeep` files; copy only the folders you populate.

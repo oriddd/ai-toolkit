@@ -6,8 +6,8 @@ Part of the [`request-metrics`](../SKILL.md) skill. Section numbers and headings
 
 Each parser is a focused `@Component` that extracts exactly one tag value from
 the request/response context. Parsers always return a non-blank sentinel
-(`UNKNOWN`, `BASIC`, …) on failure — never `null` or empty string, because
-Prometheus rejects blank label values.
+(`UNKNOWN`, `BASIC`, …) on failure — never `null` or empty string. Micrometer rejects a `null` tag value, and
+Prometheus treats an empty label value as "label absent", which merges unrelated requests into one ambiguous series.
 
 ### `RequestMethodParser`
 
@@ -42,12 +42,17 @@ public class ResponseStatusParser {
 @Component
 @Slf4j
 public class ClientIdParser {
+    /** Request attribute holding the client id captured inside the security chain (ClientIdCaptureInterceptor). */
+    public static final String CLIENT_ID_ATTRIBUTE = ClientIdParser.class.getName() + ".clientId";
     private static final String AZP = "azp";   // JWT authorized party claim
 
     // Reads the principal from the request, never SecurityContextHolder (that stays in permission/,
     // ArchUnit rule securityHolderLivesInPermissionOnly). Spring Security's request wrapper returns
     // the current Authentication from getUserPrincipal().
     public String parseClientId(final HttpServletRequest request) {
+        if (request != null && request.getAttribute(CLIENT_ID_ATTRIBUTE) instanceof String captured) {
+            return captured;    // a filter running outside Spring Security sees no principal itself
+        }
         try {
             final Principal principal = request == null ? null : request.getUserPrincipal();
             if (principal instanceof JwtAuthenticationToken jwt
@@ -58,12 +63,32 @@ public class ClientIdParser {
             if (principal instanceof UsernamePasswordAuthenticationToken) {   // HTTP Basic
                 return MonitoringConstants.BASIC;
             }
-        } catch (final Exception e) {
-            log.error("Failed to extract clientId for metrics tag", e);
+        } catch (final RuntimeException e) {
+            log.debug("Failed to extract clientId for metrics tag", e);   // DEBUG: a bad token on every call must not flood the logs
         }
         return MonitoringConstants.UNKNOWN;
     }
 }
+```
+
+When the metrics filter is ordered **before** Spring Security (so 401/403 rejections are recorded), the request it
+holds carries no principal. A `HandlerInterceptor` captures the client id while the request is inside the security
+chain; request attributes are shared by the wrapped and the outer request. Requests rejected by security never reach
+it and are tagged `UNKNOWN`:
+
+```java
+@Component
+@RequiredArgsConstructor
+public class ClientIdCaptureInterceptor implements HandlerInterceptor {
+    private final ClientIdParser clientIdParser;
+
+    @Override
+    public boolean preHandle(final HttpServletRequest request, final HttpServletResponse response, final Object handler) {
+        request.setAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE, clientIdParser.parseClientId(request));
+        return true;
+    }
+}
+// config/: a WebMvcConfigurer registers it — registry.addInterceptor(clientIdCaptureInterceptor)
 ```
 
 ### Adding a domain-specific parser
@@ -77,7 +102,7 @@ public class ExportFormatParser {
 
     public String parseExportFormat(final HttpServletRequest request) {
         final String format = request.getParameter("format");
-        if (StringUtils.isBlank(format)) {
+        if (format == null || format.isBlank()) {   // String::isBlank — no commons-lang3 needed
             return MonitoringConstants.UNKNOWN;
         }
         // the value is caller-controlled: map it onto a closed set, never use it as a tag as-is
@@ -90,8 +115,9 @@ Rules for all parsers:
 - **Never return `null` or `""`** — always return a non-blank sentinel.
 - **Tag values come from a closed set.** Never return a request parameter, header or path segment as-is: a client could
   create unlimited time series. Map it onto known values and return `OTHER` for the rest (`observability`: fewer than 100 values per tag).
-- **Swallow exceptions** with a `log.error` and return the sentinel; a bad tag
-  must not fail the request.
+- **Swallow exceptions** and return the sentinel; a bad tag must not fail the request. Log at `DEBUG` (or a
+  rate-limited `WARN` plus a failure counter), never `ERROR` per request — one malformed header on every call would
+  flood the logs.
 - Keep the method name `parse<TagConcept>(request|response|…)` for consistency.
 
 ## 7. `MetricsTagsHelper` — generic tag set
@@ -101,7 +127,7 @@ recorders DRY:
 
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class MetricsTagsHelper {
     private final RequestMethodParser requestMethodParser;
     private final ResponseStatusParser responseStatusParser;
@@ -131,7 +157,7 @@ defined once so all recorders use consistent latency buckets:
 
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class MetricsTimerHelper {
     private final MeterRegistry meterRegistry;
     private final MetricsTagsHelper metricsTagsHelper;

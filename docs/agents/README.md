@@ -27,17 +27,21 @@ and [`CHEATSHEET.md`](./CHEATSHEET.md) (using & authoring agents).
 
 ## Working with subagents
 
-Subagents cannot spawn subagents. The orchestrating agents (`new-feature`, `new-endpoint`,
-`new-kafka-consumer`, `new-microservice-client`, `refactor`, `scaffold-repo`) delegate only when
-they run as the **main-session agent**:
+The orchestrating agents (`new-feature`, `new-endpoint`, `new-kafka-consumer`, `new-microservice-client`,
+`refactor`, `scaffold-repo`) fan independent work out to `test-writer`, `update-context`, `code-review` and
+`general-purpose` subagents (see the `parallel-delegation` skill) whenever the Agent tool is available — a subagent
+can start subagents too. Without it, or pasted into another tool, the same steps run inline. `code-review` is read-only.
+
+**Questions need the main session.** A subagent cannot ask the developer anything. Run an orchestrator that must
+ask (CLARIFY / confirm steps, HITL skills) as the main-session agent:
 
 ```bash
 claude --agent ai-toolkit-java-agents:new-endpoint
 ```
 
-There they fan independent work out to `test-writer`, `update-context`, `code-review` and
-`general-purpose` subagents (see the `parallel-delegation` skill). Invoked as a subagent, or
-pasted into another tool, the same steps simply run inline. `code-review` is read-only.
+Invoked as a subagent, an orchestrator with open questions writes nothing and returns `NEEDS INPUT:` with its
+questions and proposed defaults; the caller asks the developer and invokes it again with the answers.
+`scaffold-repo` is HITL throughout — run it only with `claude --agent ai-toolkit-java-agents:scaffold-repo`.
 
 ## Other languages
 

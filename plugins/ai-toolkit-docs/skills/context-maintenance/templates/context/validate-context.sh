@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Validates that every .md file in context/ has content under each (REQUIRED) section.
-# "Content" = at least one line that is not blank and not inside an HTML comment (comments may span lines).
+# "Content" = at least one line that is not blank, not inside an HTML comment (comments may span lines), not a bare
+# code-fence delimiter (an empty ``` block is not content) and not a TODO/TBD placeholder.
 set -euo pipefail
 CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 errors=0
@@ -11,7 +12,8 @@ for f in "$CONTEXT_DIR"/*.md; do
     function flush() {
       if (in_req && !has_content) printf "ERR: %s: section \047%s\047 is empty but required.\n", rel, header
     }
-    /^##+/ { flush(); in_req = ($0 ~ /\(REQUIRED\)/); header = $0; has_content = 0; in_comment = 0; next }
+    !in_comment && /^[ \t]*(```|~~~)/ { in_fence = !in_fence; next }
+    !in_fence && !in_comment && /^##+/ { flush(); in_req = ($0 ~ /\(REQUIRED\)/); header = $0; has_content = 0; next }
     in_req {
       line = $0; text = ""
       while (length(line) > 0) {
@@ -25,7 +27,7 @@ for f in "$CONTEXT_DIR"/*.md; do
           text = text substr(line, 1, i - 1); line = substr(line, i + 4); in_comment = 1
         }
       }
-      if (text !~ /^[ \t\r]*$/) has_content = 1
+      if (text !~ /^[ \t\r]*$/ && text !~ /^[ \t\r]*[-*]?[ \t]*(TODO|TBD)[ \t\r.:]*$/) has_content = 1
     }
     END { flush() }
   ' "$f")"

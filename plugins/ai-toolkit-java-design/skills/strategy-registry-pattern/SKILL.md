@@ -88,7 +88,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 **Checklist:**
 1. ✅ Create a new `<UseCase>Strategy implements Strategy` in `strategy/`
 2. ✅ Make it a `@Component`
-3. ✅ Implement `getSupportedXxx()` or `supportedContexts()`
+3. ✅ Implement `getSupported<X>()` (or `supported<X>s()` when it serves several values) — the one discriminator contract, see `components.md` §4
 4. ✅ Implement the core behavior method
 5. ✅ If new tag/data extraction is needed, add a new `<Concept>Parser` in `parser/`
 6. ✅ If a new discriminator value is needed, update the Resolver or Config
@@ -110,13 +110,15 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 ### Test the Resolver
 - ✅ Valid input → returns expected discriminator
-- ✅ Invalid input → returns `null`
+- ✅ Invalid input → returns `Optional.empty()`
+- ✅ Overlapping rules (e.g. two URI patterns that both match) → the most specific one wins, every run
 - ✅ Edge cases (null request, missing headers, malformed URIs)
 
 ### Test the Registry
 - ✅ Matching strategy → returns the strategy
-- ✅ No matching strategy → returns `null`
+- ✅ No matching strategy → returns `Optional.empty()`
 - ✅ Multiple strategies, correct one selected
+- ✅ Two strategies with the same discriminator → the constructor throws `IllegalStateException`
 
 ### Test Each Strategy
 - ✅ `canHandle` returns `true` for its discriminator
@@ -127,7 +129,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 ### Test Each Parser
 - ✅ Valid input → returns expected value
 - ✅ Invalid input → returns sentinel (UNKNOWN, DEFAULT)
-- ✅ Exception → returns sentinel, logs error
+- ✅ Exception → returns sentinel, logs at `DEBUG` (never `ERROR` per request)
 
 ## Do / Don't
 
@@ -135,7 +137,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - Add new behavior by adding a new `@Component` strategy — never modify Handler/Registry
 - Return non-blank sentinel values from Parsers — never `null` or `""`
 - Keep the Handler/Filter generic — no strategy-specific logic
-- Use `List<Strategy>` injection in Registry — Spring auto-discovers
+- Use `List<Strategy>` injection in Registry — Spring auto-discovers; index it by discriminator in the constructor and fail on duplicates
 - Delegate tag/data extraction to Parsers — keep strategies DRY
 
 ❌ **Don't:**
@@ -143,6 +145,8 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - Let strategies reference other strategies directly
 - Inline data extraction logic in strategies — use Parsers
 - Return `null` from Parsers — return sentinel values
+- Return `null` from Resolvers or Registries — return `Optional`
+- Rely on `findFirst()` over beans or a `Map.of(...)` for routing — bean order and `Map.of` iteration order are unspecified
 - Skip unit tests for new strategies/parsers
 
 ## Related Skills
@@ -167,15 +171,21 @@ Use when the concern applies to every request:
 - Request/response transformation
 
 ### Config-driven Resolver
-When the discriminator is determined by a config map (URI patterns → metric names):
+When the discriminator is determined by a config map (URI patterns → metric names). The rules are an **ordered**
+list — the resolver takes the first match, so put the most specific pattern first (`Map.of` has no defined order).
+It is a plain `@Component` holding constants, not a `@Configuration` class (it declares no beans); values that
+change per environment belong in a `@ConfigurationProperties` record instead (`spring-boot-conventions` §1):
 ```java
-@Getter
-@Configuration
+@Component
 public class MonitoringConfig {
-    private final Map<Pattern, String> patternToMetricNameMap = Map.of(
-        Pattern.compile("/api/v1/invoices/[^/]+/export"), "service.invoices.export",
-        Pattern.compile("/api/v1/reports"), "service.reports.create"
+    private static final List<Map.Entry<Pattern, String>> PATTERN_TO_METRIC_NAME = List.of(
+        Map.entry(Pattern.compile("/api/v1/invoices/[^/]+/export"), "service.invoices.export"),   // most specific first
+        Map.entry(Pattern.compile("/api/v1/reports"), "service.reports.create")
     );
+
+    public List<Map.Entry<Pattern, String>> patternToMetricName() {
+        return PATTERN_TO_METRIC_NAME;
+    }
 }
 ```
 

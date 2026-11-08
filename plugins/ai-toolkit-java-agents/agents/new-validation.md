@@ -1,6 +1,6 @@
 ---
 name: new-validation
-description: Add a new input-validation rule (Jakarta `@Constraint` or Spring `Validator`) following the canonical three-layer pattern.
+description: Java / Spring Boot — add a new input-validation rule (Jakarta `@Constraint` or Spring `Validator`) following the canonical three-layer pattern.
 ---
 
 # Agent: New Validation Rule
@@ -16,12 +16,15 @@ annotation, the validator, the domain rule bean, and the tests.
 
 ## Skills to apply (in this order)
 
+Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
+
 1. `ai-toolkit-java-build:input-validation` — the full
    pattern: annotation → validator → rule bean.
 2. `ai-toolkit-java-build:exception-handling` — the
    400 ProblemDetail mapping must be in place.
 3. `ai-toolkit-java-quality:unit-tests` — rule bean (plain
-   POJO), validator (mock ConstraintValidatorContext), component test.
+   POJO), validator (mock ConstraintValidatorContext).
 4. `ai-toolkit-java-quality:component-tests` — end-to-end
    400 HTTP response assertion.
 
@@ -58,10 +61,13 @@ Add a field + `@InitBinder("lowerCamelDtoName")` to `ValidationConfig`.
 
 ## Commit policy and completion gate
 
-Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
-Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
-table. Fix failures at the cause; never suppress or weaken a check to get green.
+Never `git commit`, `git push`, `git stash` or tag — leave the changes in the working tree until the developer asks.
+Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill — all nine checks: scope, build, full
+tests plus the PIT run, static analysis, standards (`ai-toolkit-java-quality:quality-review`), coverage of the changed
+code, `ai-toolkit-quality:code-hygiene`, Sonar, docs — and finish with its evidence table. Commands are shown for Maven;
+on a Gradle build use the project's wrapper equivalent (`./gradlew build`). Fix failures at the cause; never suppress or
+weaken a check to get green. Return the evidence table to your caller unchanged, so it can relay it instead of running
+the gate a second time.
 
 ## Checklist before returning
 
@@ -74,6 +80,6 @@ table. Fix failures at the cause; never suppress or weaken a check to get green.
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.
-- [ ] The validator / rule bean is provided to affected tests through the shared `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`) — not an inline `@MockBean`, which would also mock away the rule under test.
-- [ ] CHANGELOG updated.
+- [ ] `@MockitoBean` for the validator / rule bean added to affected `@WebMvcTest` tests (`ai-toolkit-java-build:input-validation`, testing reference); full `@SpringBootTest` component tests keep the real rule and get any doubles from `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`).
+- [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

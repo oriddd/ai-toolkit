@@ -28,7 +28,7 @@ Must answer in under 60 seconds:
 ## 2. `CONTRIBUTING.md`
 
 - How to set up the dev env (refers to `local-dev-experience`).
-- Branching + commit-message convention (refers to `release-versioning`).
+- Branching + commit-message convention (refers to `git-commit-conventions`; release tags and CHANGELOG in `release-versioning`).
 - Test policy (refers to `unit-tests`, `component-tests`, `integration-tests`).
 - Definition of Done — every PR checks: tests pass, Spotless clean, no new
   SpotBugs HIGH, OpenAPI snapshot reviewed, ADR added if architectural.
@@ -52,18 +52,36 @@ Default to **Mermaid** — fenced `mermaid` blocks in `.md` files render nativel
 (see `uml-diagram`). Use **Structurizr DSL** or **C4-PlantUML** only when you need C4 tooling; then render in CI:
 
 ```yaml
-- uses: cloudbees/plantuml-github-action@<commit-sha>   # pin a commit SHA — never @master
-  with: { args: -tsvg docs/diagrams/*.puml }
+# pinned PlantUML image — pin the tag (or digest), never :latest
+- run: docker run --rm -v "$PWD:/work" -w /work plantuml/plantuml:<pinned-version> -tsvg -o _rendered docs/diagrams/*.puml
+- run: git diff --exit-code docs/diagrams/_rendered   # fails when a committed SVG is stale
 ```
 
 With PlantUML / Structurizr, generated SVGs are committed to `docs/diagrams/_rendered/`; pre-commit
-fails if `.puml` changed but the SVG was not regenerated. Mermaid diagrams need neither step.
+fails if `.puml` changed but the SVG was not regenerated:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: plantuml-rendered
+        name: PlantUML SVGs are up to date
+        language: system
+        files: ^docs/diagrams/.*\.puml$
+        pass_filenames: false
+        entry: bash -c 'docker run --rm -v "$PWD:/work" -w /work plantuml/plantuml:<pinned-version> -tsvg -o _rendered docs/diagrams/*.puml && git diff --exit-code docs/diagrams/_rendered'
+```
+
+Mermaid diagrams need neither step.
 
 ## 4. `docs/adr/` — Architecture Decision Records
 
-Capture *why*, not *what*. One file per decision, immutable once accepted.
+Capture *why*, not *what*. One file per decision, immutable once accepted (the only later edit is the `Status`
+line when it is superseded).
 
-Template: `docs/adr/template.md`
+File name: `docs/adr/NNNN-<kebab-case-slug>.md`, numbered in sequence (e.g. `docs/adr/0007-use-kafka-for-events.md`);
+the title inside is `ADR-NNNN — <Title>`. Template: `docs/adr/template.md`
 
 ```markdown
 # ADR-NNNN — <Title>
@@ -93,7 +111,8 @@ When to write an ADR:
 - Disabling a security default.
 - Deviating from a toolkit skill.
 
-ADRs are **append-only**. Superseding an old ADR creates a new one.
+ADRs are **append-only**. Superseding an old ADR creates a new one; the old ADR's `Status` line is changed to
+`SUPERSEDED by ADR-MMMM` and nothing else in it.
 
 ## 5. `docs/SLO.md`
 
@@ -101,13 +120,14 @@ See `observability` §4 — the SLI/SLO table for the service.
 
 ## 6. Use-case diagrams
 
-Generated from the controller + operation classes via `springdoc` (Spring) or the OpenAPI generator and a
-PlantUML render step:
+Written by hand from the controller + operation classes (`springdoc` and the OpenAPI generator document the API
+contract, they do not draw sequence diagrams). Mermaid by default (`uml-diagram`); `.puml` only when the repo
+already uses PlantUML:
 
 ```
 docs/diagrams/
-├── usecase-create-invoice.puml
-├── sequence-export-invoice.puml
+├── usecase-create-invoice.md       # mermaid flowchart
+├── sequence-export-invoice.md      # mermaid sequenceDiagram
 └── …
 ```
 
@@ -128,5 +148,5 @@ in CI.
 ✅ Diagrams are text-first (Mermaid by default; PlantUML / Structurizr when needed) so they diff in git.
 ❌ Never put architecture diagrams in Confluence or a slide deck "as the
 source of truth" — they drift the day after the meeting.
-❌ Never amend a past ADR; supersede it.
+❌ Never amend a past ADR; supersede it (only its `Status` line changes).
 

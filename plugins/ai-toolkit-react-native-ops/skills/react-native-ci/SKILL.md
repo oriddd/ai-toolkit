@@ -26,9 +26,10 @@ runners (full native control). Default to EAS unless you need custom native buil
 .github/workflows/
 ├── pr.yml            # verify gates on every pull request
 ├── preview.yml       # EAS preview build on labelled PRs
-├── e2e.yml           # Maestro critical flows (nightly and on demand), see react-native-e2e-tests
+├── e2e.yml           # Maestro critical flows (nightly and on demand, not a PR gate), see react-native-e2e-tests
 ├── audit.yml         # scheduled, advisory dependency audit
 └── release.yml       # tag-driven store build and submit
+.nvmrc                # the Node major CI and developers use (setup-node reads it)
 eas.json              # build profiles (EAS path)
 fastlane/Fastfile     # lanes (Fastlane path)
 ```
@@ -56,8 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
       - run: npm run verify
@@ -80,8 +81,8 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --ignore-scripts
       - run: npm audit --omit=dev --audit-level=high   # advisory: not a required check; triage failures weekly
@@ -107,8 +108,8 @@ jobs:
     if: github.event.label.name == 'preview'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
       - uses: expo/expo-github-action@v8
         with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }   # equals the eas-cli pin in package.json
@@ -121,12 +122,13 @@ jobs:
 { "cli": { "appVersionSource": "remote" },
   "build": {
     "preview": { "distribution": "internal", "channel": "preview" },
+    "e2e": { "distribution": "internal", "ios": { "simulator": true }, "android": { "buildType": "apk" } },
     "production": { "autoIncrement": true, "channel": "production" } },
   "submit": { "production": {} } }
 ```
 
-`e2e.yml` (nightly `schedule` plus `workflow_dispatch`, not a PR gate) builds a simulator/emulator binary with an `e2e`
-EAS profile, installs it, and runs `maestro test .maestro/flows --include-tags critical --format junit` with Maestro
+`e2e.yml` (nightly `schedule` plus `workflow_dispatch`, not a PR gate; the same policy as `react-native-e2e-tests` §5)
+builds a simulator/emulator binary with the `e2e` EAS profile above, installs it, and runs `maestro test .maestro/flows --include-tags critical --format junit` with Maestro
 installed from the pinned version baked into the runner image (a developer-run install, see `react-native-e2e-tests`),
 then uploads the JUnit report and screenshots. Secrets reach flows through the environment, never `-e` on the command line.
 This workflow is a pattern, not exercised here.
@@ -143,8 +145,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production        # manual approval gate
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
       - uses: expo/expo-github-action@v8
         with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }

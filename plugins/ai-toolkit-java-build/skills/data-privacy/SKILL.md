@@ -30,6 +30,7 @@ Identify any fields that contain Personally Identifiable Information (PII):
 Use a custom `@Mask` annotation on DTO fields and a corresponding Jackson `JsonSerializer` or a Logback/Log4j2 pattern converter to mask these fields.
 
 ```java
+@Target({ElementType.FIELD, ElementType.METHOD, ElementType.RECORD_COMPONENT})   // record components propagate to the accessor/field Jackson reads
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Mask {}   // marker only — no @JsonSerialize, so the ObjectMapper writing API responses ignores it
 
@@ -58,6 +59,9 @@ ObjectMapper logMapper = JsonMapper.builder()
     .build();
 ```
 
+> The snippets use Jackson 2 (`com.fasterxml.jackson`, Spring Boot 3.x). **Boot 4 note:** Boot 4 defaults to
+> Jackson 3 (`tools.jackson` packages, `ValueSerializer` instead of `JsonSerializer`); port the same idea.
+
 #### Jackson Masking Implementation
 ```java
 public class MaskingSerializer extends JsonSerializer<String> {
@@ -75,6 +79,16 @@ public class MaskingSerializer extends JsonSerializer<String> {
 ## 3. PII in Database (Encryption)
 
 Sensitive PII should be encrypted at rest. Use **JPA Attribute Converters** with a secure key management system (AES-256).
+
+The converter must use authenticated encryption — never `Cipher.getInstance("AES")`, which means ECB mode
+(identical plaintexts give identical ciphertexts, no integrity):
+
+- **Algorithm:** `AES/GCM/NoPadding` with a 256-bit key and a 128-bit tag.
+- **IV:** a fresh random 96-bit IV from `SecureRandom` for **every** value; never reuse an IV with the same key.
+- **Stored format:** `<keyVersion>:<base64(iv || ciphertext+tag)>`, so old rows stay readable after rotation.
+- **Keys:** fetched from a KMS / Vault (envelope encryption: a data key wrapped by a master key), never from
+  `application.yaml` or the image.
+- **Prefer a vetted library** (e.g. Google Tink `Aead`, or your KMS client's encryption SDK) over hand-written `Cipher` code.
 
 ```java
 @Entity
@@ -100,6 +114,15 @@ Implement a mechanism to handle data deletion requests. Use a **Deletion Coordin
 3. **Phase 2 (Async)**: Trigger background jobs to purge audit logs, backups, and secondary stores.
 4. **Finalize**: Emit `UserPurgedEvent` once all data traces are removed.
 
+Places PII survives a plain delete — cover each one:
+
+- **Soft-deleted rows** (`persistence` §1): the row stays, so scrub/anonymise its PII columns.
+- **Audit columns** (`createdBy` / `updatedBy`): store an opaque subject id, never a name or e-mail, so they need no scrubbing.
+- **Outbox rows** (`messaging` §3): payloads are kept until the retention job runs — keep events PII-free, or purge
+  the subject's rows.
+- **Broker topics**: retention (or compaction) keeps every event for days or forever; you cannot edit a record.
+  Keep events ids-only, or encrypt PII per subject and delete the key (crypto-shredding).
+
 ## 5. Data Retention (TTL)
 
 Define and enforce data retention periods.
@@ -117,6 +140,7 @@ Every access to PII should be logged.
 ✅ Mask PII in logs by default.
 ✅ Use field-level encryption for sensitive data.
 ✅ Implement a clear data retention policy.
-❌ Never use PII in cache keys or URL parameters.
+❌ Never use PII in cache keys or URL parameters — including path ids: address a user as
+`/users/{opaqueId}`, never `/users/{email}`; look a user up by e-mail with a `POST …/search` body instead.
 ❌ Never log raw request/response bodies that might contain PII.
 ❌ Never store PII in plaintext in local development environments.

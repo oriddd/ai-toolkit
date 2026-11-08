@@ -16,7 +16,8 @@ last_reviewed: 2026-06-28
 # Exception Handling Skill
 This skill enforces a project-wide error contract:
 
-- Internal code throws **domain exceptions** (typed, not `RuntimeException`).
+- Internal code throws **domain exceptions** — typed subclasses of the unchecked
+  `BaseDomainException`, never a raw `RuntimeException`.
 - A single `@RestControllerAdvice` translates every exception (domain or
   third-party) into an [RFC 7807 `ProblemDetail`](https://www.rfc-editor.org/rfc/rfc7807)
   with a stable HTTP status.
@@ -36,60 +37,97 @@ The skill uses **only stock Spring Boot 3 primitives**:
 
 ```
 exception/
-├── <Domain>Exception.java                # base – checked
-├── <Domain>BadRequestException.java      # extends base – maps to 400
-├── <Domain>ForbiddenException.java       # extends base – maps to 403
-├── <Domain>NotFoundException.java        # extends base – maps to 404
+├── BaseDomainException.java              # base – unchecked (extends RuntimeException), carries errorCode
+├── BadRequestException.java              # extends base – maps to 400
+├── ForbiddenException.java               # extends base – maps to 403
+├── NotFoundException.java                # extends base – maps to 404
+├── ConflictException.java                # extends base – maps to 409
+├── UnsupportedApiVersionException.java   # extends base – maps to 406 (response-mapper)
+├── DependencyException.java              # extends base – maps to 500 (downstream non-2xx that is not an outage)
+├── TooManyRequestsException.java         # extends base – maps to 429 + Retry-After
+├── UnavailableException.java             # extends base – maps to 503 + Retry-After (downstream down)
 ├── constants/
-│   └── ExceptionMessages.java            # static final String catalogue, MessageFormat-ready
+│   └── ExceptionMessages.java            # error codes + MessageFormat templates + factory methods
 └── handler/
-    └── <Domain>ExceptionsHandler.java    # @RestControllerAdvice extends ResponseEntityExceptionHandler
+    └── GlobalExceptionHandler.java       # @RestControllerAdvice extends ResponseEntityExceptionHandler
 ```
+
+These names and packages are the **single source** for every other skill
+(permissions, persistence, messaging, external-client, input-validation,
+rate-limiting …): import `{{basePackage}}.exception.*` and
+`{{basePackage}}.exception.constants.ExceptionMessages`; never define a
+parallel hierarchy (e.g. a `CacheClientException extends RuntimeException`).
+If you prefer a domain prefix (`FooNotFoundException`), apply it to the
+whole hierarchy consistently.
 
 ## Inputs
 
 | # | Question | Default |
 | - | -------- | ------- |
-| 1 | Domain prefix for the exceptions (e.g. `Foo` → `FooException`)? | derived from service name |
-| 2 | Should the base exception be **checked** or **unchecked**? | checked |
-| 3 | Which HTTP statuses must be mapped? | `400`, `403`, `404`, `500` |
-| 4 | Third-party exceptions that must also be mapped (FQCN → status)? | none |
+| 1 | Domain prefix for the exceptions (e.g. `Foo` → `FooNotFoundException`)? | none (`BaseDomainException`, `NotFoundException`, …) |
+| 2 | Which HTTP statuses must be mapped? | `400`, `403`, `404`, `406`, `409`, `429`, `500`, `503` |
+| 3 | Third-party exceptions that must also be mapped (FQCN → status)? | none |
+
+The base exception is always **unchecked**: no `throws` clauses for domain
+exceptions, and `@Transactional` rolls back on them by default.
 
 ## Generation rules
 
 ### 1. Base + subclass exceptions
 
 ```java
-public class FooException extends Exception {
-    public FooException(final String message)                       { super(message); }
-    public FooException(final String message, final Throwable cause){ super(message, cause); }
+public abstract class BaseDomainException extends RuntimeException {
+    private final String errorCode;
+    protected BaseDomainException(String errorCode, String message)                  { super(message); this.errorCode = errorCode; }
+    protected BaseDomainException(String errorCode, String message, Throwable cause) { super(message, cause); this.errorCode = errorCode; }
+    public String getErrorCode() { return errorCode; }
 }
 
-public class FooBadRequestException extends FooException {
-    public FooBadRequestException(final String m)                       { super(m); }
-    public FooBadRequestException(final String m, final Throwable c)    { super(m, c); }
+public class BadRequestException extends BaseDomainException {
+    public BadRequestException(String errorCode, String message)                  { super(errorCode, message); }
+    public BadRequestException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
 }
-// …Forbidden / NotFound similarly
+// …Forbidden / NotFound / Conflict / TooManyRequests / Unavailable similarly
 ```
 
 Rules:
-- Always provide both `(String)` and `(String, Throwable)` constructors.
-- **Never** subclass `RuntimeException` for expected error paths — the
-  signature lies to callers.
-- **Never** add fields (status code, error code, …) — that belongs in the
-  advice. The exception's identity *is* the mapping.
+- Always provide both `(errorCode, message)` and `(errorCode, message, cause)` constructors.
+- **Never** throw a raw `RuntimeException` for expected error paths — always a
+  subclass of `BaseDomainException`, so the advice can map it.
+- **Never** add fields other than the `errorCode` taken from
+  `ExceptionMessages` — the HTTP status belongs in the advice. The
+  exception's identity *is* the mapping.
 
 ### 2. `ExceptionMessages`
 
 ```java
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ExceptionMessages {
+    // error codes
+    public static final String ERR_BAD_REQUEST         = "ERR-BAD-REQUEST";
+    public static final String ERR_NOT_FOUND           = "ERR-NOT-FOUND";
+    public static final String ERR_FORBIDDEN           = "ERR-FORBIDDEN";
+    public static final String ERR_UNAVAILABLE         = "ERR-UNAVAILABLE";
+    // message templates
     public static final String UNRECOGNIZED_INPUT      = "Unrecognized input: {0}";
     public static final String RESOURCE_NOT_FOUND      = "Resource {0} not found";
     public static final String FORBIDDEN_FOR_RESOURCE  = "Caller has no access to resource {0}";
     public static final String DEPENDENCY_UNAVAILABLE  = "Downstream dependency {0} is unavailable";
+
+    // factory methods — the preferred way to build an exception
+    public static NotFoundException resourceNotFound(String type, String id) {
+        return new NotFoundException(ERR_NOT_FOUND, MessageFormat.format(RESOURCE_NOT_FOUND, type + " " + id));
+    }
+    public static UnavailableException dependencyUnavailable(String dependency, Throwable cause) {
+        return new UnavailableException(ERR_UNAVAILABLE, MessageFormat.format(DEPENDENCY_UNAVAILABLE, dependency), cause);
+    }
 }
 ```
+
+The shipped template also has `versionConflict`, `invalidField`,
+`accessDenied`, `callerContextNotFound()`, `unrecognizedCallerContext(ctx)`,
+`rateLimitExceeded(seconds)`, `dependencyCallFailed(dep, status)` and
+`unsupportedApiVersion(supportedVersions)`.
 
 Rules:
 - Use `MessageFormat` placeholders `{0}`, `{1}`, … — **never** `String.format`
@@ -98,42 +136,65 @@ Rules:
   places it stays one constant.
 - The class is `final` with a private constructor (Lombok or hand-written).
 
-Callers format at the throw site:
+Callers use a factory method, or format at the throw site:
 
 ```java
-throw new FooBadRequestException(MessageFormat.format(ExceptionMessages.UNRECOGNIZED_INPUT, value));
+throw ExceptionMessages.resourceNotFound("Invoice", invoiceId);
+throw new BadRequestException(ExceptionMessages.ERR_BAD_REQUEST,
+        MessageFormat.format(ExceptionMessages.UNRECOGNIZED_INPUT, value));
 ```
 
 ### 3. `@RestControllerAdvice` (vanilla Spring Boot 3)
 
 ```java
 @RestControllerAdvice
-public class FooExceptionsHandler extends ResponseEntityExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-    @ExceptionHandler(FooBadRequestException.class)
-    public ProblemDetail handle(final FooBadRequestException e) {
+    @ExceptionHandler(BadRequestException.class)
+    public ProblemDetail onBadRequest(final BadRequestException e) {
         return build(HttpStatus.BAD_REQUEST, e);
     }
 
-    @ExceptionHandler(FooForbiddenException.class)
-    public ProblemDetail handle(final FooForbiddenException e) {
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail onForbidden(final ForbiddenException e) {
         return build(HttpStatus.FORBIDDEN, e);
     }
 
-    @ExceptionHandler(FooNotFoundException.class)
-    public ProblemDetail handle(final FooNotFoundException e) {
+    @ExceptionHandler(NotFoundException.class)
+    public ProblemDetail onNotFound(final NotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
 
-    @ExceptionHandler(FooException.class)
-    public ProblemDetail handle(final FooException e) {
+    @ExceptionHandler(UnavailableException.class)          // 503 + Retry-After
+    public ResponseEntity<ProblemDetail> onUnavailable(final UnavailableException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "30")
+                .body(build(HttpStatus.SERVICE_UNAVAILABLE, e));
+    }
+
+    @ExceptionHandler(BaseDomainException.class)
+    public ProblemDetail onDomain(final BaseDomainException e) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, e);
     }
 
-    private ProblemDetail build(final HttpStatus status, final Exception e) {
+    @ExceptionHandler(Exception.class)                     // catch-all for bugs
+    public ProblemDetail onUnexpected(final Exception e) throws Exception {
+        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
+            throw e;                                       // let Spring Security answer 401 / 403
+        }
+        log.error("Unhandled exception", e);
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
+    }
+
+    private ProblemDetail build(final HttpStatus status, final BaseDomainException e) {
+        final boolean hideDetail = status.is5xxServerError() && status != HttpStatus.SERVICE_UNAVAILABLE;
+        if (hideDetail) {
+            log.error("Domain failure [{}]", e.getErrorCode(), e);   // cause is logged, never returned
+        }
         final ProblemDetail pd = ProblemDetail.forStatus(status);
         pd.setTitle(status.getReasonPhrase());
-        pd.setDetail(e.getMessage());
+        pd.setDetail(hideDetail ? "Internal server error" : e.getMessage());
+        pd.setProperty("errorCode", e.getErrorCode());
         pd.setProperty("timestamp", Instant.now().toString());
         return pd;
     }
@@ -144,7 +205,13 @@ Rules:
 - **Extend `ResponseEntityExceptionHandler`** so Spring's built-in handlers
   for `MethodArgumentNotValidException`, `HttpMessageNotReadableException`,
   etc. remain wired and produce `ProblemDetail` responses.
-- **Most specific exception first** — Spring picks by closest match.
+- **Declaration order doesn't matter** — Spring picks the handler whose
+  exception type is the closest match (by inheritance depth), so the
+  `BaseDomainException` and `Exception` handlers only catch what nothing
+  more specific handles.
+- **5xx never echoes `e.getMessage()`** — a wrapped downstream failure may
+  carry remote details. Log it with the cause and return a generic detail.
+  The 503 detail is safe because it is our own catalogue text.
 - Map every third-party exception that can escape the boundary here, **not**
   in the service layer. Services rethrow as-is or wrap into a domain exception.
 - The `build` helper is the place to add cross-cutting fields (timestamp,
@@ -156,34 +223,42 @@ Rules:
 
 | Situation | What to throw |
 | --- | --- |
-| Input is syntactically invalid (bad enum value, missing required param) | `<Domain>BadRequestException` |
-| Caller is authenticated but not allowed for this resource | `<Domain>ForbiddenException` |
-| Resource genuinely does not exist | `<Domain>NotFoundException` |
-| Downstream dependency returned an error / timed out | `<Domain>Exception` wrapping the cause (→ 500) |
+| Input is syntactically invalid (bad enum value, missing required param) | Nothing — binding and Bean Validation (`input-validation`) reject it before your code runs; never write `if (x == null) throw` guards |
+| Input is well-formed but the business rule rejects it | `BadRequestException` |
+| Caller is authenticated but not allowed for this resource | `ForbiddenException` |
+| Resource genuinely does not exist | `NotFoundException` |
+| State conflict (duplicate, stale version) | `ConflictException` (409) |
+| Requested API version / projection is not served | `UnsupportedApiVersionException` (406) |
+| Caller exceeded its rate limit | `TooManyRequestsException` (429 + `Retry-After`) |
+| Downstream dependency is down / timed out (5xx, timeout, connection refused) | `UnavailableException` wrapping the cause (→ 503 + `Retry-After`) |
+| Downstream returned an unexpected error that is not an outage (e.g. a 4xx caused by our request) | `DependencyException` via `ExceptionMessages.dependencyCallFailed(dep, status)` (→ 500, generic detail) |
 | Programmer error (precondition violation inside the service) | `IllegalStateException` / `IllegalArgumentException` (not handled by `ResponseEntityExceptionHandler`, which only covers Spring MVC exceptions — they reach the catch-all handler and become a logged `500`, which is right for a bug) |
 
 ## Tests
 
 For the handler, use the `unit-tests` skill with the
-`@WebMvcTest(controllers = ..., advice = FooExceptionsHandler.class)` slice
-or a full `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`
+`@WebMvcTest(FooController.class)` slice (it picks up `@RestControllerAdvice`
+beans automatically; add `@Import(GlobalExceptionHandler.class)` if you
+narrow the scan) or a full
+`MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`
 setup. Assert:
 
 - Status code matches.
-- `ProblemDetail.detail` equals the formatted message constant.
+- `ProblemDetail.detail` equals the formatted message constant (4xx) or the
+  generic text (5xx other than 503); `errorCode` equals the catalogue code.
 - `ProblemDetail.title` / `status` are populated by the advice.
 
 For each thrown-exception path inside services, assert in unit tests that
-the **correct subclass** is thrown (`assertThrows(FooForbiddenException.class, …)`),
-not just `FooException`. The HTTP mapping depends on the exact subclass.
+the **correct subclass** is thrown (`assertThatThrownBy(…).isInstanceOf(ForbiddenException.class)`),
+not just `BaseDomainException`. The HTTP mapping depends on the exact subclass.
 
 Component tests (see `component-tests`) prove the end-to-end status
-mapping for the full matrix (`200 / 400 / 403 / 404 / 500`).
+mapping for the full matrix (`200 / 400 / 403 / 404 / 406 / 409 / 500 / 503`).
 
-> **About the shipped templates.** They implement one concrete variant: an **unchecked** `BaseDomainException` that carries an
-> `errorCode`, messages built with `String.formatted` in `ExceptionMessages`, and a single `GlobalExceptionHandler`. That differs from the
-> checked, field-free, `MessageFormat` default described above — answer question 2 first and follow **one** model per service. If you keep the
-> checked default, a checked exception does not roll back `@Transactional` unless you declare `rollbackFor`.
+> **About the shipped templates.** They implement exactly the model above:
+> unchecked `BaseDomainException` with an `errorCode`, the
+> `ExceptionMessages` catalogue (codes, `MessageFormat` templates, factory
+> methods) and one `GlobalExceptionHandler` in `exception/handler/`.
 
 ## Do / Don't
 
@@ -210,5 +285,9 @@ controller and the advice.
 - [`ConflictException.java.tmpl`](./templates/ConflictException.java.tmpl) — Maps to 409.
 - [`BadRequestException.java.tmpl`](./templates/BadRequestException.java.tmpl) — Maps to 400.
 - [`ForbiddenException.java.tmpl`](./templates/ForbiddenException.java.tmpl) — Maps to 403.
+- [`TooManyRequestsException.java.tmpl`](./templates/TooManyRequestsException.java.tmpl) — Maps to 429 + `Retry-After`.
+- [`UnavailableException.java.tmpl`](./templates/UnavailableException.java.tmpl) — Maps to 503 + `Retry-After`.
+- [`UnsupportedApiVersionException.java.tmpl`](./templates/UnsupportedApiVersionException.java.tmpl) — Maps to 406.
+- [`DependencyException.java.tmpl`](./templates/DependencyException.java.tmpl) — Maps to 500 (generic detail).
 - [`ExceptionMessages.java.tmpl`](./templates/ExceptionMessages.java.tmpl) — Message catalogue.
 - [`GlobalExceptionHandler.java.tmpl`](./templates/GlobalExceptionHandler.java.tmpl) — The `@RestControllerAdvice`.

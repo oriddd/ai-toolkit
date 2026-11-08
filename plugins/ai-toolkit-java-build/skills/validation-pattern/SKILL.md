@@ -5,7 +5,7 @@ description: >
   rule beans, message design and testing strategy. Use when deciding how to externalize validation from business code;
   to write a validator apply `input-validation`.
 tier: foundational
-applies_to: [rest, event, monolith]
+applies_to: [rest, monolith]
 depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
@@ -55,7 +55,8 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 ### 2. **Jakarta ConstraintValidator** — Field/Parameter Validation
 - Implements `ConstraintValidator<Annotation, Type>`
-- Is a `@Component` (Spring auto-wires dependencies)
+- Is **not** a `@Component`: Spring's `SpringConstraintValidatorFactory` creates it through the context, so
+  constructor injection works; one instance is cached per constraint and shared across threads
 - Captures annotation attributes in `initialize()`
 - Returns `true` (valid) or `false` + violation (invalid)
 - Delegates domain logic to `rule/` beans
@@ -63,24 +64,22 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 **Key Pattern:**
 ```java
-@Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class EditableProductIdValidator 
         implements ConstraintValidator<EditableProductId, String> {
     private final ProductEditabilityRule rule;  // domain logic bean
-    private String messageTemplate;
 
     @Override
     public void initialize(final EditableProductId annotation) {
-        this.messageTemplate = annotation.message();
+        // capture annotation attributes here
     }
 
     @Override
     public boolean isValid(final String value, final ConstraintValidatorContext ctx) {
-        if (invalid) {
-            return rejectWith(ctx, "Custom error message");
+        if (value == null || value.isBlank()) {
+            return rejectWith(ctx, "Product ID must not be blank");
         }
-        return rule.checkDomainLogic(value);
+        return rule.isEditableProduct(value);
     }
 
     private boolean rejectWith(final ConstraintValidatorContext ctx, final String msg) {
@@ -97,9 +96,9 @@ public class EditableProductIdValidator
 @Validated  // REQUIRED — Boot < 3.2 silently ignores param constraints without it; 3.2+ it selects the ConstraintViolationException path
 public class ProductController {
     @PatchMapping("/{id}")
-    public ResponseEntity update(
+    public ResponseEntity<ProductResponse> update(
             @PathVariable @EditableProductId String id,  // validated here
-            @RequestBody @Valid Request req) { ... }
+            @RequestBody @Valid UpdateProductRequest req) { ... }
 }
 ```
 
@@ -114,7 +113,7 @@ public class ProductController {
 **Key Pattern:**
 ```java
 @Component
-public class CreateScheduleValidator implements Validator {
+public class CreateScheduleRequestValidator implements Validator {
     @Override
     public boolean supports(Class<?> clazz) {
         return CreateScheduleRequest.class.equals(clazz);
@@ -122,9 +121,10 @@ public class CreateScheduleValidator implements Validator {
 
     @Override
     public void validate(Object target, Errors errors) {
-        final CreateScheduleRequest req = (CreateScheduleRequest) target;
-        if (req.getType() == RECURRING && req.getInterval() == null) {
-            errors.rejectValue("interval", "code", "interval required for RECURRING");
+        final CreateScheduleRequest request = (CreateScheduleRequest) target;
+        if (ScheduleType.RECURRING.equals(request.getType()) && request.getIntervalDays() == null) {
+            errors.rejectValue("intervalDays", "schedule.recurring.intervalDays",
+                    "intervalDays is required for RECURRING schedules");
         }
     }
 }
@@ -133,9 +133,9 @@ public class CreateScheduleValidator implements Validator {
 **Register in ValidationConfig:**
 ```java
 @ControllerAdvice
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class ValidationConfig {
-    private final CreateScheduleValidator validator;
+    private final CreateScheduleRequestValidator validator;
 
     @InitBinder("createScheduleRequest")  // lower-camel DTO name
     public void bind(WebDataBinder binder) {
@@ -154,13 +154,18 @@ public class ValidationConfig {
 **Key Pattern:**
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class ProductEditabilityRule {
     private final ConfigService configService;
 
     public boolean isEditable(final String productType) {
         final Config config = configService.getConfig(productType);
         return config != null && config.isEditable();
+    }
+
+    public boolean isEditableProduct(final String productId) {
+        final String productType = configService.getProductType(productId);
+        return productType != null && isEditable(productType);
     }
 }
 ```
@@ -185,7 +190,7 @@ public class ProductEditabilityRule {
 ```java
 class ProductEditabilityRuleTest {
     @Test
-    void whenEditable_returnsTrue() {
+    void isEditable_configSaysEditable_returnsTrue() {
         // mock configService, test rule.isEditable()
     }
 }
@@ -193,10 +198,16 @@ class ProductEditabilityRuleTest {
 
 **Test Jakarta Validator** (mock context):
 ```java
-class ValidatorTest {
+class EditableProductIdValidatorTest {
+    private final ProductEditabilityRule rule = mock(ProductEditabilityRule.class);
+    private final ConstraintValidatorContext ctx = mock(ConstraintValidatorContext.class);
+    private final ConstraintViolationBuilder builder = mock(ConstraintViolationBuilder.class);
+    private final EditableProductIdValidator validator = new EditableProductIdValidator(rule);
+
     @Test
-    void whenInvalid_returnsFalse() {
-        assertThat(validator.isValid(badValue, ctx)).isFalse();
+    void isValid_blankId_returnsFalse() {
+        when(ctx.buildConstraintViolationWithTemplate(any())).thenReturn(builder);   // stub, or rejectWith NPEs
+        assertThat(validator.isValid(" ", ctx)).isFalse();
         verify(ctx).disableDefaultConstraintViolation();
     }
 }
@@ -204,24 +215,33 @@ class ValidatorTest {
 
 **Test Spring Validator** (drive validate):
 ```java
-class ValidatorTest {
+class CreateScheduleRequestValidatorTest {
+    private final CreateScheduleRequestValidator validator = new CreateScheduleRequestValidator();
+
     @Test
-    void whenMissingField_rejectsValue() {
+    void validate_recurringWithoutInterval_rejectsIntervalDays() {
+        var request = new CreateScheduleRequest(ScheduleType.RECURRING, null);
+        var errors = new BeanPropertyBindingResult(request, "createScheduleRequest");
         validator.validate(request, errors);
-        assertThat(errors.hasFieldErrors("field")).isTrue();
+        assertThat(errors.hasFieldErrors("intervalDays")).isTrue();
     }
 }
 ```
 
 **Component Test** (HTTP → 400):
 ```java
-@WebMvcTest(Controller.class)
-class ValidationComponentTest {
+@WebMvcTest(ProductController.class)
+class ProductControllerValidationTest {
+    @Autowired MockMvc mockMvc;
     @MockitoBean ProductEditabilityRule rule;   // Spring Boot 3.4+; replaces the deprecated @MockBean
+    @MockitoBean UpdateProductOperation operation;   // the controller's own collaborator
 
     @Test
-    void invalidRequest_returns400() {
-        mockMvc.perform(post("/api").content("{}"))
+    void update_uneditableProduct_returns400() throws Exception {
+        when(rule.isEditableProduct("p-1")).thenReturn(false);
+        mockMvc.perform(patch("/api/v1/products/p-1")
+                .contentType(MediaType.APPLICATION_JSON)        // without it: 415, not the 400 under test
+                .content("{\"name\":\"New name\"}"))            // otherwise valid body
             .andExpect(status().isBadRequest());
     }
 }
@@ -240,7 +260,8 @@ class ValidationComponentTest {
 - Write `if/throw` in controllers/operations — use validators
 - Put business logic in validators — use `rule/` beans
 - Omit `@InitBinder` value — runs on every request
-- Skip `@MockitoBean` in component tests
+- Skip `@MockitoBean` for the rule beans / downstream services a web-slice test needs — but never mock a
+  registered Spring `Validator` itself (its mock `supports()` returns false → 500)
 
 ## Implementation Checklist
 
@@ -252,7 +273,7 @@ class ValidationComponentTest {
 - [ ] Add `@Validated` or `@Valid` to controller
 - [ ] Unit-test validator
 - [ ] Component-test HTTP→400 path
-- [ ] Add `@MockitoBean` for affected tests
+- [ ] Add `@MockitoBean` for the rule beans / downstream services in affected tests (never for a registered `Validator`)
 
 ## Related Skills
 
@@ -260,8 +281,3 @@ This pattern is applied in:
 - **input-validation** — Full implementation guide with detailed examples
 - **exception-handling** — Maps validation exceptions to HTTP 400
 - **code-structure** — Defines `validation/` package placement
-
----
-
-**Version:** 1.0  
-**Last Reviewed:** 2026-07-12

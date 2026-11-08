@@ -1,12 +1,14 @@
 package {{basePackage}}.repository;
+import jakarta.persistence.metamodel.SingularAttribute;
 import org.springframework.data.jpa.domain.Specification;
 /**
  * Specifications keep composable predicates in one place — replaces the
  * anti-pattern findByXAndYAndZAndW. Compose with `.and()` / `.or()`.
+ * Attributes are typed JPA metamodel attributes (e.g. Invoice_.status), never a field name taken from user input.
  */
 public final class ExampleSpecifications {
     private ExampleSpecifications() {}
-    public static <E> Specification<E> hasField(String field, Object value) {
-        return (root, q, cb) -> cb.equal(root.get(field), value);
+    public static <E, T> Specification<E> hasField(SingularAttribute<? super E, T> attribute, T value) {
+        return (root, q, cb) -> cb.equal(root.get(attribute), value);
     }
 }

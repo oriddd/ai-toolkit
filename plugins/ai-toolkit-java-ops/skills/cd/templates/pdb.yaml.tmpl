@@ -1,0 +1,13 @@
+{{ "{{" }}- if gt (int .Values.autoscaling.minReplicas) 1 {{ "}}" }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ "{{" }} include "{{chartName}}.fullname" . {{ "}}" }}
+  labels:
+    {{ "{{" }}- include "{{chartName}}.labels" . | nindent 4 {{ "}}" }}
+spec:
+  maxUnavailable: {{ "{{" }} .Values.podDisruptionBudget.maxUnavailable {{ "}}" }}
+  selector:
+    matchLabels:
+      {{ "{{" }}- include "{{chartName}}.selectorLabels" . | nindent 6 {{ "}}" }}
+{{ "{{" }}- end {{ "}}" }}

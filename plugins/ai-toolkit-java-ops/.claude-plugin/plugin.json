@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-java-ops",
   "description": "Java 21 / Spring Boot build-and-run phase — Jenkins and GitHub Actions CI, Helm CD, observability, request metrics, health indicators, graceful shutdown, local dev.",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "author": {
     "name": "oriddd"
   },
@@ -17,6 +17,7 @@
   ],
   "dependencies": [
     "ai-toolkit-java-design",
-    "ai-toolkit-java-quality"
+    "ai-toolkit-java-quality",
+    "ai-toolkit-workflow"
   ]
 }

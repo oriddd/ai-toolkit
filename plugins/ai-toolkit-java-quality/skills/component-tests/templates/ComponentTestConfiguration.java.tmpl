@@ -6,9 +6,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+// Security imports: only when spring-boot-starter-security is on the classpath (create-repo Q9 auth = yes).
+// Without Spring Security, delete these three imports and the testSecurityFilterChain bean below.
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
+
+import java.time.Duration;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -20,6 +24,7 @@ public class ComponentTestConfiguration {
     // Must be the only SecurityFilterChain: annotate the production security
     // config with @Profile("!component-test"), otherwise Spring Security 6
     // fails at startup (two any-request chains) or the production chain wins.
+    // Delete this bean when the service has no Spring Security (see the imports above).
     @Bean
     public SecurityFilterChain testSecurityFilterChain(final HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
@@ -31,8 +36,8 @@ public class ComponentTestConfiguration {
     @Primary
     public TestRestTemplate testRestTemplate() {
         final SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
-        rf.setConnectTimeout(120_000);
-        rf.setReadTimeout(120_000);
+        rf.setConnectTimeout(Duration.ofMinutes(2));
+        rf.setReadTimeout(Duration.ofMinutes(2));
         final TestRestTemplate t = new TestRestTemplate();
         t.getRestTemplate().setRequestFactory(rf);
         return t;
@@ -40,19 +45,24 @@ public class ComponentTestConfiguration {
 
     // ─── deterministic fakes for external collaborators ──────────
     // Branch on the input so a single bean can drive happy + failure paths
-    // from a single test class. Example:
+    // from a single test class. A @Primary mock wins injection, but the
+    // production bean is still created: if it does heavy work at startup,
+    // gate it with @Profile("!component-test") (see SKILL.md §1b). Example
+    // (PermissionsHandler.handle(String resourceId) from the permissions skill;
+    // domain exceptions are unchecked and built from ExceptionMessages). Needs:
+    //   import {{basePackage}}.exception.constants.ExceptionMessages;
+    //   import {{basePackage}}.permission.PermissionsHandler;
     //
     // @Bean @Primary
-    // public PermissionsHandler permissionsHandler() throws Exception {
+    // public PermissionsHandler permissionsHandler() {
     //     final var mock = mock(PermissionsHandler.class);
     //     doAnswer(inv -> {
-    //         final String fileId = inv.getArgument(1);
+    //         final String fileId = inv.getArgument(0);
     //         if ("fileThatIsForbidden.txt".equals(fileId)) {
-    //             throw new FooForbiddenException("forbidden");
+    //             throw ExceptionMessages.accessDenied(fileId);
     //         }
     //         return null;
-    //     }).when(mock).handle(anyString(), anyString());
+    //     }).when(mock).handle(anyString());
     //     return mock;
     // }
 }
-

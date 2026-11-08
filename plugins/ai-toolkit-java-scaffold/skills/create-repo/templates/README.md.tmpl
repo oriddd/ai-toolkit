@@ -4,8 +4,8 @@
 
 ## Tech stack
 
-- Java 21 + Spring Boot (via `org.springframework.boot:spring-boot-starter-parent`)
-- Maven build, Jacoco + Surefire quality gates
+- Java 21 + Spring Boot 3.5 (via `org.springframework.boot:spring-boot-starter-parent`)
+- Maven build with quality gates in `verify`: Jacoco check (≥ 85 % line / ≥ 75 % branch per class), PIT (≥ 75 %), Surefire + Failsafe
 - Jenkins CI (declarative pipeline)
 - Helm chart for Kubernetes deployment
 - Prometheus metrics on `{{contextPath}}/actuator/prometheus`
@@ -13,9 +13,9 @@
 ## Local build
 
 ```sh
-mvn -q -DskipTests package      # build
-mvn -q test                     # tests
-mvn spring-boot:run             # run locally on port {{appPort}}
+./mvnw -q -DskipTests package   # build
+./mvnw -q verify                 # tests + quality gates (as CI)
+./mvnw spring-boot:run           # run locally on port {{appPort}}
 ```
 
 The app exposes:
@@ -26,7 +26,7 @@ The app exposes:
 
 ## Project layout
 
-See [`generated-docs/`](./generated-docs/) and the
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md), the ADRs in [`docs/adr/`](./docs/adr/) and the
 `code-structure` skill for
 the canonical package hierarchy and design patterns enforced in this repo.
 

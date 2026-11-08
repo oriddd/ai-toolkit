@@ -29,7 +29,8 @@ src/
 │   └── hooks/useOrders.test.tsx
 └── test/
     ├── renderWithProviders.tsx            # fresh QueryClient + fake services
-    ├── fakes/FakeSecureStore.ts  FakeAnalytics.ts
+    ├── builders.ts                        # anOrderDto(), anOrder()
+    ├── fakes/FakeSecureStore.ts  FakeKeyValueStorage.ts  FakeAnalytics.ts
     └── msw/server.ts  handlers.ts
 jest.config.js  jest.setup.ts
 ```
@@ -38,12 +39,15 @@ jest.config.js  jest.setup.ts
 
 ```json
 { "devDependencies": { "jest": "^29.7.0", "jest-expo": "~<expo-sdk>.0.0", "@testing-library/react-native": "^13.3.0",
-  "msw": "~2.6.0", "@types/jest": "^29.5.0" } }
+  "react-test-renderer": "<react-version>", "msw": "~2.6.0", "@types/jest": "^29.5.0" } }
 ```
 
-- `jest-expo` is pinned to one Expo SDK: replace `<expo-sdk>` with the app's `expo` major (e.g. `~52.0.0` for SDK 52); use the latest stable SDK for a new app. Bare React Native apps drop `jest-expo` and use the `react-native` preset.
-- RNTL 12.4+ ships the jest matchers (`toBeOnTheScreen`, `toHaveTextContent`, ...) and registers them when you import from
-  `@testing-library/react-native`. Do not install `@testing-library/jest-native` (deprecated); v12 is no longer maintained, so use v13.
+- `jest-expo` is pinned to one Expo SDK: replace `<expo-sdk>` with the app's `expo` major (e.g. `~58.0.0` for SDK 58); use the latest stable SDK for a new app. Bare React Native apps drop `jest-expo` and use the `react-native` preset.
+- `react-test-renderer` is a peer of RNTL 13 and must equal the app's `react` version exactly (`<react-version>`,
+  e.g. `19.3.0`); without it `npm install` fails with ERESOLVE.
+- RNTL 13 ships the jest matchers (`toBeOnTheScreen`, `toHaveTextContent`, ...) and registers them when you import from
+  `@testing-library/react-native` (12.4 shipped them but needed `@testing-library/react-native/extend-expect`).
+  Do not install `@testing-library/jest-native` (deprecated); v12 is no longer maintained, so use v13.
 - `msw` is held on `~2.6.0`: newer 2.x releases pull ESM-only dependencies that Jest fails to parse
   ("Cannot use import statement outside a module" in `rettime`) unless you extend `transformIgnorePatterns`.
 
@@ -59,8 +63,8 @@ module.exports = {
 };
 ```
 
-The threshold is a build-breaking gate. The MSW setup above was run with `jest-expo` 52, `expo` 52, `react-native` 0.76,
-RNTL 13, `msw` 2.6.9 on Node 22: no `fetch`, `TextEncoder` or `BroadcastChannel` polyfill was needed there. On another
+The threshold is a build-breaking gate. The MSW setup above was run with `jest-expo` 58, `expo` 58, `react-native` 0.88,
+RNTL 13.3, `msw` 2.6.9 on Node 26: no `fetch`, `TextEncoder` or `BroadcastChannel` polyfill was needed there. On another
 SDK or newer MSW, re-run the tests in section 3 first and treat any resolution or polyfill error as a setup problem to fix once in
 `jest.config.js`/`jest.setup.ts`, not per test (unverified on other combinations).
 
@@ -113,8 +117,29 @@ it('exposes a retryable NetworkError when offline', async () => {
 });
 ```
 
-`testProviders()` builds a new `QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })` per test and
-returns a wrapper component around it; `gcTime: Infinity` stops cache timers from keeping Jest from exiting.
+```tsx
+// test/renderWithProviders.tsx
+const noop = () => undefined;
+export const fakeServices = (): Services => ({
+  http: createHttpClient('https://api.test', () => Promise.resolve(null)),   // real client; MSW answers
+  storage: new FakeKeyValueStorage(),                                          // Map-backed fakes
+  logger: { debug: noop, info: noop, warn: noop, error: noop },
+  errorReporter: { report: noop },
+  analytics: new FakeAnalytics(),
+});
+
+export const testProviders = (services: Services = fakeServices()) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  return ({ children }: PropsWithChildren) => (
+    <ServicesProvider value={services}>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </ServicesProvider>
+  );
+};
+```
+
+Each call builds a new `QueryClient`, so tests share no cache; `gcTime: Infinity` stops cache timers from
+keeping Jest from exiting.
 
 ## 4. Fakes over mocks
 
@@ -140,7 +165,8 @@ network, timers or device APIs; use `jest.useFakeTimers()` explicitly where time
 
 ## Do / Don't
 
-- ✅ Build test data with named builders (`anOrder({...})`).
+- ✅ Build test data with named builders in `src/test/builders.ts`: `anOrderDto(overrides)` returns the wire
+  shape (for MSW), `anOrder(overrides)` returns `orderSchema.parse(anOrderDto(overrides))`, a branded `Order`.
 - ✅ One behaviour per test; arrange / act / assert visible.
 - ✅ Assert on what the user sees or what the hook returns.
 - ❌ Snapshot tests of whole screens as the main assertion.

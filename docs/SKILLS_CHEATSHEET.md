@@ -128,7 +128,8 @@ Longer than one paragraph → agents may misclassify.
 
 ```bash
 # Add this as a pre-commit alias
-alias toolkit-check="cd $(git rev-parse --show-toplevel) && bash tools/validate-skills.sh && python3 tools/check-links.py"
+# single quotes: $(git rev-parse …) must run when you call the alias, not when it is defined
+alias toolkit-check='cd "$(git rev-parse --show-toplevel)" && bash tools/validate-skills.sh && python3 tools/check-links.py'
 ```
 
 ### Test a skill locally before publishing
@@ -168,7 +169,8 @@ The agent uses this order to sequence its work.
 ### Keep agent files slim
 
 Agents live next to their own cheatsheet in [`agents/`](./agents/README.md).
-Each agent file should stay under ~80 lines; if it grows, extract a new skill
+Keep each agent file focused — today they run from ~40 lines (workers) to ~170 lines
+(multi-layer orchestrators); if one keeps growing, move the reusable rules into a skill
 and reference it. See [`agents/CHEATSHEET.md`](./agents/CHEATSHEET.md).
 
 ### Three-rule test for a new skill

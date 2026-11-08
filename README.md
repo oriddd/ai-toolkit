@@ -63,7 +63,7 @@ setup/   client setup notes
 ## Where to start
 
 - Find a skill for your task: [`docs/INDEX_BY_USE_CASE.md`](./docs/INDEX_BY_USE_CASE.md)
-- Mandatory rules: [`docs/BACKEND_GUILD.md`](./docs/BACKEND_GUILD.md)
+- Mandatory rules (Java / Spring Boot): [`docs/BACKEND_GUILD.md`](./docs/BACKEND_GUILD.md)
 - Full guide: [`docs/HOW-TO.md`](./docs/HOW-TO.md)
 - Bootstrap a project's docs: copy the [context templates](./plugins/ai-toolkit-docs/skills/context-maintenance/templates/context)
 
@@ -74,4 +74,5 @@ See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) and [`docs/AUTHORING.md`](.
 ```bash
 bash tools/validate-skills.sh && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh
 # maintainers, before a release: bash prepare-for-publish.sh   (needs a local .publication-blocklist)
+# or run it on every push: pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
 ```

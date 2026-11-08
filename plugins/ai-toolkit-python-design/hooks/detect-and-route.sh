@@ -12,7 +12,13 @@ for d in "$dir" "$dir"/*/ "$dir"/apps/*/ "$dir"/packages/*/ "$dir"/services/*/; 
     [ -f "$d/$f" ] && show
   done
   for f in "$d"/requirements*.txt; do
-    [ -f "$f" ] && show
+    [ -f "$f" ] || continue
+    # at the root a requirements file is enough; one level down (docs/requirements.txt for mkdocs in a
+    # Java repo) it counts only next to Python code in that directory or its direct subdirectories
+    [ "$d" = "$dir" ] && show
+    for py in "$d"/*.py "$d"/*/*.py; do
+      [ -f "$py" ] && show
+    done
   done
 done
 exit 0

@@ -12,6 +12,7 @@ import org.springframework.retry.annotation.Backoff;
 public class DlqHandler {
     @RetryableTopic(
         attempts = "5",
+        exclude = IllegalArgumentException.class,   // e.g. missing event-id header: retrying cannot help, go straight to the DLT
         backoff = @Backoff(delay = 1000, multiplier = 2.0, maxDelay = 30000),
         topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE
     )

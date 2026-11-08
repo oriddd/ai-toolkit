@@ -9,21 +9,27 @@ public class OutboxEntity {
     @Column(nullable = false) private String aggregateType;
     @Column(nullable = false) private String aggregateId;
     @Column(nullable = false) private String eventType;
-    @Column(nullable = false, columnDefinition = "text") private String payload;   // real JSON easily exceeds 4000 chars
+    // real JSON easily exceeds 4000 chars; the column type is owned by the migration (outbox-migration.sql.tmpl):
+    // `text` on Postgres — change both together on another database (e.g. CLOB on Oracle)
+    @Column(nullable = false, columnDefinition = "text") private String payload;
+    /** W3C trace context of the request that wrote the row; the relay sends it as the `traceparent` header. */
+    private String traceparent;
     @Column(nullable = false) private Instant createdAt = Instant.now();
     private Instant publishedAt;
     protected OutboxEntity() {}
-    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload) {
+    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload, String traceparent) {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.payload = payload;
+        this.traceparent = traceparent;
     }
-    public UUID getId()              { return id; }
+    public UUID getId()              { return id; }   // sent as the `event-id` header; consumers dedupe on it
     public String getAggregateType() { return aggregateType; }
     public String getAggregateId()   { return aggregateId; }   // the Kafka record key (partition key = aggregate id)
     public String getEventType()     { return eventType; }
     public String getPayload()       { return payload; }
+    public String getTraceparent()   { return traceparent; }
     public Instant getPublishedAt()  { return publishedAt; }
     public void markPublished()      { this.publishedAt = Instant.now(); }
 }

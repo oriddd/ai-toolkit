@@ -31,9 +31,10 @@ public class ConfigManager {
     }
 }
 
-// ✅ Better: Instance-based, injectable configuration
-@ConfigurationProperties(prefix = "app")
-public record AppConfig(Map<String, String> settings) { }
+// ✅ Better: Instance-based, typed, injectable configuration
+@ConfigurationProperties(prefix = "app.processing")
+public record ProcessingProperties(ProcessingMode mode, Duration timeout) { }
+// registered by @ConfigurationPropertiesScan on the Application class (code-structure §6)
 ```
 
 ### ❌ 5c. Hidden dependencies
@@ -49,7 +50,7 @@ public class InvoiceService {
 @Service
 @RequiredArgsConstructor
 public class InvoiceService {
-    private final ProcessingConfig config;
+    private final ProcessingProperties processing;
 }
 ```
 
@@ -74,6 +75,9 @@ public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
 // ✅ Better: Each concern in its own layer
 @PostMapping("/invoices")
 public ResponseEntity<InvoiceDto> create(@Valid @RequestBody CreateInvoiceRequest request) {
-    return ResponseEntity.ok(operation.createInvoice(request));
+    InvoiceDto created = createInvoiceOperation.execute(request);
+    URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+            .path("/{id}").buildAndExpand(created.id()).toUri();
+    return ResponseEntity.created(location).body(created);   // 201 + Location (api-design)
 }
 ```

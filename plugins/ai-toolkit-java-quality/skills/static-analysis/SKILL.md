@@ -23,9 +23,9 @@ on objective violations.
 | --- | --- | --- |
 | **Spotless** | Formatting drift (indent, imports, blank lines) | `pom.xml` plugin with an `<importOrder>` block |
 | **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, threshold Medium; fail on any HIGH and any MEDIUM not in the baseline |
-| **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepDisableWarningsInGeneratedCode` to silence noise |
+| **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepExcludedPaths` skips generated sources (`-XepDisableWarningsInGeneratedCode` only silences warnings) |
 | **NullAway** | Null-safety: every reference is annotated `@Nullable` or assumed non-null | Annotated packages only |
-| **Checkstyle** | Organization-specific rules: method length, file length, parameter count (`quality-review` F22–F24) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
+| **Checkstyle** | Team-specific rules: method length, file length, parameter count (`quality-review` F22–F24) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
 | **PMD** (optional) | Method/class size, complexity (overlaps with `quality-review`) | Often dropped in favour of SpotBugs + Sonar |
 | **Sonar** (optional) | Aggregated quality dashboard, hotspots | CI step that uploads to SonarCloud / SonarQube |
 
@@ -77,12 +77,12 @@ on objective violations.
           <path>
             <groupId>com.google.errorprone</groupId>
             <artifactId>error_prone_core</artifactId>
-            <version>2.28.0</version>
+            <version>2.36.0</version>   <!-- or newer; 2.36+ needs the should-stop arg below -->
           </path>
           <path>
             <groupId>com.uber.nullaway</groupId>
             <artifactId>nullaway</artifactId>
-            <version>0.11.0</version>
+            <version>0.12.0</version>   <!-- or newer -->
           </path>
           <!-- Listing processors here disables classpath discovery: every processor the build uses must be listed -->
           <path>
@@ -94,8 +94,16 @@ on objective violations.
         <compilerArgs>
           <!-- Error Prone on JDK 17+/21 also needs the --add-exports / --add-opens flags from the note below -->
           <arg>-XDcompilePolicy=simple</arg>
-          <arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode -Xep:NullAway:ERROR
-               -XepOpt:NullAway:AnnotatedPackages={{basePackage}}</arg>
+          <arg>--should-stop=ifError=FLOW</arg>   <!-- required by Error Prone 2.36+ -->
+          <!-- ExcludedPaths: openapi-generated models would otherwise fail NullAway at ERROR (golden-path #14).
+               ExcludedFieldAnnotations: fields injected by Mockito / Spring in tests are never null. -->
+          <arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode
+               -XepExcludedPaths:.*/target/generated-sources/.*
+               -Xep:NullAway:ERROR
+               -XepOpt:NullAway:AnnotatedPackages={{basePackage}}
+               -XepOpt:NullAway:UnannotatedSubPackages={{basePackage}}.generated
+               -XepOpt:NullAway:TreatGeneratedAsUnannotated=true
+               -XepOpt:NullAway:ExcludedFieldAnnotations=org.mockito.Mock,org.mockito.Spy,org.mockito.InjectMocks,org.mockito.Captor,org.springframework.beans.factory.annotation.Autowired,org.springframework.boot.test.web.server.LocalServerPort,org.springframework.test.context.bean.override.mockito.MockitoBean</arg>
         </compilerArgs>
       </configuration>
     </plugin>
@@ -115,7 +123,7 @@ on objective violations.
         <configLocation>checkstyle.xml</configLocation>
         <consoleOutput>true</consoleOutput>
         <failOnViolation>true</failOnViolation>
-        <violationSeverity>warning</violationSeverity>
+        <violationSeverity>error</violationSeverity>   <!-- warnings (F22, F24) are printed, errors (F23 ceiling) fail -->
       </configuration>
       <executions><execution><phase>validate</phase><goals><goal>check</goal></goals></execution></executions>
     </plugin>
@@ -124,7 +132,11 @@ on objective violations.
 ```
 
 Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F22–F24
-thresholds (add organization-specific modules below these):
+thresholds (add team-specific modules below these). The severities match
+quality-review: F22 and F24 are **WARN** there, so Checkstyle reports them
+without failing the build; only the F23 **hard ceiling** (300 lines) is an
+error. The plugin configuration above uses `<violationSeverity>error</violationSeverity>`,
+so warnings are printed but do not break the build:
 
 ```xml
 <?xml version="1.0"?>
@@ -132,21 +144,42 @@ thresholds (add organization-specific modules below these):
     "https://checkstyle.org/dtds/configuration_1_3.dtd">
 <module name="Checker">
   <property name="severity" value="warning"/>
-  <!-- F23 class length: hard ceiling 300 (the 200 target is checked in quality-review) -->
-  <module name="FileLength"><property name="max" value="300"/></module>
+  <!-- F23 class length: hard ceiling 300 breaks the build (the 200 target is checked in quality-review) -->
+  <module name="FileLength">
+    <property name="max" value="300"/>
+    <property name="severity" value="error"/>
+  </module>
   <module name="TreeWalker">
-    <!-- F22 method length -->
+    <!-- F22 method length (WARN) -->
     <module name="MethodLength">
       <property name="max" value="30"/>
       <property name="countEmpty" value="false"/>
     </module>
-    <!-- F24 method parameters -->
+    <!-- F24 method parameters (WARN); constructors excluded: Spring beans take their collaborators there -->
     <module name="ParameterNumber">
       <property name="max" value="4"/>
       <property name="ignoreOverriddenMethods" value="true"/>
+      <property name="tokens" value="METHOD_DEF"/>
     </module>
   </module>
 </module>
+```
+
+Starter `spotbugs-exclude.xml` (the baseline the plugin above references —
+without the file the build fails). At threshold Medium, SpotBugs flags
+`EI_EXPOSE_REP*` and `CT_CONSTRUCTOR_THROW` on most Spring beans, which hold
+injected collaborators and validate in constructors by design:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Spring beans keep references to injected (shared, immutable-by-contract) collaborators -->
+  <Match><Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/></Match>
+  <!-- constructors that reject invalid configuration are intended -->
+  <Match><Bug pattern="CT_CONSTRUCTOR_THROW"/></Match>
+  <!-- generated sources (openapi-first-codegen), golden-path #14 -->
+  <Match><Package name="~{{basePackage}}\.generated(\..*)?"/></Match>
+</FindBugsFilter>
 ```
 
 ## Spotless first, opinion second
@@ -154,13 +187,22 @@ thresholds (add organization-specific modules below these):
 - `mvn spotless:apply` is the **only** way to format code. IDE formatting
   is configured to match Spotless output — no debates in PR.
 - Pre-commit runs `spotless:apply` automatically (see `local-dev-experience`).
+- Run `mvn spotless:apply` once after generating a repo or any code (the
+  `sortPom` step also reorders the generated `pom.xml`); otherwise the first
+  `spotless:check` fails on generated, unformatted files.
 
 ## NullAway annotation policy
 
 - Default-non-null for all `{{basePackage}}` packages. Mark any nullable
-  return / param with `@Nullable`.
-- Generated code (MapStruct mappers, JPA static metamodel) excluded by
-  package.
+  return / param with JSpecify `org.jspecify.annotations.Nullable`
+  (`org.jspecify:jspecify`, e.g. 1.0.0) — one `@Nullable` flavour per repo.
+- Generated code (openapi models, MapStruct mappers, JPA static metamodel)
+  excluded by path (`-XepExcludedPaths`) and package
+  (`UnannotatedSubPackages`).
+- Test code: fields injected by Mockito / Spring are excluded via
+  `ExcludedFieldAnnotations` (above). Alternatively keep Error Prone out of
+  test compilation by giving the `default-testCompile` execution its own
+  `compilerArgs` without `-Xplugin:ErrorProne`.
 
 ## Suppressions
 
@@ -182,9 +224,9 @@ build fails with `IllegalAccessError`:
 | --- | --- |
 | Spotless | Any difference |
 | SpotBugs | Any HIGH; any MEDIUM not in the `spotbugs-exclude.xml` baseline (HIGH findings are never baselined) |
-| Checkstyle | Any violation |
-| Error-Prone / NullAway | Any new violation |
-| Sonar | Quality Gate failure (default: > 5 % new code smells, < 80 % new-code coverage) |
+| Checkstyle | Any `error`-severity violation (the F23 hard ceiling); F22 / F24 are printed as warnings, matching `quality-review` |
+| Error-Prone / NullAway | Any violation (at `ERROR` there is no baseline) |
+| Sonar | Quality Gate failure (default "Sonar way", on new code: reliability, security and maintainability rating A, all security hotspots reviewed, coverage ≥ 80 %, duplicated lines ≤ 3 %) |
 
 ## Do / Don't
 

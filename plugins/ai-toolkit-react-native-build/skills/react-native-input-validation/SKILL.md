@@ -48,7 +48,7 @@ shared/validation/
 import { z } from 'zod';
 import { vm } from './messages';
 
-export const emailField = z.string().trim().min(1, vm.required).email(vm.email);
+export const emailField = z.string().trim().min(1, vm.required).pipe(z.email(vm.email)); // zod 4: z.email(), not .email()
 export const passwordField = z.string().min(12, vm.passwordShort).regex(/\d/, vm.passwordDigit);
 ```
 
@@ -93,59 +93,85 @@ export function useSignupForm() {
 }
 
 export function SignupScreen() {
-  const { control, handleSubmit } = useSignupForm();
-  const { mutate, isPending } = useSignup();
+  const { control, handleSubmit, setError } = useSignupForm();
+  const { mutate, isPending } = useSignup(setError);         // section 7 maps server field errors into the form
   return (
     <>
       <FormTextField control={control} name="email" label="Email" testID="signup-email" />
       <FormTextField control={control} name="password" label="Password" secureTextEntry testID="signup-password" />
       <FormTextField control={control} name="confirmPassword" label="Confirm password" secureTextEntry testID="signup-confirm-password" />
-      <Button title="Create account" disabled={isPending} onPress={() => void handleSubmit((v) => mutate(v))()} />
+      <Button title="Create account" testID="signup-submit" disabled={isPending} onPress={() => void handleSubmit((v) => mutate(v))()} />
     </>
   );
 }
 ```
 
-`FormTextField` wraps `Controller` and renders `fieldState.error?.message`. The screen holds no rules.
+`FormTextField` is a small generic component of the app (`<T extends FieldValues>({ control, name, label, testID,
+secureTextEntry })`) that wraps `Controller` around a `TextInput` and renders `fieldState.error?.message`. The screen holds no rules.
 
 ## 5. Share schemas with API types
 
 ```ts
 // features/orders/model/orderSchemas.ts
-export const orderSchema = z.object({ id: z.string().brand<'OrderId'>(), total: z.number().nonnegative(), status: z.enum(['open', 'cancelled']) });
+export const orderSchema = z.object({
+  id: z.string().brand<'OrderId'>(), title: z.string(), total: z.number().nonnegative(), status: z.enum(['open', 'cancelled']),
+});
 export type Order = z.infer<typeof orderSchema>;
 export type OrderId = Order['id'];                       // branded by the schema, never hand-written
 ```
 
 Types are inferred from schemas, never hand-written twice. Responses are parsed with the same schema
-at the api-client edge (`schema.parse`, see `react-native-state-and-data`); a parse failure becomes an
+at the api-client edge (`schema.safeParse`, see `react-native-state-and-data`); a parse failure becomes an
 `AppError` there, not a crash in a component.
 
 ## 6. Parse untrusted data at every boundary
 
 ```ts
-const deepLinkParams = z.object({ orderId: z.string().uuid() });
+const deepLinkParams = z.object({ orderId: z.uuid() });   // zod 4: z.uuid(), not z.string().uuid()
 export const parseOrderLink = (raw: unknown) => deepLinkParams.safeParse(raw);
 ```
 
-Use `safeParse` where failure is expected (links, storage, forms) and `parse` at the api-client edge
-where failure is an error to map. Apply the same to persisted values after app upgrades.
+Use `safeParse` everywhere: where failure is expected (links, storage, forms) the result drives the flow, and
+at the api-client edge a failed result is mapped to an `AppError` (no `ZodError` escapes). Apply the same to
+persisted values after app upgrades.
 
 ## 7. Server-side validation errors
 
 Map a 422 body to field errors with `setError(field, { message })` inside the submit hook, via the
-mapper's `ValidationError.fieldErrors` (`VALIDATION_FAILED`, see `react-native-error-handling`), so server and client rules show in the same place:
+mapper's `ValidationError.fieldErrors` (`VALIDATION_FAILED`, see `react-native-error-handling`), so server and client rules show in the same place.
+
+**Wire contract:** the server's `field` is the wire path, the JSON key exactly as the request body sent it
+(`body.customer_email` from a Python backend, see `python-error-handling`); `mapHttpError` strips the
+`body.` prefix. Each form declares which wire keys it renders and under which form field, so snake_case
+APIs and camelCase forms both work. A server error that matches no rendered field must not vanish: show the
+`VALIDATION_FAILED` message as a form-level error instead.
 
 ```ts
-onError: (e) => {
-  if (!(e instanceof ValidationError)) return;            // other AppErrors go to the toast/banner
-  for (const [field, code] of Object.entries(e.fieldErrors))
-    if (field in signupSchema.shape)                      // ignore fields this form does not render
-      setError(field as keyof SignupForm, { message: code in vm ? vm[code as keyof typeof vm] : vm.serverRejected });
-},
+// features/signup/hooks/useSignup.ts
+// wire key -> form field; a Map, so a server key such as `toString` can never match a prototype member
+const SERVER_FIELDS = new Map<string, keyof SignupForm>([['email', 'email'], ['password', 'password']]);
+const serverMessage = (code: string): string =>
+  Object.hasOwn(vm, code) ? vm[code as keyof typeof vm] : vm.serverRejected;
+
+export function useSignup(setError: UseFormSetError<SignupForm>) {
+  const { http } = useServices();
+  return useMutation({
+    mutationFn: (v: SignupForm) => http.request({ path: '/signup', method: 'POST', body: v }, z.undefined()),
+    onError: (e) => {
+      if (!(e instanceof ValidationError)) return;          // other AppErrors go to the toast/banner
+      let matched = false;
+      for (const [wireKey, code] of Object.entries(e.fieldErrors)) {
+        const field = SERVER_FIELDS.get(wireKey);
+        if (field) { setError(field, { message: serverMessage(code) }); matched = true; }
+      }
+      if (!matched) setError('root.server', { message: errorMessages.VALIDATION_FAILED });  // never silent
+    },
+  });
+}
 ```
 
-Messages come from the catalogue, never from the server's text.
+The screen renders `formState.errors.root?.server?.message` above the submit button. Messages come from
+the catalogue, never from the server's text.
 
 ## Do / Don't
 

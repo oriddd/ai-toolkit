@@ -1,0 +1,33 @@
+package {{basePackage}}.adapter.cache.http;
+import {{basePackage}}.spi.cache.CacheKey;
+import {{basePackage}}.spi.cache.CachePort;
+import java.time.Duration;
+import java.util.Optional;
+/**
+ * CachePort adapter backed by a remote HTTP cache service (pluggable-architecture §1–§3, guild #20).
+ * Package-private: CacheClientConfig creates it. Assumes the port DTO is `record CacheKey(String value)` — adjust to yours.
+ */
+class HttpCacheAdapter implements CachePort {
+    private final CacheClient client;
+    private final CacheEntryConverter converter;
+    HttpCacheAdapter(CacheClient client, CacheEntryConverter converter) {
+        this.client = client;
+        this.converter = converter;
+    }
+    @Override
+    public Optional<byte[]> get(CacheKey key) {
+        return client.fetch(key.value()).map(converter::toValue);
+    }
+    @Override
+    public void put(CacheKey key, byte[] value, Duration ttl) {
+        client.store(converter.toRemote(key.value(), value, ttl));
+    }
+    @Override
+    public void evict(CacheKey key) {
+        client.evict(key.value());
+    }
+    @Override
+    public String providerId() {
+        return "http";
+    }
+}

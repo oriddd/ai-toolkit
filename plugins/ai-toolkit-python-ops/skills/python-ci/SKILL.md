@@ -28,13 +28,15 @@ pyproject.toml + uv.lock        # lock file is committed; CI installs with --loc
 
 ## 1. The verify sequence
 One sequence, identical locally and in CI. It is what "verified" means in this toolkit and what the
-`completion-gate` skill runs for Python:
+`completion-gate` skill runs for Python. Its canonical definition is `python-static-analysis` §5 (the
+quality plugin supplies the gate commands); it is repeated here because CI runs it:
 
 ```
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"
 ```
 plus `uv run pytest -m integration` when Docker is available (pytest exits 5 when no integration test exists; the CI job accepts exactly that code with `|| [ $? -eq 5 ]`, any other failure still fails). The CI jobs below are this sequence split
-into separately named jobs; the unit job adds `--cov` so the `fail_under` threshold applies.
+into separately named jobs; the unit job adds `--cov` so the `fail_under` threshold applies. The integration
+job also runs the migrations on an empty database and `alembic check` (see `python-integration-tests` §3).
 
 ## 2. Workflow
 Gates run as separate jobs so a failure names its cause; all are required checks on the default branch.
@@ -55,7 +57,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@<commit-sha>   # vN.N.N: third-party, so SHA-pinned to the latest stable release
         with:
           version: "<uv-version>"  # latest stable uv, same as the Dockerfile image tag
@@ -70,7 +72,7 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
@@ -79,7 +81,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest          # Docker available for testcontainers
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
@@ -89,7 +91,7 @@ jobs:
     needs: [quality, unit, integration]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@<commit-sha>   # third-party: SHA of the latest stable release
       - uses: docker/build-push-action@<commit-sha>     # third-party: SHA of the latest stable release
         with:
@@ -118,19 +120,22 @@ separate step with registry credentials scoped to that job.
 ```dockerfile
 FROM python:3.12-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+# use the image's Python, never a downloaded one
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
+# --no-editable: the package is installed into .venv, so the runtime needs no source tree
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
 RUN groupadd --system app && useradd --system --gid app --uid 10001 app
 WORKDIR /app
-COPY --from=build --chown=app:app /app /app
+# owned by root: the runtime user can read and run the code but not modify it
+COPY --from=build /app/.venv /app/.venv
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live')"]
@@ -140,7 +145,8 @@ CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", 
 `README.md` is copied with the manifests because `pyproject.toml` declares `readme = "README.md"` and the build backend
 reads it when the project is installed (drop it from the `COPY` if you do not declare a readme; keep it out of `.dockerignore`).
 Dependencies are copied before source so the expensive layer is cached. The runtime stage has no
-compiler, no uv, no dev dependencies, and runs as an unprivileged user. `.dockerignore` excludes
+compiler, no uv, no dev dependencies and no source tree (only the non-editable `.venv`), and runs as an
+unprivileged user that cannot write to the installed code. `.dockerignore` excludes
 `.git`, `.venv`, `tests`, `__pycache__`, `.env*`.
 
 ## 4. Reproducibility and supply chain

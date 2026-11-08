@@ -17,12 +17,25 @@ last_reviewed: 2026-06-28
 
 This skill extends the `external-client` resilience section to provide a comprehensive stability toolkit.
 
+Resilience4j annotations (`@CircuitBreaker`, `@Retry`, `@Bulkhead`, `@TimeLimiter`, `@RateLimiter`) are aspects:
+they need `resilience4j-spring-boot3` **and** `spring-boot-starter-aop` on the classpath, with versions from
+`resilience4j-bom` (`external-client` §10). Without the AOP starter they are silently ignored.
+`resilience4j-micrometer` publishes `resilience4j_*` metrics for every instance automatically once Actuator +
+Micrometer are present.
+
+> **Boot 4 note:** the AOP starter is `spring-boot-starter-aspectj`; check the Resilience4j starter name for
+> Boot 4 before upgrading. Spring Framework 7 also ships native `@Retryable` and `@ConcurrencyLimit` in core —
+> pick one mechanism per service.
+
 ## 1. The Bulkhead Pattern
 
 Prevent a failure in one part of the system from taking down the entire service by isolating resources.
 
-- **Thread Pool Bulkhead**: Separate thread pools for different external dependencies.
-- **Semaphore Bulkhead**: Limit the number of concurrent calls to a dependency.
+- **Thread Pool Bulkhead**: Separate thread pools for different external dependencies. **Async only:** the
+  annotation works only on methods returning `CompletionStage` / `CompletableFuture`; on a synchronous method it
+  is not applied.
+- **Semaphore Bulkhead**: Limit the number of concurrent calls to a dependency. Works on synchronous methods —
+  the default choice for blocking (servlet) code.
 
 ```yaml
 resilience4j:
@@ -60,7 +73,10 @@ resilience4j:
 Every network call **must** have a timeout.
 - **Connect Timeout**: Max time to establish a TCP connection.
 - **Read Timeout**: Max time to wait for a packet.
-- **Request Timeout**: Total time for the operation (enforced by Resilience4j/Spring).
+- **Request Timeout**: Total time for the operation (enforced by Resilience4j/Spring). Resilience4j
+  `@TimeLimiter` works **only on async return types** (`CompletionStage` / `CompletableFuture`) and is silently
+  skipped on a synchronous method. For synchronous code, set connect and read timeouts on the HTTP client
+  itself (`external-client` §6) and bound retries with a total time budget (`external-client` §10).
 
 ## 4. The Fail-Fast Pattern
 
@@ -81,14 +97,20 @@ When a call fails or is rejected by a bulkhead/circuit-breaker, provide a safe a
 Every resilience event (circuit breaker opening, bulkhead rejection) must emit a **Metric** and a **Log entry** (see observability). Resilience4j provides an `EventPublisher` for this:
 
 ```java
-registry.circuitBreaker("my-cb").getEventPublisher()
+// find(): a typo fails fast — circuitBreaker(name) would silently create a new, unconfigured breaker
+registry.find("my-cb")
+    .orElseThrow(() -> new IllegalStateException("No circuit breaker named my-cb"))
+    .getEventPublisher()
     .onStateTransition(event -> log.warn("Circuit Breaker transitioned: {}", event.getStateTransition()));
 ```
 
+Metrics need no code: `resilience4j-micrometer` (pulled in by the starter) registers them per instance.
+
 ## 7. Idempotency Keys
 
-For any write operation (`POST`, `PUT`, `DELETE`), use an idempotency key to make retries safe.
-- Client passes `X-Idempotency-Key`.
+For any non-idempotent write (`POST`, `PATCH`; `PUT` and `DELETE` are idempotent by definition), use an
+idempotency key to make retries safe — the contract is `spring-boot-conventions` §9 / `api-design`.
+- Client passes `Idempotency-Key` (IETF draft name; no `X-` prefix).
 - Server records the result of the first call and returns it for subsequent calls with the same key.
 
 ## Do / Don't

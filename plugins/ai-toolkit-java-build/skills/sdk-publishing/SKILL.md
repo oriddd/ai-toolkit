@@ -33,8 +33,13 @@ extracting too early creates worse coupling than duplication.
 
 ## Artifact shape
 
+Follow Spring Boot's own convention: the code lives in an **`-autoconfigure`** module, and a thin
+**`-starter`** module (a `pom.xml` with dependencies only, no code) is what consumers add.
+
 ```
-my-foo-spring-boot-starter/
+foo-spring-boot-starter/            # thin: depends on foo-spring-boot-autoconfigure (+ any libraries it needs at runtime)
+└── pom.xml
+foo-spring-boot-autoconfigure/      # all the code below
 ├── pom.xml                   # packaging = jar
 └── src/main/
     ├── java/<basePackage>/
@@ -47,7 +52,7 @@ my-foo-spring-boot-starter/
         └── additional-spring-configuration-metadata.json
 ```
 
-### `pom.xml`
+### `pom.xml` (autoconfigure module)
 
 ```xml
 <dependencies>
@@ -55,6 +60,11 @@ my-foo-spring-boot-starter/
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-autoconfigure</artifactId>
         <scope>provided</scope>          <!-- consumer brings Spring Boot -->
+    </dependency>
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-webflux</artifactId>
+        <optional>true</optional>        <!-- WebClient: compiles FooClientImpl; @ConditionalOnClass(WebClient.class) backs off without it -->
     </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -67,7 +77,33 @@ my-foo-spring-boot-starter/
         <optional>true</optional>        <!-- compiles FooHealthIndicator; active only when the consumer has actuator -->
     </dependency>
 </dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+                <!-- JDK 23+ no longer runs processors found on the classpath: declare it explicitly -->
+                <annotationProcessorPaths>
+                    <path>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-configuration-processor</artifactId>
+                    </path>
+                </annotationProcessorPaths>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
 ```
+
+The configuration processor generates the IDE metadata (`spring-configuration-metadata.json`). Whether
+`annotationProcessorPaths` picks its version from `dependencyManagement` depends on your
+`maven-compiler-plugin` version — if the build complains, add an explicit `<version>` matching your Spring Boot
+version. If you also use Lombok, list it in `annotationProcessorPaths` too.
+
+> **Boot 4 note:** `HealthIndicator` moved to the `spring-boot-health` module
+> (`org.springframework.boot.health.contributor`); depend on that instead of `spring-boot-actuator` there.
 
 Never package `spring-boot-starter-web` (or any starter) as a transitive
 dependency — the consumer chooses their own web stack.
@@ -135,14 +171,26 @@ must be `public` to be instantiated there — package-private would not compile.
 Use **JPMS** (`module-info.java`) when feasible to make this mechanical:
 
 ```java
-module foo.spring.boot.starter {
+module {{basePackage}} {
+    requires spring.core;
+    requires spring.beans;
     requires spring.context;
-    requires spring.web;
-    exports my.foo.api;
-    exports my.foo.autoconfigure;
+    requires spring.boot;
+    requires spring.boot.autoconfigure;
+    requires static spring.webflux;          // WebClient (optional dependency)
+    requires static spring.boot.actuator;    // HealthIndicator (optional dependency)
+    exports {{basePackage}}.api;
+    exports {{basePackage}}.autoconfigure;
+    // Spring instantiates and proxies the configuration and internal beans reflectively
+    opens {{basePackage}}.autoconfigure to spring.core, spring.beans, spring.context;
+    opens {{basePackage}}.internal to spring.core, spring.beans, spring.context;
     // internal/ NOT exported
 }
 ```
+
+Spring jars are automatic modules on the module path; check their names against the versions you use. If the
+consumer runs on the class path (the usual case), `module-info` only documents intent — the
+`api/` vs `internal/` split and the review rule still do the work.
 
 ## Configuration metadata for IDE autocomplete
 
@@ -157,34 +205,53 @@ annotations at compile time and emits
     {
       "name": "foo.dependency.base-url",
       "type": "java.lang.String",
-      "description": "Base URL of the Foo dependency. Required.",
-      "defaultValue": "http://localhost:8080"
+      "description": "Base URL of the Foo dependency. Required."
     }
   ]
 }
+```
+
+A required property has **no** default (a `localhost` default silently points production at nothing). Enforce
+it on the record:
+
+```java
+@Validated
+@ConfigurationProperties(prefix = "foo.dependency")
+public record FooProperties(@NotBlank String baseUrl) {}
 ```
 
 ## Versioning + deprecation policy
 
 - **SemVer.** Major = breaking, minor = additive, patch = bug fix.
 - **Deprecation window: 2 minor releases.** Mark with `@Deprecated(forRemoval = true, since = "1.4.0")`
-  and provide a migration note in the CHANGELOG.
+  and provide a migration note in the CHANGELOG. (This is the **library** API; a service's public HTTP
+  endpoints follow `api-design`'s deprecation window.)
 - **Never** change the wire shape of a DTO in a non-major bump.
 - **Never** rename a `@ConfigurationProperties` key without keeping the old
-  one as deprecated with `DeprecatedConfigurationProperty(replacement = "...")`.
+  one as deprecated. `@DeprecatedConfigurationProperty` goes on a getter, which a properties **record**
+  doesn't have, so declare the deprecation in `additional-spring-configuration-metadata.json`:
+
+```json
+{ "properties": [ {
+    "name": "foo.dependency.url",
+    "type": "java.lang.String",
+    "deprecation": { "replacement": "foo.dependency.base-url", "level": "warning" }
+} ] }
+```
 
 ## Testing
 
 The library ships with its own tests:
 
 - **Unit tests** for every API class.
-- **`@SpringBootTest` slice** with `ApplicationContextRunner`:
+- **Auto-configuration tests** with `ApplicationContextRunner` (not `@SpringBootTest`, and not a slice: it starts
+  a minimal context with only the configurations you list):
 
 ```java
 // WebClientAutoConfiguration supplies the WebClient.Builder bean fooClient needs; actuator (optional dependency above)
 // must be on the test classpath for the HealthConfiguration branch.
 @Test
-void registersBeansWhenWebClientPresent() {
+void fooAutoConfiguration_webClientPresent_registersBeans() {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withPropertyValues("foo.dependency.base-url=http://x")
@@ -195,12 +262,24 @@ void registersBeansWhenWebClientPresent() {
 }
 
 @Test
-void backsOffWhenConsumerProvidesItsOwn() {
+void fooAutoConfiguration_consumerDefinesFooClient_backsOff() {
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withUserConfiguration(CustomConfig.class)
         .withPropertyValues("foo.dependency.base-url=http://x")
-        .run(ctx -> assertThat(ctx).hasBean("customFooClient"));
+        .run(ctx -> {
+            assertThat(ctx).hasSingleBean(FooClient.class);        // only the consumer's one…
+            assertThat(ctx).hasBean("customFooClient");
+            assertThat(ctx).doesNotHaveBean("fooClient");           // …the library's default backed off
+        });
+}
+
+@Configuration(proxyBeanMethods = false)
+static class CustomConfig {
+    @Bean
+    FooClient customFooClient() {
+        return mock(FooClient.class);
+    }
 }
 ```
 
@@ -224,8 +303,9 @@ one sentence, split it.
 ✅ The public API is interfaces + records only; implementations live in
 `internal/`.
 ✅ Configuration metadata is published so IDEs autocomplete.
-❌ Never depend on a Spring starter from a library — only on
-`spring-boot-autoconfigure` (`provided`).
+❌ Never depend on a Spring starter from a library's autoconfigure module — only on
+`spring-boot-autoconfigure` (`provided`) and optional libraries. Your own thin `-starter`
+module depends on your `-autoconfigure` module.
 ❌ Never break wire compatibility in a non-major release.
 ❌ Never extract code into a library before the rule of three is satisfied.
 

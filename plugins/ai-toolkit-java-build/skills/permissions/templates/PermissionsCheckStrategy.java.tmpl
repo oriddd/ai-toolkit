@@ -1,13 +1,14 @@
 package {{basePackage}}.permission;
 
-import {{basePackage}}.exception.{{Domain}}ForbiddenException;
-
 import java.util.List;
 
 public interface PermissionsCheckStrategy {
 
-    /** Adjust the parameters to the resource-id shape (SKILL.md Phase 1 #3). */
-    void verifyPermissions(final String resourceId) throws {{Domain}}ForbiddenException;
+    /**
+     * Adjust the parameters to the resource-id shape (SKILL.md Phase 1 #3).
+     * Throws the unchecked {@code {{basePackage}}.exception.ForbiddenException} (exception-handling) when access is denied.
+     */
+    void verifyPermissions(final String resourceId);
 
     List<CallerContext> supportedContexts();
 }

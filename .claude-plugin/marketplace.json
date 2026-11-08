@@ -59,7 +59,7 @@
     {
       "name": "ai-toolkit-python",
       "source": "./plugins/ai-toolkit-python",
-      "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
+      "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
       "category": "development"
     },
     {
@@ -101,7 +101,7 @@
     {
       "name": "ai-toolkit-react-native",
       "source": "./plugins/ai-toolkit-react-native",
-      "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
+      "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
       "category": "development"
     },
     {

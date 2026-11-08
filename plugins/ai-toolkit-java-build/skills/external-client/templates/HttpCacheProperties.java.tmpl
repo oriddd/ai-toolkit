@@ -1,0 +1,14 @@
+package {{basePackage}}.adapter.cache.http;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.time.Duration;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+/** platform.cache.http.* — one immutable record per dependency (spring-boot-conventions §1). */
+@Validated
+@ConfigurationProperties(prefix = "platform.cache.http")
+public record HttpCacheProperties(
+        @NotBlank String baseUrl,
+        @NotBlank String entryPath,          // e.g. /cache/{key} — the URI template lives in config, never inline
+        @NotNull Duration connectTimeout,
+        @NotNull Duration readTimeout) {}

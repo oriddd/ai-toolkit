@@ -25,7 +25,8 @@ documented in `docs/GLOSSARY.md`.
 
 If two terms have different meanings in two contexts (e.g. `Order` means
 something different to billing vs. shipping), they live in **different
-services**, never the same one.
+bounded contexts** — a separate service, or a separate module of a modular
+monolith (`code-structure` §4k, Pattern D) — never in the same model.
 
 ## 2. Aggregate Root
 
@@ -33,7 +34,7 @@ The entry-point of a consistency boundary. **All mutations** to entities
 inside the aggregate go through the root.
 
 ```java
-public class Invoice {                        // Aggregate Root
+public class Invoice extends AbstractAggregateRoot<Invoice> {   // Aggregate Root; registerEvent(...) comes from Spring Data
     private final InvoiceId id;               // Value Object
     private String name;
     private Status status;
@@ -50,6 +51,19 @@ public class Invoice {                        // Aggregate Root
 }
 ```
 
+`registerEvent` is inherited from Spring Data's `AbstractAggregateRoot`: the
+events are published **in-process** (as application events) when the repository
+`save()`s the root, and they are not durable. For events that must leave the
+service, bridge them to the outbox: a `@TransactionalEventListener(phase =
+BEFORE_COMMIT)` (or a plain `@EventListener`) writes the outbox row in the same
+transaction (see `messaging`).
+
+This is a **domain class**, not a JPA entity: `final` fields and no no-arg
+constructor are deliberate. Either keep a separate JPA entity in `entity/` and
+map between the two in the repository adapter, or, if you annotate the root
+itself with `@Entity`, add a `protected` no-arg constructor and drop `final` on
+the persistent fields (JPA needs both).
+
 Rules:
 - One transaction = one aggregate. Cross-aggregate consistency is **eventual**
   via Domain Events (see `messaging` outbox).
@@ -65,14 +79,23 @@ natural fit:
 
 ```java
 public record Money(BigDecimal amount, Currency currency) {
-    public Money { Objects.requireNonNull(currency); if (amount.signum() < 0) throw …; }
+    public Money {
+        Objects.requireNonNull(amount, "amount");
+        Objects.requireNonNull(currency, "currency");
+        // normalise the scale: BigDecimal.equals compares scale, so 10.0 and 10.00 would not be equal records
+        amount = amount.setScale(currency.getDefaultFractionDigits(), RoundingMode.HALF_EVEN);
+        // add `if (amount.signum() < 0) throw …;` only where the domain forbids negatives
+        // (a price may, a balance or a refund must not)
+    }
     public Money plus(Money other) { … }
 }
 ```
 
 Examples: `Money`, `InvoiceId`, `EmailAddress`, `DateRange`, `Coordinates`.
-**Never** pass primitive `String id` around — wrap in an `InvoiceId` so the
-compiler catches mix-ups.
+**Inside the domain, never** pass primitive `String id` around — wrap in an
+`InvoiceId` so the compiler catches mix-ups. At the edges (controller path
+variables, API DTOs, downstream client calls) a `String` / `UUID` id is fine;
+convert it to the Value Object at the boundary.
 
 ## 4. Domain Event
 
@@ -99,6 +122,13 @@ public class TransferService {
 Lives in `domain/`. Never injects repositories — receives loaded
 aggregates as parameters.
 
+Changing **two** aggregates in one transaction breaks §2's "one transaction =
+one aggregate". Either record it as a deliberate, documented exception (both
+aggregates in the same database and the business needs strong consistency, see
+`documentation-and-adr`), or make it eventually consistent: debit `from`,
+publish a `BalanceDebitedEvent` via the outbox, and credit `to` in its own
+transaction, with a compensating step on failure (a saga).
+
 ## 6. Repository
 
 The collection-like illusion for aggregates. Spring Data repositories are
@@ -110,6 +140,11 @@ public interface InvoiceRepository extends Repository<Invoice, InvoiceId> {
     void save(Invoice invoice);
 }
 ```
+
+A Value Object id only works as a Spring Data / JPA id when it is mapped:
+make `InvoiceId` an `@Embeddable` and the field an `@EmbeddedId` (records work
+as embeddables on Hibernate 6.2+), or keep the JPA entity separate with a raw
+`UUID` id and convert to `InvoiceId` in the repository adapter.
 
 ## 7. Anti-Corruption Layer (ACL)
 
@@ -150,8 +185,8 @@ Adopt incrementally; the rest of the skill set still applies.
 
 ## Do / Don't
 
-✅ Wrap identifiers in Value Objects; the type system catches half of all
-bugs.
+✅ Wrap identifiers in Value Objects inside the domain; the type system
+catches half of all bugs.
 ✅ One aggregate per transaction; cross-aggregate consistency is async.
 ✅ Document the ubiquitous language in `docs/GLOSSARY.md` and keep it
 synced.

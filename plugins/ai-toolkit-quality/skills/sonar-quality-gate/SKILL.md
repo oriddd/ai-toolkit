@@ -6,7 +6,7 @@ description: >
   completion gate reaches Sonar or a pipeline's Sonar gate fails.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
-depends_on: [completion-gate]
+depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
@@ -37,11 +37,14 @@ If there is no Sonar configuration, report "Sonar: not configured" — do not ad
 
 ## 3. Run the analysis
 
-Generate coverage first (the `completion-gate` commands), then:
+**Default: read the CI result.** When CI already analyses the branch or PR, read its gate status (§4) instead of
+running an analysis. A local analysis uploads to a shared server, so run one only after the developer confirms it.
+
+With that confirmation, generate coverage first (the `completion-gate` commands), then:
 
 ```bash
-# Maven (token from the SONAR_TOKEN environment variable)
-mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL"
+# Maven (token from the SONAR_TOKEN environment variable; pin the plugin version, here or in pluginManagement)
+mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:<version>:sonar -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL"
 # Any other stack
 sonar-scanner -Dsonar.qualitygate.wait=true -Dsonar.host.url="$SONAR_HOST_URL"
 ```
@@ -65,7 +68,8 @@ against the shared project — ask the developer, or rely on the CI result.
 
 Gate status: `GET $SONAR_HOST_URL/api/qualitygates/project_status?projectKey=<key>&branch=<branch>` (or `&pullRequest=<id>`
 for a PR — without one the main-branch status is returned, which can show a false green).
-Open new-code issues: `GET /api/issues/search?components=<key>&resolved=false&inNewCodePeriod=true`
+Open new-code issues: `GET /api/issues/search?components=<key>&resolved=false&inNewCodePeriod=true&branch=<branch>`
+(or `&pullRequest=<id>`; without either it returns main-branch issues, a false green)
 (`componentKeys` on older servers; `sinceLeakPeriod=true` instead of `inNewCodePeriod` on older servers).
 
 Fix every failing condition at its cause:
@@ -90,6 +94,7 @@ When not run: `Sonar: not verified — <reason>`, plus the local proxies that di
 - ❌ Mark issues Won't Fix / False Positive, resolve them in the UI, or add `//NOSONAR`.
 - ❌ Exclude files or lower the gate, profile or thresholds to get green.
 - ❌ Commit analysis output, `.scannerwork/`, or tokens.
+- ❌ Upload a local analysis to the shared server without the developer's confirmation.
 - ✅ Fix the code; if a rule is genuinely wrong for this repo, tell the developer and let them decide.
 
 ## Cross-references

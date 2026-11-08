@@ -11,12 +11,12 @@ Each SOLID principle directly improves testability:
 
 ```java
 // ✅ Good: Single responsibility = single test suite
-@Service
+@Component
 public class InvoiceValidator {
     public ValidationResult validate(Invoice invoice) { }
 }
 
-@Service  
+@Component
 public class InvoiceTransformer {
     public byte[] transform(byte[] input, Format target) { }
 }
@@ -38,7 +38,7 @@ public class InvoiceProcessor {
 // ✅ Good: New format = new strategy + new test class
 public interface ExportRenderer {
     byte[] render(byte[] input);
-    boolean supports(String format);
+    boolean canHandle(String format);
 }
 
 @Component
@@ -64,7 +64,7 @@ public byte[] render(byte[] input, String format) {
 ```java
 // ✅ Good: All implementations honor the contract
 public interface InvoiceRepository {
-    Optional<Invoice> findById(String id);  // Never throws, returns empty
+    Optional<Invoice> findById(String id);  // Not found → Optional.empty(), never an exception
 }
 
 // Can use real DB in integration tests, in-memory fake in unit tests
@@ -74,8 +74,9 @@ public class JpaInvoiceRepository implements InvoiceRepository { }
 // ❌ Bad: Subclass violates contract, breaks tests
 public class StrictInvoiceRepository implements InvoiceRepository {
     public Optional<Invoice> findById(String id) {
-        if (id == null) throw new NullPointerException();  // Contract violation!
-        // Base interface says "return empty", but this throws
+        Invoice found = load(id);
+        if (found == null) throw new InvoiceNotFoundException(id);  // Contract violation!
+        // Base interface says "return empty when not found", but this throws
     }
 }
 ```
@@ -111,6 +112,10 @@ public interface InvoiceRepository {
 }
 ```
 
+> Spring Data repositories (`JpaRepository`, see `persistence`) are the accepted
+> exception: you never implement or hand-mock them method by method — tests use
+> a fake, a slice or Testcontainers. ISP applies to the interfaces you write.
+
 ### 3e. Dependency Inversion Principle (DIP)
 **Testability benefit:** Inject mocks/stubs instead of using real classes.
 
@@ -122,7 +127,8 @@ public class InvoiceService {
     private final InvoiceRepository repository;  // Interface
     
     public Invoice getInvoice(String id) {
-        return repository.findById(id).orElseThrow();
+        return repository.findById(id)
+                .orElseThrow(() -> new InvoiceNotFoundException(id));  // → 404, not a 500 NoSuchElementException
     }
 }
 

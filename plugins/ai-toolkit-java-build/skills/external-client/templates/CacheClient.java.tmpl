@@ -1,26 +1,61 @@
-package {{basePackage}}.client.cache;
-import org.springframework.stereotype.Component;
-import java.time.Duration;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientException;
-@Component
-public class CacheClient {
-    private final WebClient webClient;
-    private final Duration timeout;
-    public CacheClient(WebClient cacheWebClient, CacheClientConfig config) {
-        this.webClient = cacheWebClient;
-        this.timeout = config.getTimeout();
+package {{basePackage}}.adapter.cache.http;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.util.Optional;
+import java.util.function.Supplier;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+/**
+ * Thin transport for the HTTP cache service (Simple Wrapper, external-client §0), used only by HttpCacheAdapter.
+ * Every non-2xx becomes a domain exception: 404 = cache miss (empty), 5xx / timeout / connection refused =
+ * UnavailableException (503, retryable), any other status = DependencyException (500).
+ */
+class CacheClient {
+    static final String DEPENDENCY = "cache-service";
+    private final RestClient restClient;
+    private final HttpCacheProperties props;
+    CacheClient(RestClient restClient, HttpCacheProperties props) {
+        this.restClient = restClient;
+        this.props = props;
     }
-    /** Returns null when the cache has no body for the key — the caller must handle that. */
-    public CacheEntryResponse fetch(String key) {
-        return webClient.get().uri("/cache/{key}", key)
-                .retrieve().bodyToMono(CacheEntryResponse.class)
-                // WebClientResponseException / WebClientRequestException never escape client/cache
-                .onErrorMap(WebClientException.class, e -> new CacheClientException("Cache call failed", e))
-                .block(timeout);
+    Optional<CacheEntryResponse> fetch(String key) {
+        return call(() -> restClient.get().uri(props.entryPath(), key)
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+                        return Optional.<CacheEntryResponse>empty();          // a miss, not an error
+                    }
+                    failOnError(response.getStatusCode());
+                    return Optional.ofNullable(response.bodyTo(CacheEntryResponse.class));
+                }));
     }
-    /** Domain exception for cache transport failures — the only failure type callers see. */
-    public static class CacheClientException extends RuntimeException {
-        public CacheClientException(String message, Throwable cause) { super(message, cause); }
+    void store(CacheEntryResponse entry) {
+        call(() -> restClient.put().uri(props.entryPath(), entry.key()).body(entry)
+                .exchange((request, response) -> { failOnError(response.getStatusCode()); return null; }));
+    }
+    void evict(String key) {
+        call(() -> restClient.delete().uri(props.entryPath(), key)
+                .exchange((request, response) -> {
+                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {   // evicting a miss is fine
+                        failOnError(response.getStatusCode());
+                    }
+                    return null;
+                }));
+    }
+    private static void failOnError(HttpStatusCode status) {
+        if (status.is5xxServerError()) {
+            throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, null);
+        }
+        if (!status.is2xxSuccessful()) {                                   // 1xx / 3xx / 4xx: never parse as a body
+            throw ExceptionMessages.dependencyCallFailed(DEPENDENCY, status.value());
+        }
+    }
+    /** Connect / read timeouts and refused connections surface as ResourceAccessException — an outage, so 503. */
+    private static <T> T call(Supplier<T> remoteCall) {
+        try {
+            return remoteCall.get();
+        } catch (ResourceAccessException e) {
+            throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, e);
+        }
     }
 }

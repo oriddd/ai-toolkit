@@ -37,7 +37,8 @@ layout/
 ├── LayoutResolver.java                # Resolver: extracts ?layout=X from request
 ├── LayoutStrategy.java                # Strategy interface: defines map(entity) contract
 ├── LayoutHandler.java                 # Handler: orchestrates resolver → registry → strategy
-├── LayoutRegistry.java                # Registry: routes LayoutType → strategy
+├── LayoutRegistry.java                # Registry: routes (entity type, LayoutType) → strategy
+├── LayoutAccessPolicy.java            # Port: may this caller see a restricted layout? (implemented in permission/)
 └── strategy/
     ├── SummaryLayoutStrategy.java     # Strategy: entity → SummaryDTO
     ├── DetailedLayoutStrategy.java    # Strategy: entity → DetailedDTO
@@ -50,9 +51,13 @@ See strategy-registry-pattern for detailed component responsibilities.
 
 **Layout-specific mapping:**
 - **Discriminator:** `LayoutType` enum (SUMMARY / DETAILED / FULL)
-- **Resolver:** Reads `?layout=X` query parameter
-- **Strategy:** Maps entity → DTO for the specific layout
-- **Handler:** Orchestrates resolver → registry → strategy, returns DTO
+- **Resolver:** Reads `?layout=X` query parameter; an unknown value is a 400, never a silent fallback
+- **Strategy:** Maps entity → DTO for the specific layout; says whether the layout is restricted
+- **Handler:** Orchestrates resolver → registry → access check → strategy, returns DTO
+
+**Layouts are not field-level security.** Any caller can send `?layout=full`. A layout that exposes sensitive or
+internal data (permissions, change history, audit data) is **restricted**: the handler asks `LayoutAccessPolicy`
+first and answers 403 when the caller may not see it.
 
 ## 3. Implementation
 
@@ -63,17 +68,21 @@ public enum LayoutType {
     SUMMARY, DETAILED, FULL;
 
     public static LayoutType fromString(final String layout) {
-        if (StringUtils.isBlank(layout)) {
-            return DETAILED;  // default
+        if (layout == null || layout.isBlank()) {
+            return DETAILED;  // default when the client sends no layout
         }
         try {
-            return LayoutType.valueOf(layout.toUpperCase());
+            return LayoutType.valueOf(layout.trim().toUpperCase(Locale.ROOT));   // Locale.ROOT: "full" must not depend on the server locale
         } catch (final IllegalArgumentException e) {
-            return DETAILED;  // fallback
+            // an unknown layout is a client error (400), never a silent fallback to DETAILED
+            throw ExceptionMessages.invalidField("layout", "expected one of " + Arrays.toString(values()));
         }
     }
 }
 ```
+
+`ExceptionMessages.invalidField` returns the `BadRequestException` of `exception-handling` (400). With
+openapi-first, declare `layout` as an enum parameter in `api.yaml` instead, so the generated code rejects unknown values.
 
 ### `LayoutResolver`
 
@@ -98,6 +107,11 @@ public interface LayoutStrategy<E, D> {
     LayoutType getSupportedLayoutType();
     Class<E> getEntityType();   // the registry is shared by every entity — this keeps Product and other entities apart
 
+    /** A restricted layout exposes sensitive or internal fields; the handler checks LayoutAccessPolicy first. */
+    default boolean isRestricted() {
+        return false;
+    }
+
     default boolean canHandle(final LayoutType layoutType) {
         return getSupportedLayoutType() != null 
                 && getSupportedLayoutType().equals(layoutType);
@@ -105,22 +119,42 @@ public interface LayoutStrategy<E, D> {
 }
 ```
 
+### `LayoutAccessPolicy` (port)
+
+```java
+/** Implemented in permission/ (it may read the security context); layout/ only depends on this interface. */
+public interface LayoutAccessPolicy {
+    boolean isAllowed(LayoutType layoutType, String resourceId);
+}
+```
+
 ### `LayoutRegistry`
+
+One **non-generic** singleton for every entity. Spring injects every `LayoutStrategy` (Product, Order, …), so the
+registry indexes them by (entity type, layout) and fails at startup when two strategies claim the same pair. The
+generic type is restored in one place, `find(...)`, where the key guarantees it.
 
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
-public class LayoutRegistry<E, D> {
-    // One singleton for ALL entities: Spring injects every LayoutStrategy (Product, Order, …),
-    // so the lookup must match the entity type as well as the layout.
-    private final List<LayoutStrategy<E, D>> strategies;
+public class LayoutRegistry {
+    private record Key(Class<?> entityType, LayoutType layoutType) { }
 
-    public LayoutStrategy<E, D> getStrategy(final Class<?> entityType, final LayoutType layoutType) {
-        return strategies.stream()
-                .filter(s -> s.getEntityType().isAssignableFrom(entityType))
-                .filter(s -> s.canHandle(layoutType))
-                .findFirst()
-                .orElse(null);
+    private final Map<Key, LayoutStrategy<?, ?>> strategies;
+
+    public LayoutRegistry(final List<LayoutStrategy<?, ?>> strategies) {
+        this.strategies = strategies.stream().collect(Collectors.toUnmodifiableMap(
+                s -> new Key(s.getEntityType(), s.getSupportedLayoutType()),
+                Function.identity(),
+                (first, second) -> {
+                    throw new IllegalStateException("Two layout strategies for " + first.getEntityType().getSimpleName()
+                            + "/" + first.getSupportedLayoutType() + ": " + first.getClass().getName()
+                            + ", " + second.getClass().getName());
+                }));
+    }
+
+    @SuppressWarnings("unchecked")   // safe: the key's entity type is the strategy's own getEntityType()
+    public <E> Optional<LayoutStrategy<E, ?>> find(final Class<E> entityType, final LayoutType layoutType) {
+        return Optional.ofNullable((LayoutStrategy<E, ?>) strategies.get(new Key(entityType, layoutType)));
     }
 }
 ```
@@ -129,28 +163,34 @@ public class LayoutRegistry<E, D> {
 
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @Slf4j
-public class LayoutHandler<E, D> {
+public class LayoutHandler {
     private final LayoutResolver layoutResolver;
-    private final LayoutRegistry<E, D> layoutRegistry;
+    private final LayoutRegistry layoutRegistry;
+    private final LayoutAccessPolicy layoutAccessPolicy;
 
-    public D handle(final E entity, final HttpServletRequest request) {
+    /**
+     * @param entityType passed explicitly — entity.getClass() can be a JPA proxy subclass
+     * @param resourceId the id the access policy checks for restricted layouts
+     */
+    public <E> Object handle(final Class<E> entityType, final String resourceId, final E entity,
+                             final HttpServletRequest request) {
         if (entity == null) {
             return null;
         }
-        final LayoutType layoutType = layoutResolver.resolve(request);
-        final LayoutStrategy<E, D> strategy = layoutRegistry.getStrategy(entity.getClass(), layoutType);
+        final LayoutType layoutType = layoutResolver.resolve(request);   // unknown value → 400
+        final LayoutStrategy<E, ?> strategy = layoutRegistry.find(entityType, layoutType)
+                .or(() -> {
+                    log.warn("No {} layout for {}, using DETAILED", layoutType, entityType.getSimpleName());
+                    return layoutRegistry.find(entityType, LayoutType.DETAILED);
+                })
+                .orElseThrow(() -> new IllegalStateException(
+                        "No DETAILED layout strategy for " + entityType.getSimpleName() + " (mandatory)"));
 
-        if (strategy == null) {
-            log.warn("No layout strategy found for type: {}, using DETAILED", layoutType);
-            final LayoutStrategy<E, D> fallback = layoutRegistry.getStrategy(entity.getClass(), LayoutType.DETAILED);
-            if (fallback == null) {
-                throw new IllegalStateException("No DETAILED layout strategy found (mandatory)");
-            }
-            return fallback.map(entity);
+        if (strategy.isRestricted() && !layoutAccessPolicy.isAllowed(strategy.getSupportedLayoutType(), resourceId)) {
+            throw ExceptionMessages.accessDenied("layout " + strategy.getSupportedLayoutType());   // 403
         }
-
         return strategy.map(entity);
     }
 }
@@ -175,13 +215,12 @@ public class ProductSummaryLayoutStrategy implements LayoutStrategy<Product, Pro
     @Override
     public ProductSummaryDTO map(final Product product) {
         if (product == null) return null;
-        return ProductSummaryDTO.builder()
-                .id(product.getId())
-                .name(product.getName())
-                .createdAt(product.getCreatedAt())
-                .build();
+        return new ProductSummaryDTO(product.getId(), product.getName(), product.getCreatedAt());
     }
 }
+
+// DTOs are immutable records (`code-structure`: models are records)
+public record ProductSummaryDTO(String id, String name, Instant createdAt) { }
 ```
 
 **DetailedLayoutStrategy** — standard fields (mandatory default):
@@ -201,24 +240,24 @@ public class ProductDetailedLayoutStrategy implements LayoutStrategy<Product, Pr
     @Override
     public ProductDetailedDTO map(final Product product) {
         if (product == null) return null;
-        return ProductDetailedDTO.builder()
-                .id(product.getId())
-                .name(product.getName())
-                .description(product.getDescription())
-                .createdAt(product.getCreatedAt())
-                .updatedAt(product.getUpdatedAt())
-                .owner(product.getOwner())
-                .build();
+        return new ProductDetailedDTO(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getCreatedAt(),
+                product.getUpdatedAt(),
+                product.getOwner());
     }
 }
 ```
 
-**FullLayoutStrategy** — all fields + expensive computations:
+**FullLayoutStrategy** — all fields + expensive computations; **restricted** (it exposes permissions and history):
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class ProductFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final ProductMetadataService productMetadataService;
+    private final ProductDetailsService productDetailsService;
 
     @Override
     public LayoutType getSupportedLayoutType() {
@@ -231,48 +270,68 @@ public class ProductFullLayoutStrategy implements LayoutStrategy<Product, Produc
     }
 
     @Override
+    public boolean isRestricted() {
+        return true;    // permissions and change history are not for every caller
+    }
+
+    @Override
     public ProductFullDTO map(final Product product) {
         if (product == null) return null;
-        return ProductFullDTO.builder()
-                .id(product.getId())
-                .name(product.getName())
-                .description(product.getDescription())
-                .createdAt(product.getCreatedAt())
-                .updatedAt(product.getUpdatedAt())
-                .owner(product.getOwner())
+        // Lazy associations are loaded inside the service's read-only transaction and returned as a read model;
+        // touching product.getPermissions() / getChangeHistory() here would run outside it (LazyInitializationException).
+        final ProductFullDetails details = productDetailsService.getFullDetails(product.getId());
+        return new ProductFullDTO(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getCreatedAt(),
+                product.getUpdatedAt(),
+                product.getOwner(),
                 // Full layout includes expensive/computed fields
-                .metadata(productMetadataService.getMetadataFor(product.getId()))
-                .permissions(product.getPermissions())
-                .changeHistory(product.getChangeHistory())
-                .build();
+                productMetadataService.getMetadataFor(product.getId()),
+                details.permissions(),
+                details.changeHistory());
     }
 }
 ```
+
+**Rules for strategies:**
+- A strategy never touches a lazy JPA association: the mapping runs after the service transaction has closed.
+  Load what the layout needs inside the service (`@Transactional(readOnly = true)`, an `@EntityGraph` or a fetch join)
+  and pass a read model, as `ProductFullDetails` above.
+- On list endpoints, load the extra data for the whole page in one query — calling a per-item service from `map`
+  is an N+1.
 
 ## 4. Controller Integration
 
 ```java
 @RestController
 @RequestMapping("/api/v1/products")
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class ProductController {
     private final ProductService productService;
-    private final LayoutHandler<Product, ?> layoutHandler;
+    private final LayoutHandler layoutHandler;
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getProduct(@PathVariable final String id,
-                                       final HttpServletRequest request) {
+    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(oneOf = {
+            ProductSummaryDTO.class, ProductDetailedDTO.class, ProductFullDTO.class })))
+    public ResponseEntity<Object> getProduct(@PathVariable final String id,
+                                             final HttpServletRequest request) {
         final Product product = productService.getById(id);
-        final Object dto = layoutHandler.handle(product, request);
+        final Object dto = layoutHandler.handle(Product.class, id, product, request);
         return ResponseEntity.ok(dto);
     }
 }
 ```
 
 **Rules:**
-- Wildcard `?` for DTO type — handler returns the right DTO based on layout
+- The response type is `Object` — the handler returns the right DTO based on layout. Without the `oneOf`
+  `@ApiResponse` springdoc publishes no schema, so declare every layout DTO there.
+- **openapi-first:** a generated `ProductApi` method has one fixed return type, so this controller cannot implement it
+  as is. Declare the layouts as `oneOf` in `api.yaml` and map to the generated types, or don't use layouts there.
 - Pass `HttpServletRequest` to handler for layout resolution
 - Service returns **product**, mapping is presentation-layer concern
+- Unknown `?layout=` → 400; a restricted layout the caller may not see → 403
 
 ## 5. Adding a New Layout
 
@@ -281,11 +340,13 @@ public class ProductController {
 2. ✅ Create new DTO class (e.g., `ProductCompactDTO`)
 3. ✅ Create new `<Layout>LayoutStrategy implements LayoutStrategy`
 4. ✅ Make it a `@Component`
-5. ✅ Implement `getSupportedLayoutType()`, `getEntityType()` and `map(entity)`
-6. ✅ Write unit tests
+5. ✅ Implement `getSupportedLayoutType()`, `getEntityType()` and `map(entity)`; override `isRestricted()` to `true`
+   when the layout exposes sensitive or internal data
+6. ✅ Write unit tests (including the 403 path for a restricted layout)
 
 **Zero changes needed:**
-- ❌ LayoutHandler, LayoutRegistry, LayoutResolver, existing strategies
+- ❌ LayoutHandler, LayoutRegistry, LayoutResolver, existing strategies (a second strategy for the same entity and
+  layout fails the startup — replace the existing one instead)
 
 ## 6. When to Use
 
@@ -293,7 +354,8 @@ public class ProductController {
 - Endpoints must return different field sets (summary/detailed/full)
 - Mobile clients need compact responses, web clients need full data
 - Performance optimization — avoid sending unused fields
-- Multi-tenant scenarios with different field visibility
+- Multi-tenant scenarios with different field presentation — not as field-level security: hiding data from a
+  caller always needs an authorization check (restricted layouts, §7 "Layout + Permissions")
 
 ❌ **Don't use when:**
 - Only one response shape needed — use single DTO
@@ -302,53 +364,7 @@ public class ProductController {
 
 ## 7. Variations
 
-### Layout + Permissions
-Filter fields based on caller permissions. This **replaces** `ProductFullLayoutStrategy` — keep exactly
-one strategy per (entity, layout), otherwise `findFirst` picks one at random:
-```java
-@Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
-public class SecureFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
-    private final PermissionsHandler permissionsHandler;
-
-    @Override
-    public LayoutType getSupportedLayoutType() {
-        return LayoutType.FULL;
-    }
-
-    @Override
-    public Class<Product> getEntityType() {
-        return Product.class;
-    }
-
-    @Override
-    public ProductFullDTO map(final Product product) {
-        final ProductFullDTO dto = /* base mapping */;
-        try {
-            permissionsHandler.handle(product.getId());
-            dto.setSensitiveData(product.getSensitiveData());
-        } catch (final ForbiddenException e) {
-            // Omit sensitive fields
-        }
-        return dto;
-    }
-}
-```
-
-### Layout from Accept Header
-Use media type instead of query param:
-```java
-@Component
-public class LayoutResolver {
-    public LayoutType resolve(final HttpServletRequest request) {
-        final String accept = request.getHeader("Accept");
-        if (accept != null && accept.contains("application/vnd.api.summary+json")) {
-            return LayoutType.SUMMARY;
-        }
-        return LayoutType.DETAILED;
-    }
-}
-```
+Layout + Permissions (field filtering by a boolean permission query) and layout from the `Accept` header — load [`references/variations.md`](./references/variations.md) when you need one of them.
 
 ---
 

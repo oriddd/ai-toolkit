@@ -11,6 +11,10 @@ Python / React Native skills) covering everything from REST API design to
 release versioning. Your job is to apply the right subset of those
 skills to every request — never reinvent patterns the catalogue
 already prescribes.
+
+> **Paths:** the relative links and `tools/…` commands below work inside the toolkit repository only. Pasted
+> elsewhere, read the same documents from your toolkit checkout (e.g. `~/.ai-toolkit/docs/…`) and, in Claude Code,
+> load skills by their qualified name (`ai-toolkit-java-design:code-structure`) instead of opening files.
 ## 1. Read order (every task, every time)
 1. **[`BACKEND_GUILD.md`](../BACKEND_GUILD.md)** — adoption matrix,
    apply-order, recipes, **non-negotiables** (mandatory before any diff).
@@ -65,7 +69,9 @@ These come from `BACKEND_GUILD.md §4`. They are not advisory:
 15. URL conventions: plural nouns, kebab-case, version in path,
     `application/problem+json` for errors.
 16. Secrets never appear in `application.yaml` or in commit history.
-17. Graceful shutdown is enabled and exercised by a component test.
+17. Graceful shutdown is enabled and exercised by a test — a component test
+    asserting the shutdown settings, plus the `graceful-shutdown` rolling-update
+    smoke test.
 18. Releases use Conventional Commits; CHANGELOG is automated.
 19. `context/` documentation is updated in the same PR as the code
     change it describes.
@@ -86,6 +92,10 @@ These come from `BACKEND_GUILD.md §4`. They are not advisory:
 - **`health-indicator`** — ask for the downstream's name, base URL,
   expected status code, probe interval before generating the indicator.
 - **`external-client`** — **CRITICAL**: Ask about API complexity and scale before choosing pattern (Simple Wrapper vs Lite Client vs Full 5-Layer). See skill §0 for decision tree.
+- **`pattern-selection`** — ask its scale / growth questions before adding a new layer, client package or abstraction.
+
+Only the main session can ask the developer. Running as a subagent, return the open questions (with proposed
+defaults) to the caller instead of guessing.
 
 ### Pattern Selection HITL Checkpoints
 
@@ -105,16 +115,18 @@ These come from `BACKEND_GUILD.md §4`. They are not advisory:
 **Default Rule**: When uncertain, start simple. It's easier to add layers than remove them.
 
 #### Operation Layer Decision
-**STOP and ASK** before creating operation layer:
+The controller never orchestrates: it holds no logic and delegates to exactly **one** class — a `*Service`
+or an `*Operation` (non-negotiable 3, `code-structure`). **STOP and ASK** before creating an operation layer:
 1. Does controller orchestration involve 5+ service calls?
 2. Is there complex permission checking + business logic + audit logging?
 3. Are there multi-step transactions across repositories?
 
 **Decision:**
-- Simple orchestration (2-4 service calls) → Controller calls services directly
-- Complex orchestration (5+ steps, transactions) → Operation layer
+- Nothing to orchestrate (one service does the work) → Controller calls that one `*Service`
+- Orchestration (several services, permission check + business logic, transactions) → one `*Operation` per use case
 
-**Default Rule**: Start without operations. Add when controller exceeds ~100 LOC or has complex multi-step logic.
+**Default Rule**: Start without an operation when one service is enough. Add it as soon as the use case
+orchestrates several services, or the controller would otherwise grow multi-step logic.
 
 ### When NOT to ask
 
@@ -140,8 +152,9 @@ verbatim:
 Anything else (`<basePackage>`, `__basePackage__`) is **forbidden** —
 the validator will reject it.
 ## 6. Output expectations
-- **Diff format.** Produce a unified diff when modifying existing files;
-  use full file contents only for new files.
+- **Diff format.** In a tool without file-edit capability, produce a unified diff when modifying existing
+  files and full file contents only for new files. Agents that edit files directly just edit them and
+  name the changed files.
 - **No bare prose.** When you say "I added X" name the exact files +
   line ranges.
 - **Cite the skill.** Every non-trivial decision must cite the skill
@@ -150,7 +163,9 @@ the validator will reject it.
 - **Run the validator** if you touched `plugins/*/skills/`:
   `bash tools/validate-skills.sh`. If it fails, **fix before
   returning**.
-- **Update CHANGELOG.md** `[Unreleased]` for any user-visible change.
+- **Update CHANGELOG.md** `[Unreleased]` for any user-visible change — only when no release bot
+  (release-please / semantic-release) owns it (`release-versioning`); with a bot, the Conventional
+  Commit message is the changelog entry.
 - **Update `context/`** per `context-maintenance` whenever architecture
   / progress / standards / dependencies move.
 ## 7. When the catalogue conflicts with the request
@@ -186,13 +201,15 @@ Final pre-flight (every response):
 - [ ] `bash tools/validate-skills.sh` clean (if `plugins/*/skills/` touched)?
 - [ ] `python3 tools/build-indexes.py --check` clean (if frontmatter touched)?
 - [ ] `context/` updated where appropriate?
-- [ ] CHANGELOG `[Unreleased]` updated?
+- [ ] CHANGELOG `[Unreleased]` updated (only when no release bot owns it)?
 If any answer is "no", the diff is not ready.
 
-## 8. Commit policy and completion gate (every language)
+## 11. Commit policy and completion gate (every language)
 
 - **Never** `git commit`, `git push` or tag until the developer asks. Leave changes in the working tree.
 - Before reporting a task done, run the `completion-gate` skill: clean build, full tests, static
   analysis, standards review of the diff, coverage of changed code, `code-hygiene`, the Sonar gate
   (`sonar-quality-gate`) — and end with its evidence table. Fix failures at the cause; never suppress
   or weaken a check to get green.
+- When another agent did the work and returned the evidence table, relay that table verbatim; re-run the
+  gate only if you changed code after it.

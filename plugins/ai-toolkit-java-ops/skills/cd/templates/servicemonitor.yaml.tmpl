@@ -1,0 +1,17 @@
+{{ "{{" }}- /* Rendered only when enabled AND the Prometheus Operator CRD is installed, so the chart also installs on clusters without it. */{{ "}}" }}
+{{ "{{" }}- if and .Values.serviceMonitor.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/ServiceMonitor") {{ "}}" }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ "{{" }} include "{{chartName}}.fullname" . {{ "}}" }}
+  labels:
+    {{ "{{" }}- include "{{chartName}}.labels" . | nindent 4 {{ "}}" }}
+spec:
+  selector:
+    matchLabels:
+      {{ "{{" }}- include "{{chartName}}.selectorLabels" . | nindent 6 {{ "}}" }}
+  endpoints:
+    - port: http
+      path: {{contextPath}}/actuator/prometheus
+      interval: {{ "{{" }} .Values.serviceMonitor.interval {{ "}}" }}
+{{ "{{" }}- end {{ "}}" }}

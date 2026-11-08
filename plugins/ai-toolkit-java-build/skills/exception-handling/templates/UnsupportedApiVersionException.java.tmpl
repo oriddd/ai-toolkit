@@ -1,0 +1,6 @@
+package {{basePackage}}.exception;
+/** Maps to 406 — the caller asked for an API version / projection the service does not serve (response-mapper). */
+public class UnsupportedApiVersionException extends BaseDomainException {
+    public UnsupportedApiVersionException(String errorCode, String message) { super(errorCode, message); }
+    public UnsupportedApiVersionException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

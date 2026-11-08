@@ -15,14 +15,14 @@ class ProductEditabilityRuleTest {
     private final ProductEditabilityRule rule = new ProductEditabilityRule(configService);
 
     @Test
-    void whenConfigSaysEditable_returnsTrue() {
+    void isEditable_configSaysEditable_returnsTrue() {
         when(configService.getProductConfig("TypeA"))
             .thenReturn(configDto(true));
         assertThat(rule.isEditable("TypeA")).isTrue();
     }
 
     @Test
-    void whenConfigMissing_returnsFalse() {
+    void isEditable_configMissing_returnsFalse() {
         when(configService.getProductConfig("TypeA")).thenReturn(null);
         assertThat(rule.isEditable("TypeA")).isFalse();
     }
@@ -38,32 +38,41 @@ class EditableProductIdValidatorTest {
     private final ProductLookupService lookup = mock(ProductLookupService.class);
     private final ProductEditabilityRule rule  = mock(ProductEditabilityRule.class);
     private final ConstraintValidatorContext ctx = mock(ConstraintValidatorContext.class);
+    private final HibernateConstraintValidatorContext hibernateCtx = mock(HibernateConstraintValidatorContext.class);
     private final ConstraintViolationBuilder builder = mock(ConstraintViolationBuilder.class);
 
     private final EditableProductIdValidator validator =
             new EditableProductIdValidator(lookup, rule);
 
     @BeforeEach void setUp() {
-        validator.initialize(annotation("Product '%s' of type '%s' is not editable"));
         when(ctx.buildConstraintViolationWithTemplate(any())).thenReturn(builder);
         when(builder.addConstraintViolation()).thenReturn(ctx);
+        when(ctx.unwrap(HibernateConstraintValidatorContext.class)).thenReturn(hibernateCtx);
     }
 
     @Test
-    void blankId_isInvalid() {
+    void isValid_blankId_returnsFalse() {
         assertThat(validator.isValid("", ctx)).isFalse();
-    }
-
-    @Test
-    void productTypeNotEditable_isInvalid() {
-        when(lookup.getProductType("id1")).thenReturn("TypeA");
-        when(rule.isEditable("TypeA")).thenReturn(false);
-        assertThat(validator.isValid("id1", ctx)).isFalse();
         verify(ctx).disableDefaultConstraintViolation();
     }
 
     @Test
-    void productTypeEditable_isValid() {
+    void isValid_productTypeNotEditable_returnsFalseWithProductIdParameter() {
+        when(lookup.getProductType("id1")).thenReturn("TypeA");
+        when(rule.isEditable("TypeA")).thenReturn(false);
+        assertThat(validator.isValid("id1", ctx)).isFalse();
+        verify(hibernateCtx).addMessageParameter("productId", "id1");
+    }
+
+    @Test
+    void isValid_unknownProduct_returnsFalseLikeNotEditable() {   // same answer: no existence leak
+        when(lookup.getProductType("id1")).thenReturn(null);
+        assertThat(validator.isValid("id1", ctx)).isFalse();
+        verify(hibernateCtx).addMessageParameter("productId", "id1");
+    }
+
+    @Test
+    void isValid_productTypeEditable_returnsTrue() {
         when(lookup.getProductType("id1")).thenReturn("TypeA");
         when(rule.isEditable("TypeA")).thenReturn(true);
         assertThat(validator.isValid("id1", ctx)).isTrue();
@@ -74,28 +83,39 @@ class EditableProductIdValidatorTest {
 
 ### 5c. Component test — end-to-end validation
 
-Use a `@WebMvcTest` slice with `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`) on any rule beans; fire the request
-and assert the 400 ProblemDetail response (see `component-tests`):
+Use a `@WebMvcTest` slice with `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`) on the
+beans the slice does not load — the rule beans, the lookup services the validators use, and the controller's
+own service/operation; fire a request whose body is otherwise **valid** and assert the 400 ProblemDetail and the
+violation text (see `component-tests`):
 
 ```java
 @WebMvcTest(ProductController.class)
 class ProductControllerValidationTest {
     @Autowired MockMvc mockMvc;
-    @MockitoBean ProductEditabilityRule editabilityRule;  // MockitoBean so context loads
+    @MockitoBean ProductEditabilityRule editabilityRule;     // rule bean used by the validator
+    @MockitoBean ProductLookupService productLookupService;  // lookup used by the validator
+    @MockitoBean UpdateProductOperation updateProductOperation;  // the controller's own collaborator
 
     @Test
-    void patch_withUneditableProductType_returns400() throws Exception {
-        when(editabilityRule.isEditable(any())).thenReturn(false);
-        mockMvc.perform(patch("/api/v1/products/prod-1").contentType(APPLICATION_JSON).content("{}"))
+    void update_uneditableProductType_returns400WithViolation() throws Exception {
+        when(productLookupService.getProductType("prod-1")).thenReturn("TypeA");
+        when(editabilityRule.isEditable("TypeA")).thenReturn(false);
+        mockMvc.perform(patch("/api/v1/products/prod-1")
+                       .contentType(APPLICATION_JSON)
+                       .content("{\"name\":\"New name\"}"))           // valid body: only the path rule fails
                .andExpect(status().isBadRequest())
-               .andExpect(jsonPath("$.status").value(400));
+               .andExpect(jsonPath("$.status").value(400))
+               .andExpect(content().string(containsString("Product 'prod-1' is not editable")));
+        verifyNoInteractions(updateProductOperation);
     }
 }
 ```
 
-- Add `@MockitoBean` in the component test for **every** Spring `@Component` that
-  is a `ConstraintValidator` or `Validator` and is registered in
-  `ValidationConfig` — Spring will fail to load the context otherwise.
-- For Spring Validators registered via `@InitBinder`, `@MockitoBean` the validator
-  class itself (not the rule bean) to avoid it executing real logic in the
-  web-layer test.
+- Mock **only** rule beans and downstream services. Validators themselves are
+  not beans to mock: `ConstraintValidator`s are created by the validator factory,
+  and a Spring `Validator` registered via `@InitBinder` must stay real — a
+  Mockito mock's `supports()` returns `false`, so `addValidators` throws and the
+  request ends in a 500.
+- For full-context component tests, the same rule-bean doubles may live in the
+  shared `ComponentTestConfiguration` instead of inline `@MockitoBean`s (see
+  `component-tests`); pick one place per test class, never both.

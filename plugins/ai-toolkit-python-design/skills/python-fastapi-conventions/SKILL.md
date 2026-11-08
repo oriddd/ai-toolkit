@@ -46,8 +46,11 @@ router = APIRouter(prefix="/v1/orders", tags=["orders"])
 async def create_order(
     body: CreateOrderRequest,
     operation: Annotated[CreateOrderOperation, Depends(get_create_order_operation)],
+    response: Response,
 ) -> OrderResponse:
-    return await operation.execute(body)
+    created = await operation.execute(body)
+    response.headers["Location"] = f"{router.prefix}/{created.id}"   # 201 always carries Location
+    return created
 ```
 
 ## 2. Dependencies are the injection seam
@@ -57,15 +60,20 @@ lifespan; per-request objects (unit of work, current user) are built here. Never
 across requests. Tests swap providers with `app.dependency_overrides`.
 
 ```python
-def get_uow_factory(request: Request) -> Callable[[], SqlUnitOfWork]:
+def get_uow_factory(request: Request) -> Callable[[], UnitOfWork]:
     factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     return partial(SqlUnitOfWork, factory)          # `python-persistence`: a new session per unit of work
 
-def get_order_service(
-    uow_factory: Annotated[Callable[[], SqlUnitOfWork], Depends(get_uow_factory)],
-) -> OrderService:
-    return OrderService(uow_factory)                # the service opens `async with uow_factory() as uow`
+def get_create_order_operation(
+    uow_factory: Annotated[Callable[[], UnitOfWork], Depends(get_uow_factory)],
+) -> CreateOrderOperation:
+    return CreateOrderOperation(uow_factory)        # the operation opens `async with uow_factory() as uow`
 ```
+
+The provider is typed with the `UnitOfWork` Protocol (from `python-persistence`), so a test override can
+return an in-memory fake. **One transaction owner:** the use case the router calls opens the unit of work,
+which is the `*Operation`, or the `*Service` when the use case needs no operation (`python-code-structure` §7).
+Services called by an operation receive the open unit of work's repositories; they never open a second one.
 
 ## 3. Explicit response models
 Every route declares `response_model` (or a return annotation) with a pydantic model separate from
@@ -85,6 +93,14 @@ class Page[T](BaseModel):
 class PageParams(BaseModel):
     limit: int = Field(default=50, ge=1, le=200)
     cursor: str | None = None
+
+@router.get("", response_model=Page[OrderResponse])
+async def list_orders(
+    customer_id: str,
+    page: Annotated[PageParams, Query()],    # without Query() a model parameter is read from the request body
+    operation: Annotated[ListOrdersOperation, Depends(get_list_orders_operation)],
+) -> Page[OrderResponse]:
+    return await operation.execute(customer_id, page)
 ```
 
 ## 5. Errors are problem+json
@@ -103,22 +119,29 @@ Create and close shared resources (DB engine, HTTP clients) in one `lifespan`, a
 The session *factory* is the shared object; sessions and units of work are created per request (section 2).
 
 ```python
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings = AppSettings()
-    engine = create_async_engine(settings.db.url)
-    app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    yield
-    await engine.dispose()
+def create_app(settings: AppSettings | None = None) -> FastAPI:
+    resolved = settings or AppSettings()        # production reads the environment; tests pass settings
 
-def create_app() -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        engine = create_async_engine(resolved.db.sqlalchemy_url(), pool_size=resolved.db.pool_size)
+        app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        yield
+        await engine.dispose()
+
     app = FastAPI(title="my-service", lifespan=lifespan)
     register_exception_handlers(app)
+    app.add_middleware(MetricsMiddleware)           # `python-observability` §4
+    app.add_middleware(CorrelationIdMiddleware)     # added last = outermost: every log line has the ID
+    app.mount("/metrics", make_asgi_app())          # prometheus-client; keep it off the public ingress
+    app.include_router(health.router)               # /health/live and /health/ready
     app.include_router(orders.router)
     return app
 ```
 
-`create_app()` is a factory so tests build isolated apps; tests must run the lifespan
+`create_app()` is a factory so tests build isolated apps: unit tests pass explicit settings
+(`create_app(test_settings)`, no `DB_*` environment needed; the engine connects lazily, so with the
+unit-of-work provider overridden nothing touches a database). Tests must run the lifespan
 (`with TestClient(app)` or `asgi-lifespan`, see `python-unit-tests`), otherwise `app.state` is empty. Add `/health/live` and `/health/ready`.
 
 ## Do / Don't

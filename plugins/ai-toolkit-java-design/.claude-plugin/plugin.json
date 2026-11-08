@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-java-design",
   "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Part of the `ai-toolkit-java` set — install that to get the whole language.",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "author": {
     "name": "oriddd"
   },

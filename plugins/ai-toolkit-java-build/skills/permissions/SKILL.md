@@ -1,9 +1,9 @@
 ---
 name: permissions
 description: >
-  Java / Spring Boot authorization via Strategy + Handler — a PermissionsHandler dispatches by caller context (user,
-  service account, external system) to pluggable PermissionsCheckStrategy beans. Use when adding authorization to an
-  endpoint or operation; never inline role checks.
+  Java / Spring Boot authorization via Strategy + Handler — PermissionsHandler dispatches by caller context (user,
+  service account, external system) to PermissionsCheckStrategy beans. Use when deciding who may call an endpoint
+  (admins, resource owner, service-account scopes).
 tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, strategy-registry-pattern]
@@ -30,7 +30,7 @@ permission/
 └── strategy/
     ├── ScopeBasedPermissionsCheck.java      # Strategy: SERVICE_ACCOUNT_CONTEXT → OAuth2 scope allow-list
     ├── ResourcePermissionsCheck.java        # Strategy: USER_CONTEXT → query an authorization source per resource
-    └── NoOpPermissionsCheck.java            # Strategy: BASIC_AUTH (trusted callers, documented no-op)
+    └── NoOpPermissionsCheck.java            # Strategy: BASIC_AUTH (trusted callers: allow-list only, no resource check)
 ```
 
 > **Pattern Application:** This follows the **Handler-based variation** of the strategy-registry-pattern.
@@ -93,11 +93,21 @@ A default `SpringSecurityCallerContextResolver` reads
 authorities to bucket the call into one of the enum values, and exposes the granted scopes. You can override this bean to read
 your own claim instead.
 
+Default bucketing (adjust to your identity provider and record it in an ADR):
+
+| Authentication | `CallerContext` |
+| --- | --- |
+| `JwtAuthenticationToken` from a client-credentials grant (no end user: `sub` equals the `client_id` / `azp` claim) | `SERVICE_ACCOUNT` |
+| `JwtAuthenticationToken` with an end-user `sub` | `USER` |
+| `JwtAuthenticationToken` whose issuer is a configured external-partner issuer | `EXTERNAL_SYSTEM` |
+| `UsernamePasswordAuthenticationToken` (HTTP Basic — only if `SecurityConfig` enables `httpBasic`) | `BASIC_AUTH` |
+| anonymous / no authentication | `null` (the handler answers 403) |
+
 ### 4. `PermissionsCheckStrategy` (interface)
 
 ```java
 public interface PermissionsCheckStrategy {
-    void verifyPermissions(final String resourceId) throws FooForbiddenException;
+    void verifyPermissions(final String resourceId);   // throws the unchecked ForbiddenException
     List<CallerContext> supportedContexts();
 }
 ```
@@ -109,28 +119,19 @@ Adjust the `verifyPermissions` signature to the resource-id shape (Phase 1 #3).
 ```java
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class PermissionsHandler {
     private final CallerContextResolver callerContextResolver;
     private final PermissionsRegistry permissionsRegistry;
 
-    @Autowired
-    public PermissionsHandler(final CallerContextResolver callerContextResolver,
-                              final PermissionsRegistry permissionsRegistry) {
-        this.callerContextResolver = callerContextResolver;
-        this.permissionsRegistry = permissionsRegistry;
-    }
-
-    public void handle(final String resourceId) throws FooForbiddenException {
+    public void handle(final String resourceId) {
         final CallerContext ctx = callerContextResolver.resolve();
         if (ctx == null) {
-            throw new FooForbiddenException(ExceptionMessages.CALLER_CONTEXT_NOT_FOUND);
+            throw ExceptionMessages.callerContextNotFound();          // ForbiddenException → 403
         }
-        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
-        if (strategy == null) {
-            throw new FooForbiddenException(
-                    MessageFormat.format(ExceptionMessages.UNRECOGNIZED_CALLER_CONTEXT, ctx));
-        }
-        strategy.verifyPermissions(resourceId);
+        permissionsRegistry.getStrategy(ctx)
+                .orElseThrow(() -> ExceptionMessages.unrecognizedCallerContext(ctx))   // ForbiddenException → 403
+                .verifyPermissions(resourceId);
     }
 }
 ```
@@ -139,19 +140,30 @@ public class PermissionsHandler {
 
 ```java
 @Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class PermissionsRegistry {
-    // Spring injects ALL PermissionsCheckStrategy beans automatically
-    private final List<PermissionsCheckStrategy> strategies;
+    private final Map<CallerContext, PermissionsCheckStrategy> strategiesByContext;
 
-    public PermissionsCheckStrategy getStrategy(final CallerContext callerContext) {
-        return strategies.stream()
-                .filter(s -> s.supportedContexts().contains(callerContext))
-                .findFirst()
-                .orElse(null);
+    // Spring injects ALL PermissionsCheckStrategy beans automatically
+    public PermissionsRegistry(final List<PermissionsCheckStrategy> strategies) {
+        final Map<CallerContext, PermissionsCheckStrategy> byContext = new EnumMap<>(CallerContext.class);
+        for (final PermissionsCheckStrategy strategy : strategies) {
+            for (final CallerContext context : strategy.supportedContexts()) {
+                if (byContext.putIfAbsent(context, strategy) != null) {
+                    throw new IllegalStateException("Two permission strategies support " + context);
+                }
+            }
+        }
+        this.strategiesByContext = Map.copyOf(byContext);
+    }
+
+    public Optional<PermissionsCheckStrategy> getStrategy(final CallerContext callerContext) {
+        return Optional.ofNullable(callerContext).map(strategiesByContext::get);
     }
 }
 ```
+
+The map is built once and a duplicate discriminator fails startup, so
+routing never depends on bean order.
 
 ### 6. Concrete strategies (generate only the ones the developer selected)
 
@@ -165,11 +177,21 @@ public class PermissionsRegistry {
   abstract `ResourceAuthorizationSource` SPI; this skill ships an
   in-memory stub plus a `TODO` pointing the implementer at the
   `external-client` skill to add the real back-end. Your own deployment
-  provides an implementation via a `@Primary @Bean`.
+  provides an implementation via a `@Primary @Bean`. The in-memory stub
+  lives in `src/test` only; the production default is a fail-closed
+  `DenyAllResourceAuthorizationSource` registered with
+  `@ConditionalOnMissingBean`, so a service that forgot the real
+  implementation denies every request instead of trusting a stub.
 
 - **`NoOpPermissionsCheck`** – for `BASIC_AUTH`. Documented no-op for
   trusted system callers. Always include this when `BASIC_AUTH` is in the
   accepted set so the dispatcher does not throw `UNRECOGNIZED_CALLER_CONTEXT`.
+  It skips the **per-resource** check only: it must still verify that the
+  principal is in an explicit, configured allow-list of trusted basic-auth
+  users (or holds a dedicated role) and throw `ForbiddenException`
+  otherwise. Any no-op strategy needs an ADR, and `BASIC_AUTH` also needs
+  `httpBasic` configured in `SecurityConfig` (the shipped template is
+  JWT-only).
 
 Each is a `@Component` and is auto-collected by the handler via list
 injection – **never** add `if/else` on `CallerContext` in the handler.
@@ -180,23 +202,36 @@ injection – **never** add `if/else` on `CallerContext` in the handler.
 permissions:
   service-account:
     allowed-scopes: ${PERMISSIONS_ALLOWED_SCOPES:{{defaultScopes}}}
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          audiences: ${JWT_AUDIENCE:{{artifactId}}}   # reject tokens minted for other services
 ```
 
-Also add a `ConfigurationConstants` entry per property.
+Bind `permissions.*` with a `PermissionsProperties` `@ConfigurationProperties`
+record (`spring-boot-conventions` §1). Also add a `ConfigurationConstants`
+entry per property: the `permissions` prefix constant in
+`constant/ConfigurationConstants`, used in `@ConfigurationProperties(prefix = …)`.
 
 ### 8. Exception type
 
-Ensure `exception/<Domain>ForbiddenException.java` exists and add static
-messages to `exception/constants/ExceptionMessages`:
+Ensure `exception/ForbiddenException.java` (unchecked, from the
+`exception-handling` templates) exists and that
+`exception/constants/ExceptionMessages` has these message templates, each
+with a factory method returning `ForbiddenException`:
 
-- `CALLER_CONTEXT_NOT_FOUND`
-- `UNRECOGNIZED_CALLER_CONTEXT` ("Unrecognized caller context: {0}")
-- `CALLER_HAS_NO_PERMISSIONS`
-- `SCOPES_NOT_FOUND`
-- `SCOPE_NOT_ALLOWED`
+- `CALLER_CONTEXT_NOT_FOUND` → `callerContextNotFound()` (shipped)
+- `UNRECOGNIZED_CALLER_CONTEXT` ("Unrecognized caller context: {0}") → `unrecognizedCallerContext(ctx)` (shipped)
+- `CALLER_HAS_NO_PERMISSIONS` → add `callerHasNoPermissions(resourceId)`
+- `SCOPES_NOT_FOUND` → add `scopesNotFound()`
+- `SCOPE_NOT_ALLOWED` → add `scopeNotAllowed(scope)`
 
 ### 9. Controller-advice mapping
-Map `<Domain>ForbiddenException` → HTTP `403 FORBIDDEN` in the global
+Map `ForbiddenException` → HTTP `403 FORBIDDEN` in the global
 `@RestControllerAdvice` (see the `exception-handling` skill). **Never** let
 the strategy translate to HTTP types itself.
 
@@ -208,7 +243,12 @@ permissionsHandler.handle(resourceId);
 // …then proceed with the use case
 ```
 
-This must be the **first** call after parameter validation.
+This must be the **first** call after parameter validation. Validation
+that runs before it must stay **syntactic** (format, length, required):
+a validator that loads the resource (e.g. checks a product's type) runs
+before authorization, so it must not reveal whether the resource exists or
+echo its attributes in the 400 — move such checks after this call, or
+return the same generic message for "missing" and "wrong type".
 
 ## Tests (use the `unit-tests` skill)
 
@@ -229,12 +269,20 @@ For each concrete strategy, cover:
 
 Strategies never read `SecurityContextHolder` (see Do / Don't) — stub the
 injected `CallerContextResolver` instead. Only the `SpringSecurityCallerContextResolver`
-test reads it: use `MockedStatic<SecurityContextHolder>` inside a `try-with-resources` block.
+test reads it: set a real context with `SecurityContextHolder.setContext(...)`
+(e.g. holding a `JwtAuthenticationToken`) and call
+`SecurityContextHolder.clearContext()` in `@AfterEach` — no static mocking.
 
 ## Component test wiring
 In `ComponentTestConfiguration`, provide a `@Primary` mock `PermissionsHandler`
 whose behaviour branches on the input id so each component test can drive the
 forbidden / allowed paths deterministically (see the `component-tests` skill).
+
+That mock bypasses the resolver, registry and strategies, so also keep at
+least one end-to-end security test (e.g. `FooSecurityTest`) that uses the
+**real** `PermissionsHandler`, fakes only the `ResourceAuthorizationSource`,
+and authenticates with a real-shaped JWT (MockMvc `jwt()` post-processor from
+`spring-security-test`) for an allowed and a forbidden caller.
 
 ## Validation
 
@@ -251,7 +299,7 @@ forbidden / allowed paths deterministically (see the `component-tests` skill).
 
 ✅ Add a new caller type by adding **one** new `@Component` strategy and one
 new enum value – never modify the handler.
-✅ Throw `*ForbiddenException` (the domain exception), not Spring's
+✅ Throw `ForbiddenException` (the domain exception), not Spring's
 `AccessDeniedException`, from strategies. The advice translates it.
 ✅ Keep the `PermissionsHandler.handle(...)` call **inside the operation**,
 not the controller – the operation owns the use case.

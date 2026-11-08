@@ -20,7 +20,7 @@ last_reviewed: 2026-11-03
 project-types                            ← pick the shape
         │
         ▼
-create-repo (HITL)                       ← generates skeleton, asks 18 questions
+create-repo (HITL, main session)         ← generates skeleton, asks its Phase 1 questions
         │
         ├─► code-structure               ← packages, base classes
         ├─► spring-boot-conventions      ← config, profiles, async, scheduled
@@ -28,7 +28,7 @@ create-repo (HITL)                       ← generates skeleton, asks 18 questio
         ├─► exception-handling
         ├─► permissions                  ← SPIs only; concrete resolver is yours to supply
         ├─► external-client              ← one sub-package per downstream
-        ├─► persistence (Flyway OR Liquibase)
+        ├─► persistence (Flyway migrations)
         ├─► messaging                    ← if event-driven
         ├─► health-indicator (HITL, repeat per dep)
         ├─► observability
@@ -50,19 +50,25 @@ create-repo (HITL)                       ← generates skeleton, asks 18 questio
 
 ## 4. Guild non-negotiables (24)
 
-These are the rules the guild enforces during PR review. Every agent
+These are the rules your maintainers enforce during PR review. Every agent
 producing code must validate the diff against this list before returning.
 
-1. **Package layout** matches `code-structure` exactly.
+1. **Package layout** matches `code-structure` §1 exactly — including the
+   feature packages listed there (`config/`, `spi/`, `adapter/`, `validation/`,
+   `entity/`, `messaging/`, …), created only when the service uses them.
 2. **Config** is `@ConfigurationProperties` (record), never `@Value` for
    grouped properties (`spring-boot-conventions` §1).
-3. **Controllers contain no business logic**; they call a `*Service` or a
-   `*Operation` (`code-structure`).
-4. **Exceptions** extend the project hierarchy and carry an
-   `ExceptionMessages` code (`exception-handling`).
+3. **Controllers contain no business logic**; each endpoint calls one
+   `*Operation` when the use case orchestrates several services, otherwise
+   one `*Service` (`code-structure`).
+4. **Exceptions** extend the project's **unchecked** domain hierarchy (rooted
+   in a base exception that extends `RuntimeException`, so no `throws`
+   clauses and `@Transactional` rolls back by default) and are built from
+   the `ExceptionMessages` catalogue, which supplies the error code and
+   message (`exception-handling`).
 5. **Authorization** goes through `PermissionsHandler`, never inline
    `if (principal.isAdmin)` (`permissions`).
-6. **Outbound HTTP** goes through an `*Client` in its own sub-package —
+6. **Outbound HTTP** goes through the `client/<dep>/` sub-package (see #23) —
    never raw `WebClient` / `RestClient` calls in a service.
    **Pattern complexity must match integration scale** (`external-client` §0):
    - Simple CRUD (1-4 endpoints) → Simple Wrapper pattern
@@ -74,12 +80,15 @@ producing code must validate the diff against this list before returning.
 8. **`@Async` and `@Scheduled`** use a named `TaskExecutor` and a property-
    driven interval respectively (`spring-boot-conventions` §7, §7b).
 9. **Caching** declares the provider, name, key, and TTL explicitly
-   (`spring-boot-conventions` §8).
+   (`spring-boot-conventions` §8); the provider sits behind a cache port as
+   in #20 (`pluggable-architecture`).
 10. **Messaging consumers** are idempotent and have a DLQ wired
     (`messaging`).
 11. **Logs** are JSON with MDC correlation IDs; no `e.printStackTrace()`
     (`observability`).
-12. **Tests**: PIT mutation score ≥ 75 %; no `@MockBean` on the class
+12. **Tests**: PIT mutation score ≥ 75 %; Jacoco ≥ 85 % line / ≥ 75 % branch
+    per class, enforced by the jacoco `check` goal in the build (`ci`
+    `pom.xml.tmpl`); no `@MockitoBean` (legacy `@MockBean`) on the class
     under test; right-boundary mocking (`unit-tests`, `quality-review`).
 13. **Static analysis** is non-skippable in the Maven build
     (`static-analysis`).
@@ -90,8 +99,10 @@ producing code must validate the diff against this list before returning.
     `application/problem+json` for errors (`api-design`).
 16. **Secrets** never appear in `application.yaml` or in commit history
     (`security-hardening`).
-17. **Graceful shutdown** is enabled and exercised by a component test
-    (`graceful-shutdown`).
+17. **Graceful shutdown** is enabled (`server.shutdown=graceful` +
+    `spring.lifecycle.timeout-per-shutdown-phase`) and exercised by a test —
+    a component test asserting the shutdown settings, plus the skill's
+    rolling-update smoke test (`graceful-shutdown`).
 18. **Releases** use Conventional Commits; CHANGELOG is automated
     (`release-versioning`).
 19. **`context/` documentation** is updated in the same PR as the code
@@ -100,7 +111,7 @@ producing code must validate the diff against this list before returning.
     external tool (cache, DB dialect, metrics backend, broker, object
     store, secret manager, identity provider, …) is consumed through a
     project-owned `spi/` port; the vendor SDK is imported **only** inside
-    `adapter/<vendor>/`; selection/composition is config-driven in
+    `adapter/<capability>/<vendor>/`; selection/composition is config-driven in
     `config/` with a `@ConditionalOnMissingBean` safe default. No vendor
     type leaks into `spi/`, `service/`, `operation/`, or `controller/`
     (`pluggable-architecture`, ArchUnit-enforced).
@@ -122,7 +133,9 @@ producing code must validate the diff against this list before returning.
     - 5-9 endpoints with complexity → Lite Client (5 files)
     - 10+ endpoints OR complex DSL → Full 5-Layer (7-9 files)
     See `external-client` §0 decision tree. Default: start simple, add layers when needed.
-    Callers depend only on `*Service`; `WebClient`, `Mono`, `Flux`, and remote
+    Callers depend only on the package's public entry type — `<Dep>Service`
+    in Full 5-Layer, `<Dep>Client` in Simple Wrapper and Lite; `WebClient`,
+    `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
     exception inside it. In the Full 5-Layer pattern, `exchangeToMono` +
     `handleResponse` handles all non-2xx, and filter map, request building,

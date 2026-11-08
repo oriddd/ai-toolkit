@@ -1,0 +1,6 @@
+package {{basePackage}}.exception;
+/** Maps to 503 — a downstream dependency is down or timed out (retryable). */
+public class UnavailableException extends BaseDomainException {
+    public UnavailableException(String errorCode, String message) { super(errorCode, message); }
+    public UnavailableException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+}

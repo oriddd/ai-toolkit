@@ -59,7 +59,8 @@ for path in all_skills:
     if not name_m: err(f"{rel}: frontmatter missing required `name:`")
     if not desc_m: err(f"{rel}: frontmatter missing required `description:`")
     name = name_m.group(1) if name_m else folder
-    desc_block = fm[desc_m.start():] if desc_m else ""
+    # only the description value: up to the next top-level key, so a later key cannot satisfy the check
+    desc_block = re.split(r"\n(?=[A-Za-z_]+:)", fm[desc_m.start():], maxsplit=1)[0] if desc_m else ""
     if desc_m and not re.search(r"\b(use|apply)\s+(this skill\s+)?(when|whenever|before|during|only|as|for)\b|\bto apply\b", desc_block, re.I):
         err(f"{rel}: description must say WHEN to use the skill (`Use when …` / `Apply when …`) so agents route to it")
     if name != folder:
@@ -131,13 +132,22 @@ if os.path.exists(blocklist_path):
             blocklist.append(line)
 
 if blocklist:
-    for path in glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True) + glob.glob(os.path.join(root, "plugins", "**", "*.md"), recursive=True):
+    # every text file (templates, scripts, JSON/YAML too), case-insensitive — same rule as prepare-for-publish.sh
+    lowered = [(t, t.lower()) for t in blocklist]
+    scan = [p for p in glob.glob(os.path.join(root, "docs", "**", "*"), recursive=True) + glob.glob(os.path.join(root, "plugins", "**", "*"), recursive=True)
+            + [os.path.join(root, "README.md")] + glob.glob(os.path.join(root, ".claude-plugin", "*")) + glob.glob(os.path.join(root, "setup", "**", "*"), recursive=True)
+            if os.path.isfile(p)]
+    for path in scan:
         rel = os.path.relpath(path, root)
-        with open(path, encoding="utf-8") as h:
-            for i, line in enumerate(h, 1):
-                for term in blocklist:
-                    if term in line:
-                        err(f"{rel}:{i}: publication-safety: blocklisted term {term!r} -> {line.strip()[:120]}")
+        try:
+            lines = read(path).split("\n")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(lines, 1):
+            low = line.lower()
+            for term, lterm in lowered:
+                if lterm in low:
+                    err(f"{rel}:{i}: publication-safety: blocklisted term {term!r} -> {line.strip()[:120]}")
 
 # 6b. Marketplace integrity: manifests, plugin membership, no cross-plugin links
 import json
@@ -265,7 +275,7 @@ for md in glob.glob(os.path.join(root, "plugins", "**", "*.md"), recursive=True)
     plugin_dir = os.path.join(root, "plugins", os.path.relpath(md, os.path.join(root, "plugins")).split(os.sep)[0])
     in_code = False
     for n, line in enumerate(read(md).split("\n"), 1):
-        if line.lstrip().startswith("```"):
+        if line.lstrip().startswith(("```", "~~~")):
             in_code = not in_code
         if in_code:
             continue
@@ -382,19 +392,59 @@ for name, (path, fm) in skill_fm.items():
     for f in [path] + sorted(glob.glob(os.path.join(os.path.dirname(path), "references", "*.md"))):
         fence = False
         for line in read(f).split("\n"):
-            if line.startswith("```"):
+            if line.lstrip().startswith(("```", "~~~")):
                 fence = not fence
             if not fence and re.match(r"#{2,4} ", line):
                 hs.append(line)
     _heads[name] = hs
+def _doc_heads(path):
+    hs, fence = [], False
+    for line in read(path).split("\n"):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        if not fence and re.match(r"#{2,4} ", line):
+            hs.append(line)
+    return hs
+def _has_sec(hs, sec):
+    return any(re.match(r"#{2,4} (?:§\s?)?" + re.escape(sec) + r"(?![0-9a-z])", h) for h in hs)
 _cite = re.compile(r"`([a-z][a-z0-9-]+)`\s*(?:skill\s*)?§\s?([0-9]+[a-z]?)")
+# looser forms, reported as warnings: un-backticked `name §N` and `FILE.md §N`. A bare `§N` is not checked:
+# in practice it often means "§N of the skill named earlier in the sentence" ("its §0").
+_cite_plain = re.compile(r"(?<![`\w-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)\s+(?:skill\s+)?§\s?([0-9]+[a-z]?)")
+_cite_doc = re.compile(r"\b([A-Z][A-Z_]+\.md)`?\s*§\s?([0-9]+[a-z]?)")
+_docs_by_name = {os.path.basename(p): p for p in glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)}
 for f in (glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)
           + glob.glob(os.path.join(root, "plugins", "*", "agents", "*.md"))
           + glob.glob(os.path.join(root, "plugins", "*", "skills", "*", "**", "*.md"), recursive=True)):
+    rel_f = os.path.relpath(f, root)
+    fence = False
     for n, line in enumerate(read(f).split("\n"), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        if fence:
+            continue
         for target, sec in _cite.findall(line):
-            if target in _heads and not any(re.match(r"#{2,4} " + sec + r"(?![0-9a-z])", h) for h in _heads[target]):
-                err(f"{os.path.relpath(f, root)}:{n}: cites `{target}` §{sec}, which has no such heading")
+            if target in _heads and not _has_sec(_heads[target], sec):
+                err(f"{rel_f}:{n}: cites `{target}` §{sec}, which has no such heading")
+        for target, sec in _cite_plain.findall(line):
+            if target in _heads and not _has_sec(_heads[target], sec):
+                warn(f"{rel_f}:{n}: cites {target} §{sec}, which has no such heading")
+        for doc, sec in _cite_doc.findall(line):
+            if doc in _docs_by_name and not _has_sec(_doc_heads(_docs_by_name[doc]), sec):
+                warn(f"{rel_f}:{n}: cites {doc} §{sec}, which has no such heading")
+
+# leftovers of the restructure / renames (warnings). Same-plugin skill links are allowed (docs/AUTHORING.md §1).
+for md in glob.glob(os.path.join(root, "plugins", "**", "*.md"), recursive=True):
+    fence = False
+    for n, line in enumerate(read(md).split("\n"), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        if fence:
+            continue
+        if re.search(r"\(public\)|public/skills/|copilot/public", line):
+            warn(f"{os.path.relpath(md, root)}:{n}: leftover from the original layout: {line.strip()[:100]}")
+        if re.match(r"#{1,4} this [A-Z]", line):
+            warn(f"{os.path.relpath(md, root)}:{n}: heading looks like a rename leftover: {line.strip()[:100]}")
 
 # reachability: every skill must be routed, referenced by another skill/agent/routing table, or depended on
 corpus = {}

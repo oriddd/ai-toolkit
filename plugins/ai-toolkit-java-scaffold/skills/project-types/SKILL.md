@@ -23,26 +23,26 @@ combination of skills and call `create-repo` with the right answers.
 
 | Project type | What it does | Required skills | Optional skills |
 | --- | --- | --- | --- |
-| **A. Synchronous REST microservice** | HTTP API in front of business logic | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `permissions`, `external-client`, `health-indicator`, `api-design`, `security-hardening`, `observability`, `unit-tests`, `component-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown` | `persistence`, `messaging`, `integration-tests`, `domain-modeling` |
+| **A. Synchronous REST microservice** | HTTP API in front of business logic | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `permissions`, `external-client`, `health-indicator`, `api-design`, `security-hardening`, `observability`, `unit-tests`, `component-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown`, `input-validation`, `pluggable-architecture`, `resilience-patterns`, `request-metrics`, `context-maintenance` | `persistence`, `messaging`, `integration-tests`, `domain-modeling`, `adapter-contract-tests` (required once a port has an adapter, guild #21), `data-privacy` (required when the service handles personal data) |
 | **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A minus the HTTP-API skills (`api-design`, `permissions`) + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` | `api-design`, `permissions` (only if a tiny status/admin HTTP API exists) |
-| **C. Scheduler / batch job** | `@Scheduled` or one-shot CLI, no HTTP | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client`, `observability`, `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown` | `persistence`, `health-indicator` (k8s readiness only) |
+| **C. Scheduler / batch job** | `@Scheduled` or one-shot CLI, no HTTP | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client`, `observability`, `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown`, `pluggable-architecture`, `resilience-patterns`, `context-maintenance`, `health-indicator` (long-running `@Scheduled` deployments on Kubernetes) | `persistence`, `adapter-contract-tests` |
 | **D. Library / SDK** | Reusable JAR consumed by other services | `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client` (if it wraps a remote service), `sdk-publishing` (mandatory), `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `static-analysis` | `permissions` if the library brings auth bits |
 | **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + `messaging` (intra-process events via `ApplicationEventPublisher`, future-proof for broker) | n/a |
 
 ## 2. Decision flow
 
 ```
-Does the service expose HTTP?
-├── No → Does it consume events / messages?
-│         ├── Yes → Type B (event-driven)
-│         └── No  → Does it run on a schedule / once?
-│                   ├── Yes → Type C (scheduler / batch)
-│                   └── No  → reconsider — pure libraries are Type D
-├── Yes → Is the JAR consumed by other JVM apps (not deployed alone)?
-│         ├── Yes → Type D (library / SDK)
-│         └── No  → Does it own more than one bounded context?
-│                   ├── Yes → Type E (monolith with bones)
-│                   └── No  → Type A (sync REST)
+Is it deployed on its own, or is the JAR consumed by other JVM apps?
+├── Consumed as a dependency → Type D (library / SDK)
+└── Deployed → Does the service expose HTTP?
+          ├── No → Does it consume events / messages?
+          │         ├── Yes → Type B (event-driven)
+          │         └── No  → Does it run on a schedule / once?
+          │                   ├── Yes → Type C (scheduler / batch)
+          │                   └── No  → reconsider the shape
+          └── Yes → Does it own more than one bounded context?
+                    ├── Yes → Type E (monolith with bones)
+                    └── No  → Type A (sync REST)
 ```
 
 ## 3. Architectural style
@@ -63,35 +63,44 @@ Document the choice in an ADR (see `documentation-and-adr`).
 
 ## 4. Orchestration
 
-This skill calls `create-repo` (HITL) and pre-fills the answer set based on
-the project type:
+This skill calls `create-repo` (HITL) and pre-fills its Phase 1 answers
+(`create-repo` question numbers in brackets) based on the project type. Items
+without a question number are not create-repo questions: they select which
+create-repo Phase 3 steps run (persistence and messaging are routed from the
+dependency types in [#16], see create-repo step 6a).
 
 ```
 Type A (sync REST):
-  permissions: yes
-  external-client: ask per dep
-  persistence: ask
-  messaging: ask
+  [#9a] projectKind: service
+  [#9]  auth / permissions: yes
+  [#11] external-client: ask per dep
+  [#16] dependencies: ask (Postgres → persistence, Kafka → messaging)
   api-design: yes
 
 Type B (event-driven):
+  [#9a] projectKind: service
+  [#9]  auth / permissions: typically no (broker auth handles it)
+  [#16] dependencies: broker (→ messaging) + DB (→ persistence, outbox)
   api-design: only if /actuator + admin
-  messaging: yes
-  persistence: yes (outbox)
-  permissions: typically no (broker auth handles it)
 
 Type C (scheduler):
+  [#9a] projectKind: service
+  [#9]  auth / permissions: no
+  [#10] requestMetrics: no (observability: include cron lag metric)
   api-design: no
-  permissions: no
-  observability: include cron lag metric
+  one-shot run (not a long-running @Scheduled pod): the cd chart's
+  Deployment + HPA + probes would crash-loop a process that exits — replace
+  them with a Kubernetes `Job` / `CronJob` manifest (no HPA, no probes);
+  the `cd` skill ships no Job template, so write it by hand
 
 Type D (library):
-  ci: yes (but no Helm chart)
-  cd: skip
+  [#9a] projectKind: library → ci: pom only (no Dockerfile, no image
+        stages, no spring-boot repackage); cd: skip (no Helm chart)
   sdk-publishing: yes
   exception-handling: API-only (no advice)
 
 Type E (monolith):
+  [#9a] projectKind: service
   domain-modeling: yes
   messaging: yes (Spring events + outbox-ready)
 ```
@@ -105,7 +114,9 @@ Type E (monolith):
 | Business logic | `service/` | `service/` | `service/` |
 | Outbound | `client/` | `producer/` + `client/` | `client/` |
 
-The rest of the package hierarchy from `code-structure` applies identically.
+The rest of the package hierarchy from `code-structure` applies identically,
+and the renamed packages take the place of their Type A counterpart in the
+ArchUnit layer rules and in `quality-review` B6.
 
 ## Do / Don't
 

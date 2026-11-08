@@ -41,21 +41,45 @@ One configuration at startup; every log line is a JSON object on stdout. Log eve
 `logger.info("order_created", order_id=..., total_cents=...)`.
 
 ```python
+from opentelemetry import trace
+from structlog.typing import EventDict, Processor, WrappedLogger
+
+def add_trace_id(_: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
+    span = trace.get_current_span().get_span_context()
+    if span.is_valid:                                    # joins this log line to its trace
+        event_dict["trace_id"] = format(span.trace_id, "032x")
+    return event_dict
+
+SHARED: list[Processor] = [
+    structlog.contextvars.merge_contextvars,
+    structlog.processors.add_log_level,
+    structlog.processors.TimeStamper(fmt="iso", utc=True),
+    add_trace_id,
+]
+
 def configure_logging(level: str = "INFO") -> None:
     structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso", utc=True),
-            structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
-        ],
+        processors=[*SHARED, structlog.processors.format_exc_info, structlog.processors.JSONRenderer()],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level)),
         cache_logger_on_first_use=True,
     )
+    # stdlib loggers (uvicorn, sqlalchemy, httpx) go through the same processors: JSON, IDs included
+    handler = logging.StreamHandler()
+    handler.setFormatter(structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=SHARED,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.JSONRenderer(),
+        ],
+    ))
+    logging.basicConfig(handlers=[handler], level=level, force=True)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(name).handlers.clear()         # uvicorn installs its own text handlers
+        logging.getLogger(name).propagate = True
 ```
 
-Get loggers with `structlog.get_logger()` per module. Never log secrets, tokens or personal data;
+`configure_logging` runs in `create_app()`, which uvicorn calls (`--factory`) after installing its own
+handlers, so the reset above wins. Get loggers with `structlog.get_logger()` per module. Never log secrets, tokens or personal data;
 log identifiers instead of payloads.
 
 ## 2. Correlation IDs via contextvars
@@ -71,10 +95,12 @@ class CorrelationIdMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
-            return await self.app(scope, receive, send)
+            await self.app(scope, receive, send)
+            return
         headers = Headers(scope=scope)
         incoming = headers.get("x-request-id", "")
-        request_id = incoming if _VALID_ID.fullmatch(incoming) else uuid4().hex   # bounded, safe to log and echo
+        # bounded, safe to log and echo
+        request_id = incoming if _VALID_ID.fullmatch(incoming) else uuid4().hex
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
@@ -86,7 +112,8 @@ class CorrelationIdMiddleware:
         await self.app(scope, receive, send_with_id)
 ```
 
-Add the active `trace_id` to the log context so logs and traces join. Workers bind a job ID the same way.
+The `add_trace_id` processor (section 1) adds the active `trace_id` to every line so logs and traces join.
+Workers bind a job ID the same way.
 
 ## 3. Traces with OpenTelemetry
 ```python
@@ -108,7 +135,35 @@ Expose `/metrics`; keep label sets small and bounded. Never expose `/metrics` pu
 REQUESTS = Counter("http_requests_total", "HTTP requests", ["method", "route", "status"])
 LATENCY = Histogram("http_request_duration_seconds", "HTTP latency", ["method", "route"],
                     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5))
+
+class MetricsMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        status = 500                                     # stays 500 if the app raises
+        started = time.perf_counter()
+
+        async def send_with_status(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_status)
+        finally:
+            route = getattr(scope.get("route"), "path", "unmatched")  # template, not raw path
+            REQUESTS.labels(scope["method"], route, str(status)).inc()
+            LATENCY.labels(scope["method"], route).observe(time.perf_counter() - started)
 ```
+
+`create_app()` registers it with `app.add_middleware(MetricsMiddleware)` and exposes the registry with
+`app.mount("/metrics", make_asgi_app())` (see `python-fastapi-conventions` §7). The router sets
+`scope["route"]` while it handles the request, so the label is the route template.
 
 Label with the route **template** (`/v1/orders/{order_id}`), never the raw path, a user ID or an
 error message: unbounded labels exhaust memory. Domain metrics (`orders_created_total`) are recorded

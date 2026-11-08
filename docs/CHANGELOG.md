@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking)
+- **Spring Boot pinned to 3.5.x** for all Java skills, templates and `create-repo` (no longer "latest").
+- **Domain exceptions are unchecked**: `BaseDomainException extends RuntimeException` with subclasses per HTTP status (400/403/404/406/409/429/503/500) and `ExceptionMessages` in `exception.constants`; `GlobalExceptionHandler` in `exception.handler`. `@Transactional` now rolls back on domain failures.
+- Docker image uses `-Djarmode=tools extract --layers --launcher` (layertools is deprecated).
+
+### Fixed
+- Generated Java service builds on Spring Boot 3.5 without workarounds: Lombok dependency, permissions/exception templates compile together, `@ConfigurationPropertiesScan`, security test profile, PIT 1.20 + junit5 plugin 1.2.3, Jacoco 85 % line / 75 % branch per class enforced, NullAway excludes generated code.
+- Data-loss and security bugs: outbox `event-id` header, idempotent consumer atomicity, retry/Resilience4j AOP, idempotency key, multi-tenancy leak, `?layout=full` authorization, NoOp fallbacks for security ports now fail at startup.
+- github-actions-ci workflows are valid YAML; Helm chart gains service/hpa/pdb/serviceAccount/secret templates, a ServiceMonitor CRD guard and documented two-step render; Jenkins adds dependency-check and Trivy scans.
+- Agents: code-review loads its skills and stays read-only; HITL questions stay in the main session; new untracked files are reviewed; Java agents name their language; tests are written after the code exists.
+- Commit guard: closes the safe-flag bypass (`git commit -m "--abort"`) and guards `git stash`, plumbing, history rewrites, `gh` writes and more publish commands; no-python fallback rewritten. Publish blocklist check works on macOS.
+- Routing: authorization row, `ci` vs `github-actions-ci` (never both), monorepo and empty-folder detection; Python detector ignores `docs/requirements.txt`.
+- Python and React Native draft examples type-check and pass tests; versions and APIs updated (pytest-asyncio ≥ 0.26, zod 4, TypeScript 6).
+- Cross-skill contradictions resolved (config, caching, coverage, packages, test naming, metrics, tracing, release, profiles); docs, setup and validators corrected.
+
 ### Fixed
 - `cd`: generated charts read the image registry from `global.imageRegistry` when an umbrella chart sets it, falling back to `image.registry`.
 - Skill descriptions shortened to at most 300 characters (validator limit lowered from 600) so a full language install fits the skill-listing budget better — Java install from ~23k to ~14k characters.

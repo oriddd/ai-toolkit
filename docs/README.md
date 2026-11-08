@@ -62,17 +62,17 @@ libraries or token shapes are assumed.
 | [`component-tests`](../plugins/ai-toolkit-java-quality/skills/component-tests/SKILL.md) | Spring Boot component tests with deterministic boundary fakes, opt-out `@TestConfiguration`s, JWT post-processors for secured paths, JsonPath, snapshot/golden-file pattern. |
 | [`integration-tests`](../plugins/ai-toolkit-java-quality/skills/integration-tests/SKILL.md) | Testcontainers (Postgres / Kafka / MinIO / LocalStack) + Surefire / Failsafe split + WireMock + Pact / Spring Cloud Contract. |
 | [`static-analysis`](../plugins/ai-toolkit-java-quality/skills/static-analysis/SKILL.md) | Spotless + SpotBugs + FindSecBugs + Error-Prone + NullAway + optional Sonar. |
-| [`quality-review`](../plugins/ai-toolkit-java-quality/skills/quality-review/SKILL.md) | SOLID / clean-code / testability audit with **48 items** including testability anti-patterns (static methods, global state), positive & negative test coverage, and quantitative thresholds (complexity ≤ 10, method ≤ 30 LOC, mutation score ≥ 75 %, …). |
+| [`quality-review`](../plugins/ai-toolkit-java-quality/skills/quality-review/SKILL.md) | SOLID / clean-code / testability audit with **43 items** (checks 1–30 plus thresholds F21–F33) including testability anti-patterns (static methods, global state), positive & negative test coverage, and quantitative thresholds (complexity ≤ 10, method ≤ 30 LOC, mutation score ≥ 75 %, …). |
 | [`adapter-contract-tests`](../plugins/ai-toolkit-java-quality/skills/adapter-contract-tests/SKILL.md) | TCK-style shared abstract test suite per port, run against every adapter so swapping a provider cannot change business behaviour — proves the lego-brick contract. |
 | **Lifecycle** | |
 | [`git-commit-conventions`](../plugins/ai-toolkit-workflow/skills/git-commit-conventions/SKILL.md) | Conventional Commit prefixes, small single-purpose commits, every commit compiles on its own, subject/body rules, commit-msg hook + interactive rebase clean-up, squash-vs-preserve policy for PRs. |
-| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Write and update pull request descriptions on Bitbucket Server — structured sections (Problem, Solution, Key Changes, Testing, Notes), fetch + replace via REST API with optimistic locking, checklist for completeness. |
+| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Write and update pull request descriptions — structured sections (Problem, Solution, Key Changes, Testing, Notes), updated with `gh` on GitHub or via the Bitbucket Server REST API with optimistic locking, checklist for completeness. |
 | [`release-versioning`](../plugins/ai-toolkit-workflow/skills/release-versioning/SKILL.md) | Conventional Commits + SemVer + `release-please` / `semantic-release` + CHANGELOG generation + deprecation policy. |
 | [`local-dev-experience`](../plugins/ai-toolkit-java-ops/skills/local-dev-experience/SKILL.md) | `docker-compose.yml` for deps, `Makefile`, `.devcontainer`, `.editorconfig`, pre-commit hooks. |
 
 ## Definition of done (language-neutral)
 
-`ai-toolkit-quality` is installed automatically with `ai-toolkit-workflow`. The workflow plugin's best-effort hook asks for confirmation before direct commits, pushes, tags and history rewrites (see `setup/claude-code/README.md` for what it cannot see).
+`ai-toolkit-quality` is installed automatically with `ai-toolkit-workflow`. The workflow plugin's best-effort hook asks for confirmation before commits, pushes, tags, stashes, history rewrites, GitHub writes and package publishing (see `setup/claude-code/README.md` for the full list and what it cannot see).
 
 | Skill | Plugin | Purpose |
 | --- | --- | --- |

@@ -3,6 +3,7 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.core.importer.ImportOption;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 @AnalyzeClasses(packages = "{{basePackage}}", importOptions = ImportOption.DoNotIncludeTests.class)
@@ -19,16 +20,45 @@ class ArchitectureTest {
     static final ArchRule layered =
         // only dependencies between two layers are checked, so config/, adapter/, spi/, acl/, domain/, event/ … are not flagged
         layeredArchitecture().consideringOnlyDependenciesInLayers()
-            .layer("Controller").definedBy("..controller..")
+            .optionalLayer("Controller").definedBy("..controller..")   // optional: event-driven / scheduler services have none
             .optionalLayer("Operation").definedBy("..operation..")
             .layer("Service").definedBy("..service..")
             .optionalLayer("Repository").definedBy("..repository..")
             .optionalLayer("Scheduler").definedBy("..scheduler..")
             .optionalLayer("Health").definedBy("..health..")
-            .layer("Client").definedBy("..client..")
+            // project-types renames (event-driven / scheduler services), anchored at the base package
+            .optionalLayer("Consumer").definedBy("{{basePackage}}.consumer..")
+            .optionalLayer("Handler").definedBy("{{basePackage}}.handler..")
+            .optionalLayer("Job").definedBy("{{basePackage}}.job..")
+            .optionalLayer("Producer").definedBy("{{basePackage}}.producer..")
+            .optionalLayer("Client").definedBy("..client..")   // optional: no client/ when the service calls no HTTP downstream (create-repo #11)
             .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
+            .whereLayer("Consumer").mayNotBeAccessedByAnyLayer()
             .whereLayer("Operation").mayOnlyBeAccessedByLayers("Controller")
-            .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler")
-            .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler")
-            .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health");
+            .whereLayer("Handler").mayOnlyBeAccessedByLayers("Consumer")
+            .whereLayer("Job").mayOnlyBeAccessedByLayers("Scheduler")
+            .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler", "Consumer", "Handler", "Job")
+            .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler", "Handler", "Job")
+            .whereLayer("Producer").mayOnlyBeAccessedByLayers("Service", "Operation", "Handler", "Job")
+            .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health", "Handler", "Job");
+    @ArchTest
+    static final ArchRule controllersAreNamedController =
+        classes().that().resideInAPackage("..controller..")
+            .should().haveSimpleNameEndingWith("Controller");
+    @ArchTest
+    static final ArchRule controllersAreThin =
+        noClasses().that().resideInAPackage("..controller..")
+            .should().dependOnClassesThat().resideInAPackage("..client..");
+    @ArchTest
+    static final ArchRule webClientLivesInClientOnly =
+        // HTTP-client packages only in client/ (wrappers), adapter/ (HTTP vendor adapters), config/ and health/ (bean wiring)
+        noClasses().that().resideOutsideOfPackages("..client..", "..adapter..", "..config..", "..health..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                "org.springframework.web.reactive.function.client..",
+                "org.springframework.web.client..");
+    @ArchTest
+    static final ArchRule securityHolderLivesInPermissionOnly =
+        // config/ is allowed so JPA auditing (persistence AuditConfig) can read the current principal
+        noClasses().that().resideOutsideOfPackages("..permission..", "..config..")
+            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.security.core.context.SecurityContextHolder");
 }

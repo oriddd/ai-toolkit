@@ -1,29 +1,31 @@
-package {{basePackage}}.client.cache;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+package {{basePackage}}.adapter.cache.http;
+import {{basePackage}}.spi.cache.CachePort;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import io.netty.channel.ChannelOption;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.netty.http.client.HttpClient;
-import java.time.Duration;
-@Configuration
-@ConfigurationProperties(prefix = "client.cache")
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+/**
+ * Vendor configuration of the "http" cache adapter (pluggable-architecture §3): active only when
+ * platform.cache.provider=http. Callers depend on the CachePort, never on CacheClient or RestClient.
+ * The RestClient is built here and handed to CacheClient directly, so no other bean can pick it up by type.
+ */
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "platform.cache", name = "provider", havingValue = "http")
+@EnableConfigurationProperties(HttpCacheProperties.class)
 public class CacheClientConfig {
-    private String baseUrl = "http://localhost:8080";
-    private Duration timeout = Duration.ofSeconds(5);
-    public String getBaseUrl() { return baseUrl; }
-    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
-    public Duration getTimeout() { return timeout; }
-    public void setTimeout(Duration timeout) { this.timeout = timeout; }
     @Bean
-    WebClient cacheWebClient() {
-        // WebClient has no response timeout by default; without these a hung dependency hangs the caller
-        HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) timeout.toMillis())
-                .responseTimeout(timeout);
-        return WebClient.builder().baseUrl(baseUrl)
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
+    CachePort httpCachePort(RestClient.Builder restClientBuilder, HttpCacheProperties props) {
+        // RestClient has no timeouts by default — without these a hung dependency hangs the caller
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout((int) props.connectTimeout().toMillis());
+        requestFactory.setReadTimeout((int) props.readTimeout().toMillis());
+        // Boot's auto-configured builder keeps Micrometer observation (metrics + W3C trace propagation)
+        RestClient restClient = restClientBuilder.clone()
+                .baseUrl(props.baseUrl())
+                .requestFactory(requestFactory)
                 .build();
+        return new HttpCacheAdapter(new CacheClient(restClient, props), new CacheEntryConverter());
     }
 }

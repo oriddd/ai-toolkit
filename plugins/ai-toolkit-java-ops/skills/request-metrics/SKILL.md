@@ -20,9 +20,9 @@ last_reviewed: 2026-07-12
 Domain metrics in a Spring Boot service live in a dedicated `monitor/` package
 that follows the **Filter → Recorder → Parser** pattern. A single filter
 measures every request; a registry routes to the right recorder; parsers extract
-structured tags. Adding a metric for a new endpoint requires adding exactly
-**one new `MetricsRecorder` class** — the filter, registry, and parsers never
-change. This is the open/closed principle (OCP) applied to observability.
+structured tags. Adding a metric for a new endpoint requires exactly
+**one new `MetricsRecorder` class, one `MonitoringConfig` entry and one `MonitoringConstants` constant** (plus a
+parser only if it needs a new domain tag) — the filter, registry and existing parsers never change. This is the open/closed principle (OCP) applied to observability.
 
 > This skill applies the **Filter-based variation** of the strategy-registry-pattern.
 > `observability` covers the three-pillar platform setup (Micrometer, structured logs, OpenTelemetry). 
@@ -63,7 +63,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 ## Do / Don't
 
 ✅ Add a new metric by adding **one** `MetricsRecorder` + one entry in
-   `MonitoringConfig` — never touch the filter or registry.
+   `MonitoringConfig` + one constant in `MonitoringConstants` — never touch the filter or registry.
 ✅ All parsers return a non-blank sentinel on failure — never `null` or `""`.
 ✅ SLO histogram buckets are defined once in `MetricsTimerHelper` and reused
    by all recorders.
@@ -74,18 +74,18 @@ Sections below keep their numbers but live in `references/` so this file stays s
 ❌ Never read `SecurityContextHolder` or `HttpServletRequest` inside a
    `MetricsRecorder` — extract that in a parser and pass the result.
 ❌ Never compile regex patterns per-request — compile once in `MonitoringConfig`.
-❌ Never emit a blank tag value — Prometheus silently drops or rejects them.
+❌ Never emit a blank tag value — Prometheus treats it as "label absent", merging unrelated requests into one ambiguous series.
 ❌ Never add business logic to `MetricsFilter` — it only measures, routes, and
    delegates.
 
 ## Cross-references
 
-- [`observability`](../observability/SKILL.md) — three-pillar platform setup
+- `observability` — three-pillar platform setup
   (Micrometer registry, structured logs, OpenTelemetry); this skill adds
   domain-level per-request metrics on top.
 - `code-structure` §3 — Pattern B overview that
   this skill fully expands.
 - `unit-tests` — parser and recorder unit-test shapes.
 - `spring-boot-conventions` — typed
-  `@ConfigurationProperties` if `MonitoringConfig` grows beyond a `Map.of`.
+  `@ConfigurationProperties` if `MonitoringConfig` grows beyond a short ordered list.
 

@@ -15,11 +15,12 @@ plugins/
     │   ├── SKILL.md                ← required
     │   ├── references/             ← optional, deep-dive sections loaded on demand (see §3b)
     │   └── templates/              ← optional, only if SKILL.md ships files
-    ├── agents/<agent>.md           ← agents only (ai-toolkit-java-agents)
+    ├── agents/<agent>.md           ← agents (ai-toolkit-<lang>-agents; update-context lives in ai-toolkit-docs)
     └── hooks/                      ← optional (<lang>-design: language routing hook; workflow: neutral rules)
-docs/                               ← README (skill index), REGISTRY, BACKEND_GUILD,
+docs/                               ← README (skill index), REGISTRY, BACKEND_GUILD, LANGUAGE_CONTRACT,
                                       INDEX_BY_USE_CASE, AUTHORING, agents/
-tools/                              ← build-indexes.py, validate-skills.sh, check-links.py
+tools/                              ← build-indexes.py, validate-skills.sh, check-links.py, test-hooks.sh,
+                                      check-versions.sh, check-repo-hygiene.sh
 ```
 
 **Plugin boundary rule:** a plugin is installed on its own, so a `SKILL.md`
@@ -32,24 +33,35 @@ Every `SKILL.md` **must** begin with YAML frontmatter, on line 1:
 
 ```yaml
 ---
-name: <folder-name>          # MUST equal the parent directory name
-description: <one-paragraph> # MUST say WHEN to use it ("Use when …" / "Apply when …"); agents grep this to choose a skill
-tier: should                 # lowercase: must | should | may | foundational
-applies_to: [rest]           # project types
+name: <folder-name>          # REQUIRED — equals the parent directory name
+description: <one-paragraph> # REQUIRED — ≤ 300 chars, says WHEN to use it ("Use when …"), names the language
+tier: should                 # REQUIRED — lowercase: must | should | may | foundational
+applies_to: [rest]           # project types (see LANGUAGE_CONTRACT.md for each language's shapes)
 depends_on: []               # skills this one needs (the plugin must depend on their plugins)
+ships_templates: false       # true when the skill has a templates/ folder (shown as "T" in REGISTRY.md)
+hitl: false                  # true when the skill must ask the developer before it proceeds
+version: 1.0
+last_reviewed: 2026-11-03
 ---
 ```
 
-Rules (all enforced by the validator):
+All nine keys are expected in every skill; the validator fails on the rules below. Use `>` (folded) for a
+long description; `tools/build-indexes.py` also reads `>-`, `|`, block lists and quoted values.
 
 | Rule | Validator section |
 | --- | --- |
 | `name` field equals folder name | §2 |
-| `description` field present and non-empty | §2 |
+| `description` present and says when to use it (`Use when …` / `Apply when …`) — in the description itself, not a later key | §2 |
+| `description` ≤ 300 characters (the skill listing is budgeted; longer ones are cut) | §6d |
+| `description` of a language skill names its language (Java / Spring / Maven, Python, React Native) | §6d |
+| `tier` is one of must / should / may / foundational; every `depends_on` names an existing skill | §6d |
 | Any markdown link `(./templates/<file>)` resolves | §3 |
-| Index (`README.md`) has a row for the skill | §4 |
-| `REGISTRY.md` has a row for the skill | §4 |
+| `docs/README.md` has a row naming the skill in backticks | §4, §6d |
+| `REGISTRY.md` has a row for the skill (generated — run `build-indexes.py`) | §4 |
+| `docs/INDEX_BY_USE_CASE.md` names the skill in backticks in at least one use-case row | §6d |
+| Some routing table, agent or other skill references the skill (it is reachable) | §6d |
 | `templates/` files use only `{{placeholder}}` syntax | §5 |
+| Frontmatter parses as strict YAML (CI installs PyYAML) | §6e |
 
 ## 3. Required SKILL.md sections
 
@@ -121,7 +133,8 @@ Before opening a PR that adds or modifies a SKILL.md:
 - [ ] `SKILL.md` is under ~12 KB (hard limit 16 KB), or its deep-dive sections are in `references/` with a reference map (§3b).
 - [ ] Every `` `skill` §N `` citation resolves to a heading (the validator checks this).
 - [ ] `templates/` files use only `{{placeholder}}` syntax.
-- [ ] `docs/README.md` has a new row.
+- [ ] `description:` is ≤ 300 characters, contains `Use when …` and names its language.
+- [ ] `docs/README.md` has a new row, and `docs/INDEX_BY_USE_CASE.md` lists the skill under at least one use case.
 - [ ] Run `python3 tools/build-indexes.py` — it regenerates `docs/REGISTRY.md` (never edit that file by hand).
 - [ ] `bash tools/validate-skills.sh` passes locally with zero errors.
 
@@ -149,6 +162,7 @@ depends_on: []
 EOF
 
 $EDITOR docs/README.md            # add a row to the skill index
+$EDITOR docs/INDEX_BY_USE_CASE.md # name the skill (in backticks) in the use-case rows it serves
 python3 tools/build-indexes.py    # regenerates docs/REGISTRY.md and the other generated files
 
 bash tools/validate-skills.sh
@@ -163,12 +177,13 @@ Add a banner immediately after the frontmatter:
 ```
 
 ```markdown
-> 🚨 **Deprecated since 2026-07-01.** Use [`<replacement-skill>`](../<replacement>/SKILL.md).
+> 🚨 **Deprecated since 2026-07-01.** Use `<replacement-skill>` instead.
 ```
 
+Name the replacement in backticks. Link it (`../<replacement>/SKILL.md`) only when it is in the *same* plugin (§1).
 The validator does not block on these — they are advisory.
 
-## 5. Phases and languages
+## 8. Phases and languages
 
 A plugin is one **phase** (workflow, docs, design, build, quality, ops, scaffold, agents), either
 language-neutral (`ai-toolkit-workflow`) or per language (`ai-toolkit-<lang>-<phase>`). Put a skill in

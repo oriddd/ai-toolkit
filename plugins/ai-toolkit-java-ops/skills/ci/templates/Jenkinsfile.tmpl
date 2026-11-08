@@ -1,3 +1,6 @@
+// Multibranch Pipeline job: enable "Discover tags" in the branch source, otherwise `tag 'v*'` never matches.
+// Builds are triggered by the SCM webhook / branch indexing; add `triggers { pollSCM(...) }` only for a
+// single-branch Pipeline job without webhooks (it is redundant in multibranch).
 pipeline {
   agent { label 'maven-21' }
   options {
@@ -6,18 +9,39 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20'))
     disableConcurrentBuilds()
   }
-  triggers { pollSCM('H/5 * * * *') }
   environment {
     IMAGE_NAME = '{{imageRegistry}}/{{artifactId}}'
   }
   stages {
+    stage('Commit messages') {
+      when { changeRequest() }
+      // Same check as the `commitlint` job (release-versioning §1, git-commit-conventions); needs Node.js on the agent
+      steps {
+        sh '''
+          npx --yes -p @commitlint/cli -p @commitlint/config-conventional \\
+            commitlint --from "origin/${CHANGE_TARGET}" --to HEAD --verbose
+        '''
+      }
+    }
     stage('Build & test') {
+      // `verify` runs unit + component tests (Surefire), integration tests (Failsafe) and the Jacoco `check`.
+      // integration-tests policy: a PR that touches no `client/` package or repository may add -DskipITs;
+      // `main` and tags always run them.
       steps { sh 'mvn -B -ntp -U clean verify' }
       post {
         always {
-          junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+          junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml', allowEmptyResults: true
           recordCoverage tools: [[parser: 'JACOCO']]
           archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
+        }
+      }
+    }
+    stage('Dependency scan') {
+      // OWASP dependency-check (security-hardening). Without an NVD API key the NVD download is throttled and very
+      // slow: store the key as a Jenkins secret-text credential. Fails on CVSS >= 7.
+      steps {
+        withCredentials([string(credentialsId: '{{nvdApiKeyCredentialsId}}', variable: 'NVD_API_KEY')]) {
+          sh 'mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DnvdApiKey="$NVD_API_KEY"'
         }
       }
     }
@@ -26,16 +50,28 @@ pipeline {
       steps {
         script {
           // release-versioning §6: git tag v1.4.0 → image tag 1.4.0; main → build number
+          // (deploy a main build with `--set image.tag=<build number>`; make registry tags immutable)
           env.IMAGE_TAG = env.TAG_NAME ? env.TAG_NAME.replaceFirst(/^v/, '') : env.BUILD_NUMBER
         }
-        sh '''
-          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
-          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
-        '''
+        // The agent needs a Docker daemon (a mounted socket is root-equivalent); prefer a rootless
+        // builder such as Kaniko, Buildah or rootless BuildKit where the platform offers one.
+        withCredentials([usernamePassword(credentialsId: '{{registryCredentialsId}}',
+                                          usernameVariable: 'REGISTRY_USER',
+                                          passwordVariable: 'REGISTRY_PASSWORD')]) {
+          sh '''
+            echo "$REGISTRY_PASSWORD" | docker login "${IMAGE_NAME%%/*}" -u "$REGISTRY_USER" --password-stdin
+            docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+            # Scan BEFORE pushing: HIGH/CRITICAL findings fail the build and nothing is published.
+            # Needs the trivy CLI on the agent (pin its version), or run the pinned aquasec/trivy image.
+            trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE_NAME}:${IMAGE_TAG}"
+            docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+          '''
+        }
       }
     }
   }
   post {
-    failure { mail to: "${env.CHANGE_AUTHOR_EMAIL}", subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}" }
+    // CHANGE_AUTHOR_EMAIL is only set on PR builds; culprits() also covers main and tag builds
+    failure { mail to: emailextrecipients([culprits(), requestor()]), subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}" }
   }
 }

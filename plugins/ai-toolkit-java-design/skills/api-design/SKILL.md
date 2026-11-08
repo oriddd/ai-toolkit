@@ -29,7 +29,7 @@ PUT    /api/v1/invoices/{id}           # full replace
 PATCH  /api/v1/invoices/{id}           # partial update
 DELETE /api/v1/invoices/{id}           # delete
 GET    /api/v1/invoices/{id}/attachments     # sub-collection
-GET    /api/v1/invoices/{id}/attachments/{attachmentId}/download?format=pdf
+GET    /api/v1/invoices/{id}/attachments/{attachmentId}/content   # Accept: application/pdf picks the format
 ```
 
 ❌ `POST /api/v1/exportInvoice` — verb in URL = anti-pattern.
@@ -47,9 +47,9 @@ GET    /api/v1/invoices/{id}/attachments/{attachmentId}/download?format=pdf
 | **401 Unauthorized** | No / invalid credentials |
 | **403 Forbidden** | Authenticated but not allowed |
 | **404 Not Found** | Resource (or its parent) does not exist |
-| **409 Conflict** | Optimistic-lock failure, idempotency-key mismatch, business invariant |
+| **409 Conflict** | Optimistic-lock failure, a request with the same `Idempotency-Key` still in flight, business invariant |
 | **415 Unsupported Media Type** | Body content type not accepted |
-| **422 Unprocessable Entity** | Syntactically valid, semantically invalid |
+| **422 Unprocessable Entity** | Syntactically valid, semantically invalid; `Idempotency-Key` reused with a different body (IETF Idempotency-Key draft) |
 | **429 Too Many Requests** | Rate-limited — include `Retry-After` |
 | **500 Internal Server Error** | Unhandled failure |
 | **503 Service Unavailable** | Downstream unhealthy — include `Retry-After` |
@@ -67,9 +67,12 @@ Pick **one** of:
 
 Rules:
 - Bump the major version only on **breaking** changes.
-- Both versions coexist for **at least 6 months**.
-- Deprecation announced via `Deprecation: @<unix-seconds>` (the IETF `Deprecation` header takes a structured-field date) + `Sunset: <HTTP-date>` (RFC 8594)
-  headers on the old version's responses, with a link to migration docs.
+- Both versions coexist for **at least 6 months**. Removal also follows `release-versioning` §7 (only in a
+  new MAJOR, at least 2 minor releases after the deprecation) — the later of the two dates wins.
+- Deprecation announced via `Deprecation: @<unix-seconds>` (RFC 9745 — a structured-field date) + `Sunset: <HTTP-date>` (RFC 8594)
+  headers on the old version's responses, with a `Link: <…>; rel="deprecation"` to migration docs.
+- Boot 4 note: Spring Framework 7 adds built-in API versioning; on Boot 3.5 (the pinned baseline) version
+  with the URI or media type as above.
 
 ## 4. Pagination, filtering, sorting
 
@@ -95,22 +98,28 @@ Two acceptable shapes:
 Map to **Specifications** in the repository (see `persistence`). Never
 write `findByStatusAndOwnerAndType...`.
 
+For the **expression** shape, parse `filter` into a small AST, check every field and operator against a
+whitelist, then build a `Specification` from it. Never concatenate the expression (or any field name) into a
+JPQL / SQL string — that is an injection hole.
+
 ### Complex Query Parameters (OData-lite)
 
 When a simple `GET` needs complex filtering, sorting, or pagination, follow these rules to prevent "query parameter explosion":
 
-1. **Filtering**: Use a flat prefix like `filter.` (e.g., `?filter.status=ACTIVE&filter.type=PDF`).
+1. **Filtering**: The **simple** shape from §5 (`?status=ACTIVE&type=PDF`). Prefix a field with `filter.`
+   (e.g. a `size` field: `?filter.size=XL`) only when its name would collide with a reserved parameter (`page`, `size`, `sort`, `fields`).
 2. **Sorting**: Use a single `sort` parameter with `field,dir` syntax (e.g., `?sort=createdAt,desc&sort=name,asc`).
 3. **Pagination**: Always use `page` (0-indexed) and `size`. Defaults: `page=0, size=20`.
 4. **Projection**: Use `fields` to limit the returned DTO properties (e.g., `?fields=id,name`).
 
-For extremely complex logic (nested AND/OR, full-text search), abandon `GET` and use **Pattern B**: `POST /resources/search` with a structured JSON request body.
+For extremely complex logic (nested AND/OR, full-text search), abandon `GET` and use a **search endpoint**: `POST /resources/search` with a structured JSON request body.
 
 ## 6. Request/response shape
 
 - Records, never `Map<String,Object>`.
 - All field names are `camelCase` in JSON; Jackson defaults.
-- `null` ≠ missing — use `JsonInclude(Include.NON_NULL)` on response DTOs.
+- Absent fields are omitted, not sent as `null` — use `@JsonInclude(Include.NON_ABSENT)` on response DTOs
+  (drops both `null` and `Optional.empty()`; `NON_NULL` would serialise an empty `Optional` as `null`).
 - `Optional` only on response DTOs to mean "absent"; never as a request
   field type (Jackson does not deserialize cleanly).
 - Dates are **ISO-8601 strings** (`Instant` → `2026-06-10T12:34:56Z`). Never
@@ -144,11 +153,14 @@ requestBody:
     value = "/api/v1/invoices/{invoiceId}/attachments",
     consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
     produces = MediaType.APPLICATION_JSON_VALUE)
-public AttachmentResponse createAttachment(
+public ResponseEntity<AttachmentResponse> createAttachment(
         @PathVariable String invoiceId,
         @RequestPart("file") MultipartFile file,
         @RequestPart("attachment") @Valid AttachmentCreateRequest attachment) {
-    return service.create(invoiceId, file, attachment);
+    AttachmentResponse created = attachmentService.create(invoiceId, file, attachment);
+    URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+        .path("/{attachmentId}").buildAndExpand(created.id()).toUri();
+    return ResponseEntity.created(location).body(created);   // 201 + Location
 }
 ```
 
@@ -156,6 +168,8 @@ Rules:
 
 - Two `@RequestPart` parameters: one for the binary, one for the JSON DTO
   — both named, both required (unless explicitly optional).
+- The client must send the JSON part with `Content-Type: application/json`; a part without it is read
+  as `application/octet-stream` and fails with **415**. Say so in the API docs.
 - `@Valid` works on `@RequestPart` JSON parts; rely on it for validation
   rather than re-validating inside the service.
 - Configure max sizes explicitly (do not rely on Spring defaults):
@@ -168,8 +182,9 @@ Rules:
         max-request-size: 55MB
   ```
 
-- Translate `MaxUploadSizeExceededException` to **`413 Payload Too Large`**
-  in your `@RestControllerAdvice` (see `exception-handling`).
+- `MaxUploadSizeExceededException` → **`413 Content Too Large`** is already inherited from
+  `ResponseEntityExceptionHandler` on Spring 6.1+ (Boot 3.2+); your `@RestControllerAdvice` (see
+  `exception-handling`) only customises the `detail` text.
 - **Stream** large files (`file.getInputStream()` → downstream sink). Never
   call `file.getBytes()` on > 1 MB payloads — it materialises into JVM
   heap.
@@ -216,7 +231,7 @@ clients are autonomous agents that should discover navigation at runtime
 
 ## 10. OpenAPI-first vs code-first
 
-| | Code-first (springdoc reads annotations) | Schema-first (write `openapi.yaml`, generate stubs) |
+| | Code-first (springdoc reads annotations) | Schema-first (write `api.yaml`, generate stubs — `openapi-first-codegen`) |
 | --- | --- | --- |
 | When | Internal API, single team, prototype | Public API, multiple teams, polyglot clients |
 | Build | `springdoc-openapi-starter-webmvc-ui` | `openapi-generator-maven-plugin` → server + client stubs |

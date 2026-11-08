@@ -29,7 +29,13 @@ Feature flags allow you to merge code to `main` and deploy to production without
 Implement flags behind a dedicated `FeatureTogglePort` (the port named in `pluggable-architecture`; its adapter wraps local config or a remote client library):
 
 ```java
-if (features.isEnabled("new-algorithm")) {
+// flag keys are constants (or an enum) — never inline string literals
+public final class FeatureFlags {
+    public static final String ENABLE_INVOICE_PRICING_V2 = "enable-invoice-pricing-v2";
+    private FeatureFlags() {}
+}
+
+if (features.isEnabled(FeatureFlags.ENABLE_INVOICE_PRICING_V2)) {
     return applyNewAlgorithm(input);
 } else {
     return applyLegacyAlgorithm(input);
@@ -38,23 +44,49 @@ if (features.isEnabled("new-algorithm")) {
 
 ### 2b. Structural Toggles (@ConditionalOnProperty)
 For larger changes, switch entire bean implementations. Select by a provider key (an enum in the typed
-properties, see `pluggable-architecture` §5), not a boolean such as `use-s3`:
+properties, see `pluggable-architecture` §5), not a boolean such as `use-s3`.
+
+Choosing **which vendor** backs a capability (S3 vs local disk) is provider selection, not a release flag: it is
+wired exactly as `pluggable-architecture` §3 describes — a `*Port` in `spi/`, one adapter per vendor, the vendor
+client injected as a bean rather than created with `new` in the config. Keep structural toggles for switching
+**behaviour** (old vs new implementation of the same port), and give them the same lifecycle as any other flag (§4):
 
 ```java
 @Bean
 @ConditionalOnProperty(name = "features.storage.provider", havingValue = "s3")
-public StorageClient s3Client() { return new S3StorageClient(); }
+public ObjectStorePort s3ObjectStore(S3Client s3) { return new S3ObjectStoreAdapter(s3); }
 
 @Bean
 @ConditionalOnProperty(name = "features.storage.provider", havingValue = "local", matchIfMissing = true)
-public StorageClient localClient() { return new LocalStorageClient(); }
+public ObjectStorePort localObjectStore(ObjectStoreProperties props) { return new LocalObjectStoreAdapter(props.rootDir()); }
 ```
+
+### 2c. Toggle-at-the-Edge Pattern
+
+Evaluate the flag **once, at the entry point** (controller, message listener, scheduled job) and route to the old
+or new use case; the code below the edge has no flag checks:
+
+```java
+@GetMapping("/{id}/price")
+public ResponseEntity<PriceResponse> price(@PathVariable String id) {
+    var operation = features.isEnabled(FeatureFlags.ENABLE_INVOICE_PRICING_V2)
+            ? pricingV2Operation : pricingOperation;          // both implement the same PricingUseCase
+    return ResponseEntity.ok(operation.execute(id));
+}
+```
+
+Pick the edge when the whole request path changes (new endpoint behaviour, new pipeline) and per-user targeting
+is needed — removing the flag later deletes one branch at one place. Pick toggle-in-logic (§2) when the change is a
+single decision deep inside a use case.
 
 ## 3. Remote Flag Providers
 
 While `application.yaml` works for static toggles, use a remote provider for dynamic control:
 - **Unleash / LaunchDarkly**: Provide SDKs for real-time updates without restart.
 - **Spring Cloud Config**: Supports refreshable beans.
+- **OpenFeature**: the vendor-neutral (CNCF) flag-evaluation API with providers for Unleash, LaunchDarkly, flagd and
+  others. A `FeatureTogglePort` adapter backed by the OpenFeature Java SDK keeps the vendor swappable by
+  configuration.
 
 ## 4. Flag Lifecycle (Technical Debt)
 
@@ -66,7 +98,9 @@ While `application.yaml` works for static toggles, use a remote provider for dyn
 
 Test both states of the flag:
 - Unit tests: Mock the `FeatureTogglePort` to return `true` and `false`.
-- Component tests: Run the test suite with the flag in the expected state for that environment (see component-tests).
+- Component tests: Run the test suite with the flag in the expected state for that environment (see component-tests),
+  and run the **critical paths in both states** (e.g. a second test class or `@TestPropertySource` with the flag
+  flipped) so the off-path still works on the day the flag is turned off or removed.
 
 ## Do / Don't
 

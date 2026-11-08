@@ -46,6 +46,16 @@ test/fakes/FakeAnalytics.ts
 ## 1. Sentry init, once, early
 
 ```ts
+// shared/config/env.ts: build-time configuration, filled from app.config / EXPO_PUBLIC_* (all public)
+export type AppEnv = {
+  name: 'development' | 'staging' | 'production';
+  apiBaseUrl: string;
+  sentryDsn: string;
+  appId: string;
+  version: string;
+  buildNumber: string;                        // a string even when numeric: Sentry's `dist` is a string
+};
+
 // shared/services/observability/initSentry.ts
 export function initSentry(env: AppEnv) {
   Sentry.init({
@@ -54,9 +64,12 @@ export function initSentry(env: AppEnv) {
     release: `${env.appId}@${env.version}+${env.buildNumber}`,
     dist: env.buildNumber,
     enabled: !__DEV__,
+    sendDefaultPii: false,                    // no IP, cookies or user details attached automatically
     tracesSampleRate: env.name === 'production' ? 0.1 : 1.0,
     enableAutoPerformanceTracing: true,
-    beforeSend: scrubPii,
+    beforeSend: scrubEvent,                   // section 2
+    beforeSendTransaction: scrubEvent,
+    beforeBreadcrumb: scrubBreadcrumb,
   });
 }
 // App.tsx: initSentry(env) before render; export default Sentry.wrap(App);
@@ -64,14 +77,39 @@ export function initSentry(env: AppEnv) {
 
 ## 2. PII scrubbing
 
+Errors, transactions and breadcrumbs all leave the device, so all three are scrubbed:
+
 ```ts
-const scrubPii = (event: Sentry.ErrorEvent) => {
-  delete event.user?.email; delete event.user?.ip_address;
-  if (event.request) { delete event.request.cookies; delete event.request.data; }
+const SENSITIVE_KEY = /pass|token|secret|auth|cookie|email|phone|address/i;
+const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
+const scrubText = (s: string) => s.replace(EMAIL, '[email]');
+const stripQuery = (url: string) => url.split('?')[0] ?? url;   // query strings carry ids, tokens, emails
+const redact = (data: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(data).map(([k, v]) => [
+    k, SENSITIVE_KEY.test(k) ? '[redacted]' : typeof v === 'string' ? scrubText(stripQuery(v)) : v,
+  ]));
+
+function scrubEvent<E extends Sentry.Event>(event: E): E {
+  if (event.user) event.user = event.user.id === undefined ? {} : { id: event.user.id };  // opaque id only
+  if (event.request)
+    event.request = {                                   // no headers, cookies, body or query string
+      ...(event.request.url && { url: stripQuery(event.request.url) }),
+      ...(event.request.method && { method: event.request.method }),
+    };
+  if (event.extra) event.extra = redact(event.extra);
+  if (event.message) event.message = scrubText(event.message);
+  for (const ex of event.exception?.values ?? []) if (ex.value) ex.value = scrubText(ex.value);
   return event;
-};
+}
+
+const scrubBreadcrumb = (crumb: Sentry.Breadcrumb): Sentry.Breadcrumb => ({
+  ...crumb,
+  ...(crumb.message && { message: scrubText(crumb.message) }),
+  ...(crumb.data && { data: redact(crumb.data) }),      // http breadcrumbs carry the URL in data.url
+});
 ```
 
+The patterns are a safety net, not the rule: the rule is to never put PII into errors, logs or events.
 Identify users by an opaque id only (`Sentry.setUser({ id })`). Same rules as logging in `react-native-security`.
 
 ## 3. ErrorReporter implementation
@@ -108,11 +146,17 @@ not interpolated sentences. Breadcrumbs give crash reports a trail. No PII; no r
 ```ts
 // shared/services/analytics/events.ts
 export type AnalyticsEvent =
-  | { name: 'order_placed'; props: { orderId: string; itemCount: number } }
+  | { name: 'order_placed'; props: { orderId: string; itemCount: number } }   // pass order.id: a branded OrderId is a string
   | { name: 'signup_completed'; props: { method: 'email' | 'apple' } };
 
 export interface Analytics { track(event: AnalyticsEvent): void; setUserId(id: string | null): void; }
+
+// shared/services/analytics/useAnalytics.ts: `analytics` is part of `Services` (react-native-code-structure §6)
+export const useAnalytics = (): Analytics => useServices().analytics;
 ```
+
+The catalogue lives in `shared/`, which cannot import feature types such as `OrderId`, so ids are typed
+`string` here.
 
 Events are a typed union, so names and properties are compile-checked and reviewable in one file. Call
 `useAnalytics().track(...)` from hooks or handlers, never in render. Respect consent: the provider no-ops

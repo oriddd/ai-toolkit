@@ -1,4 +1,4 @@
-# this Code Structure Skill — Design rules and ArchUnit
+# Code Structure — Design rules and ArchUnit
 
 Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 
@@ -27,7 +27,8 @@ Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings 
   unmodifiable on the way in and out (`List.copyOf(...)`); never expose the
   raw collection.
 - All `@ConfigurationProperties` are records (see `spring-boot-conventions`).
-- Constants classes are `final` with `@NoArgsConstructor(access = PRIVATE)`.
+- Constants classes are `final` with `@NoArgsConstructor(access = AccessLevel.PRIVATE)`
+  (or Lombok `@UtilityClass`).
 
 ## 4h. Visibility (smallest blast radius)
 
@@ -49,10 +50,13 @@ test dependency:
 <dependency>
     <groupId>com.tngtech.archunit</groupId>
     <artifactId>archunit-junit5</artifactId>
-    <version>1.3.0</version>
+    <version>${archunit.version}</version>
     <scope>test</scope>
 </dependency>
 ```
+
+Declare `archunit.version` in `<properties>` with the current 1.4.x release
+and let Renovate bump it — do not hard-code an old version here.
 
 Then assert layering, naming and the absence of cycles:
 
@@ -62,36 +66,54 @@ class ArchitectureTest {
 
     @ArchTest static final ArchRule layered = layeredArchitecture()
         .consideringOnlyDependenciesInLayers()   // config/, adapter/, spi/, acl/, domain/, event/ … are not layers, so they are not flagged
-        .layer("Controller").definedBy("..controller..")
+        .optionalLayer("Controller").definedBy("..controller..")   // optional: event-driven / scheduler services have none
         .optionalLayer("Operation").definedBy("..operation..")
         .layer("Service").definedBy("..service..")
         .optionalLayer("Repository").definedBy("..repository..")
         .optionalLayer("Scheduler").definedBy("..scheduler..")
         .optionalLayer("Health").definedBy("..health..")
-        .layer("Client").definedBy("..client..")
+        // project-types renames (Type B event-driven / Type C scheduler) — anchored at the base package
+        // so client/<dep>/…/handler/ or messaging/consumer/ sub-packages are not mistaken for these layers
+        .optionalLayer("Consumer").definedBy("{{basePackage}}.consumer..")
+        .optionalLayer("Handler").definedBy("{{basePackage}}.handler..")
+        .optionalLayer("Job").definedBy("{{basePackage}}.job..")
+        .optionalLayer("Producer").definedBy("{{basePackage}}.producer..")
+        .optionalLayer("Client").definedBy("..client..")   // optional: no client/ when the service calls no HTTP downstream (create-repo #11)
         .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
+        .whereLayer("Consumer").mayNotBeAccessedByAnyLayer()
         .whereLayer("Operation").mayOnlyBeAccessedByLayers("Controller")
-        .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler")
-        .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler")
-        .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health");
+        .whereLayer("Handler").mayOnlyBeAccessedByLayers("Consumer")
+        .whereLayer("Job").mayOnlyBeAccessedByLayers("Scheduler")
+        .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler", "Consumer", "Handler", "Job")
+        .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler", "Handler", "Job")
+        .whereLayer("Producer").mayOnlyBeAccessedByLayers("Service", "Operation", "Handler", "Job")
+        .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health", "Handler", "Job");
         // layer names, not package patterns, go in mayOnlyBeAccessedByLayers; only dependencies between two layers are checked,
         // so give every top-level package whose access you want enforced (scheduler, health, …) its own layer;
 
     @ArchTest static final ArchRule noCycles =
         slices().matching("{{basePackage}}.(*)..").should().beFreeOfCycles();
 
-    @ArchTest static final ArchRule controllersAreThin =
+    @ArchTest static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")
-            .should().haveSimpleNameEndingWith("Controller")
-            .andShould().notDependOnClassesThat().resideInAPackage("..client..");
+            .should().haveSimpleNameEndingWith("Controller");
 
+    // ArchUnit has no notDependOnClassesThat(): express "must not depend" with noClasses()
+    @ArchTest static final ArchRule controllersAreThin =
+        noClasses().that().resideInAPackage("..controller..")
+            .should().dependOnClassesThat().resideInAPackage("..client..");
+
+    // match the whole HTTP-client packages (WebClient, RestClient and their Builders, exchange types, …);
+    // client/ wraps them, adapter/ holds HTTP-based vendor adapters, config/ and health/ build the beans
     @ArchTest static final ArchRule webClientLivesInClientOnly =
-        noClasses().that().resideOutsideOfPackage("..client..")
-            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.web.reactive.function.client.WebClient")
-            .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.web.client.RestClient");
+        noClasses().that().resideOutsideOfPackages("..client..", "..adapter..", "..config..", "..health..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                "org.springframework.web.reactive.function.client..",
+                "org.springframework.web.client..");
 
+    // config/ is allowed so JPA auditing (persistence AuditConfig) can read the current principal
     @ArchTest static final ArchRule securityHolderLivesInPermissionOnly =
-        noClasses().that().resideOutsideOfPackages("..permission..")
+        noClasses().that().resideOutsideOfPackages("..permission..", "..config..")
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.security.core.context.SecurityContextHolder");
 }
 ```
@@ -101,8 +123,8 @@ the strongest enforcement you can get.
 
 ## 4j. Design pattern catalogue
 
-Beyond the three patterns above (Strategy+Registry, Filter+Recorder, Operation
-layering), the project uses the following — apply by name, with the listed
+Beyond the four patterns A–D (Strategy+Registry, Filter+Recorder, Operation
+layering, Monolith to Module), the project uses the following — apply by name, with the listed
 anti-patterns:
 
 | Pattern | When to apply | Anti-pattern |

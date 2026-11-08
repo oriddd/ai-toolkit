@@ -62,10 +62,20 @@ Collaborators are declared as `Protocol`s and received through the constructor. 
 singletons, no `import` of a concrete client inside a service.
 
 ```python
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
+
+class Clock(Protocol):                       # services/clock.py
+    def now(self) -> datetime: ...
 
 class PaymentGateway(Protocol):
     async def charge(self, customer_id: str, cents: int) -> str: ...
+
+@dataclass(frozen=True, slots=True)
+class Receipt:                               # models/receipt.py
+    charge_id: str
+    paid_at: datetime
 
 class CheckoutService:
     def __init__(self, gateway: PaymentGateway, clock: Clock) -> None:
@@ -77,6 +87,9 @@ class CheckoutService:
         return Receipt(charge_id=charge_id, paid_at=self._clock.now())
 ```
 
+`Order` is the frozen domain model from `models/order.py` (`id`, `customer_id`, `total_cents`, `status`,
+`version`; see `python-persistence`).
+
 Time, randomness, UUIDs and the environment are collaborators too (`Clock`, `IdGenerator`), never
 `datetime.now()` buried in logic. Wiring happens only in the composition root (`main.py`) and FastAPI
 `Depends` providers (see `python-fastapi-conventions`).
@@ -85,24 +98,53 @@ Time, randomness, UUIDs and the environment are collaborators too (`Clock`, `IdG
 One typed, immutable settings class per concern; read the environment once, at startup.
 
 ```python
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL, make_url
 
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_", frozen=True)
 
-    url: str
+    url: str                     # postgresql+asyncpg://app@db:5432/orders, without the password
     password: SecretStr
     pool_size: int = 10
+
+    def sqlalchemy_url(self) -> URL:     # the one place the secret joins the URL
+        return make_url(self.url).set(password=self.password.get_secret_value())
+
+class AppSettings(BaseSettings):         # the composition root reads this once: create_app(settings)
+    model_config = SettingsConfigDict(frozen=True)
+
+    db: DatabaseSettings = Field(default_factory=DatabaseSettings)
 ```
 
 Inject the settings object into whoever needs it; business code never touches `os.environ`.
 Secrets use `SecretStr`. Tests construct settings explicitly: `DatabaseSettings(url=..., password=...)`.
+Keyword arguments win over the environment, but fields you omit (`pool_size`) are still read from `DB_*`
+variables (and `.env` when `env_file` is set). For a hermetic test, use a test-only subclass that reads nothing else:
+
+```python
+from pydantic_settings import PydanticBaseSettingsSource
+
+class IsolatedDatabaseSettings(DatabaseSettings):    # tests/: constructor arguments only
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,       # pydantic-settings passes all sources by keyword
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings,)
+```
 
 ## 6. Naming
 - Modules are `snake_case` nouns for what they hold: `invoice_total_calculator.py`, not `utils.py` / `helpers.py` / `common.py`.
 - Suffixes carry meaning: `*Service`, `*Client`, `*Repository`, `*Operation`, `*Rule`, `*Settings`, `*Error`.
-- Public functions have full type hints; `from __future__ import annotations` is unnecessary on 3.12.
+- Public functions have full type hints. Add `from __future__ import annotations` only where a forward
+  reference needs it (lazy annotations by default arrive with PEP 649 in 3.14, not 3.12); avoid it in FastAPI
+  and pydantic modules, which resolve annotations at runtime.
 - Immutable data: `@dataclass(frozen=True, slots=True)` or a frozen pydantic model.
 
 ## 7. Smallest pattern that fits

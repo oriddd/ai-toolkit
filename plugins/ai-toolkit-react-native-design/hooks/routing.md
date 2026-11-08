@@ -4,7 +4,7 @@ Standards are only applied if the skill is LOADED first. Do not write code from 
 qualified name `ai-toolkit-react-native-<phase>:<skill>`, phase d=design, b=build, q=quality, o=ops (bare names can resolve to
 stale copies).
 
-**Before writing or editing React Native code, load the skills for the task:**
+**Before writing or editing React Native code — and before asking clarifying questions — load the skills for the task:**
 
 | Task | Load first |
 | --- | --- |

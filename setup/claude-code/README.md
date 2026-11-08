@@ -19,8 +19,8 @@ install the phase plugins one by one.
 | You install | You also get (dependencies) |
 | --- | --- |
 | `ai-toolkit-java` | `-java-design`, `-java-build`, `-java-quality`, `-java-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
-| `ai-toolkit-python` | `-python-design`, `-python-build`, `-python-quality`, `-python-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
-| `ai-toolkit-react-native` | `-react-native-design`, `-react-native-build`, `-react-native-quality`, `-react-native-ops`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
+| `ai-toolkit-python` | `-python-design`, `-python-build`, `-python-quality`, `-python-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
+| `ai-toolkit-react-native` | `-react-native-design`, `-react-native-build`, `-react-native-quality`, `-react-native-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
 | `ai-toolkit-<lang>-agents` | that language's design, build, quality and ops plugins, `ai-toolkit-docs`; the Java agents also `ai-toolkit-java-scaffold` |
 | `ai-toolkit-java-scaffold` | `-java-design`, `-java-ops`, `ai-toolkit-docs` |
 | `ai-toolkit-docs` | `ai-toolkit-workflow` (and so `ai-toolkit-quality`) |
@@ -29,7 +29,9 @@ install the phase plugins one by one.
 
 A language's routing table is injected only when the project is that language (`pom.xml` / `build.gradle(.kts)` / `settings.gradle(.kts)`,
 `pyproject.toml` / `requirements*.txt` / `setup.py` / `setup.cfg` / `Pipfile`, or a `package.json` that contains `react-native`).
-Detection looks at the project root only.
+Detection looks at the project root and one workspace level down (`*/`, `apps/*`, `packages/*`, `services/*`), so
+monorepos are routed too. The Java table is also injected in an empty project folder (only README/LICENSE/`.git`), so the
+"new service from scratch" route is visible before any build file exists.
 
 ## Phase plugins on their own
 
@@ -70,15 +72,17 @@ user-level agents outrank plugin agents, and a bare `Skill("code-structure")` ca
 `ai-toolkit-java-design:code-structure`. They also double the context cost.
 
 `ai-toolkit-workflow` warns at session start when it finds such copies. To clean them up safely (dry run first; with
-`--apply` they are moved to a timestamped backup folder, nothing is deleted):
+`--apply` they are moved to a timestamped backup folder, nothing is deleted). Each match is marked `[copy]` when it carries
+the toolkit's own frontmatter/header, or `[custom?]` when it only shares a name — `--apply` moves only `[copy]` items;
+add `--all` to move the others too:
 
 ```
 S="$(ls -d ~/.claude/plugins/cache/ai-toolkit/ai-toolkit-workflow/*/ | sort -V | tail -1)scripts/remove-old-copies.sh"
 bash "$S"            # list
-bash "$S" --apply    # move to ~/.claude/ai-toolkit-old-copies-backup-<timestamp>/
+bash "$S" --apply    # move [copy] items to ~/.claude/ai-toolkit-old-copies-backup-<timestamp>/
 ```
 
-Only move copies you did not customise.
+Only move copies you did not customise: an old copy you edited yourself is still marked `[copy]`.
 
 ## Context budget
 
@@ -92,20 +96,37 @@ code-heavy sections in `references/` files that load only when that part of the 
 
 ## Windows
 
-The hooks are bash scripts. Use Git for Windows (Git Bash) or WSL, keep `python3` (3.8 or newer) on `PATH` — not the
+The hooks are bash scripts. Use Git for Windows (Git Bash) or WSL, keep `python3` (3.8 or newer recommended; the commit guard's parser needs 3.7+) on `PATH` — not the
 Microsoft Store alias — and let the repo's `.gitattributes` keep LF line endings (`git config core.autocrlf input` if you
 cloned with CRLF). Without bash the hooks fail non-blocking and the commit guard is silently off. Verify with
 `bash tools/test-hooks.sh` from a clone of this repository.
 
 ## What the commit guard does and does not do
 
-`ai-toolkit-workflow` registers a `PreToolUse` hook that asks for confirmation before direct `git commit|push|tag|rebase|
-merge|cherry-pick|am|revert`, `git reset --hard`, `gh pr create|merge`, `gh release create`, `npm version|publish` and
-`mvn release:*|deploy` in Claude's Bash tool (multi-line commands, quoted paths, `bash -c`, wrappers like `sudo`/`env` are
-parsed). It is a **best-effort safety net, not a security boundary**: it cannot see aliases or variables, scripts that commit
-internally, other tools, or anything outside Claude's Bash tool, and it needs `python3` 3.6+ (3.8+ recommended) — otherwise a
-coarser text match applies. The real controls are branch protection, server-side rules and a pre-push/commit-msg git hook.
-It never blocks: a failure in the hook exits 0.
+`ai-toolkit-workflow` registers a `PreToolUse` hook that asks for confirmation, in Claude's Bash tool, before:
+
+- **commits and history rewrites:** `git commit|push|tag|rebase|merge|cherry-pick|am|revert`, `git reset --hard|--merge|--keep|--soft`
+  (and a reset to a commit such as `HEAD~1`), `git pull --rebase`, `git branch -f`, `git checkout -B`, `git switch -C`,
+  `git commit-tree|update-ref|filter-branch|filter-repo|fast-import|send-email`, `git subtree add|merge|pull|push`,
+  `git svn dcommit`, `git submodule foreach <risky command>`;
+- **stashing:** `git stash` / `push` / `save` / `pop` / `apply` / `drop` / `clear` (`list` and `show` are fine);
+- **GitHub writes:** `gh pr create|merge|review|ready|close|reopen|comment|edit`, `gh release create|upload|edit|delete`,
+  `gh repo create|delete|edit|rename|archive|sync|fork`, `gh workflow run|enable|disable`, issue/secret/variable writes,
+  and `gh api` calls that write;
+- **publishing:** `npm|yarn|pnpm|bun publish|version` (also with `--prefix`/`-r`), `yarn npm publish`, `mvn`/`mvnw(.cmd)`
+  `release:*|deploy`, Gradle `publish*` tasks (not `publishToMavenLocal`), `twine upload`, `poetry|cargo|uv|hatch|flit publish`.
+
+A flag such as `--abort`, `--continue`, `-h` or `--dry-run` makes a command safe only when it really is that flag (not an option
+value like `git commit -m "--abort"`). The parser handles multi-line commands, quoted paths, comments, heredocs, `bash -c`,
+`| sh`, wrappers like `sudo`/`env`/`watch`, and git aliases. It is a **best-effort safety net, not a security boundary**: it
+cannot see variable indirection, scripts that commit internally, other tools, or anything outside Claude's Bash tool, and it
+needs `python3` 3.7+ — otherwise a smaller pure-bash parser applies (no heredoc, alias or `$(…)` handling). The real controls
+are branch protection, server-side rules and a pre-push/commit-msg git hook. It never blocks on its own failure: a bug in the
+hook exits 0.
+
+**Headless runs (`claude -p`).** "Ask" needs someone to answer. In a headless run there is nobody, so a guarded command is
+refused even when your prompt asked for it. Run the commit or push yourself afterwards, run the session interactively, or
+pass `--permission-prompt-tool <mcp-tool>` so your own tool answers the prompt.
 
 ## Tuning the routing
 

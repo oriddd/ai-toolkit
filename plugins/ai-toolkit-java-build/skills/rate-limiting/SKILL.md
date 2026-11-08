@@ -26,7 +26,10 @@ Rate limiting prevents a single client from overwhelming the service, whether in
 Limits can be enforced locally or across a cluster.
 
 ### 2a. In-process (Local) - Resilience4j
-Suitable for fixed-size clusters or simple concurrency protection.
+Suitable for **outbound / self-protection**: capping how fast *this instance* calls a downstream or runs an
+expensive method. A Resilience4j `RateLimiter` instance is one shared limit per pod — **not** per client — and it
+limits calls per period, not concurrency (use a bulkhead for that, `resilience-patterns`). For per-client limits
+on inbound requests use Bucket4j (§2b, §3).
 
 ```yaml
 resilience4j:
@@ -40,6 +43,27 @@ resilience4j:
 
 ### 2b. Local Rate Limiting with Bucket4j
 
+```xml
+<!-- Bucket4j is not managed by the Spring Boot BOM: pin the version -->
+<dependency>
+    <groupId>com.bucket4j</groupId>
+    <artifactId>bucket4j_jdk17-core</artifactId>
+    <version><current></version>
+</dependency>
+```
+
+Behind a port (`pluggable-architecture`, guild #20), so local and Redis buckets are swappable by configuration:
+
+```java
+// spi/ratelimit/RateLimiterPort.java — vendor-free
+public interface RateLimiterPort {
+    RateLimitDecision tryConsume(String clientKey);
+}
+public record RateLimitDecision(boolean allowed, long retryAfterSeconds) {}
+```
+
+The local adapter (`adapter/ratelimit/bucket4j/`) holds the per-client buckets:
+
 ```java
 // one bucket PER CLIENT (a single shared bucket would let one caller starve everyone) — key it by client id / api key
 // bounded (Caffeine): an unbounded map grows with every client id ever seen; idle clients' buckets are evicted
@@ -52,10 +76,18 @@ Bucket bucket = buckets.get(clientId, id -> Bucket.builder()
     .addLimit(limit -> limit.capacity(10).refillIntervally(10, Duration.ofMinutes(1)))   // Bandwidth.classic / Refill are deprecated in Bucket4j 8.x
     .build());
 
-if (bucket.tryConsume(1)) {
-    return executeRequest();
-} else {
-    throw new TooManyRequestsException();   // map it to 429 + Retry-After in your @RestControllerAdvice — no shipped template does
+ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+return new RateLimitDecision(probe.isConsumed(),
+        TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+```
+
+The caller (a filter or the operation) turns a refusal into the domain exception:
+
+```java
+RateLimitDecision decision = rateLimiter.tryConsume(clientKey);
+if (!decision.allowed()) {
+    // TooManyRequestsException → 429 + Retry-After, mapped by the exception-handling GlobalExceptionHandler template
+    throw ExceptionMessages.rateLimitExceeded(decision.retryAfterSeconds());
 }
 ```
 In-memory buckets are per instance; use the distributed variant below when the limit must hold across pods.
@@ -64,10 +96,23 @@ In-memory buckets are per instance; use the distributed variant below when the l
 
 When running multiple instances, use **Redis + Bucket4j** to have a shared counter. This prevents a client from getting N times the limit by hitting N different pods.
 
+Add a second `RateLimiterPort` adapter (`adapter/ratelimit/redis/`) selected by
+`platform.ratelimit.provider: redis`. It uses `com.bucket4j:bucket4j_jdk17-lettuce` (version `<current>`) and a
+Lettuce-based `ProxyManager` (`LettuceBasedProxyManager`): `proxyManager.getProxy(clientKey, () -> configuration)`
+returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. Check the
+builder API of the Bucket4j version you pin — it changed across 8.x releases. Prove both adapters with one
+`RateLimiterPort` contract suite (`adapter-contract-tests`).
+
 ## 4. Where to Limit?
 
 - **Gateway Layer**: Best for broad protection (IP-based).
 - **Controller/Filter**: Best for business-aware limits (User-ID based).
+
+**Choosing the key.** Prefer the authenticated principal (`sub`) or API key. Use the client IP only when there is
+no identity, and only as resolved by a **trusted** proxy chain: behind an ingress every request shows the proxy's
+IP, and a raw `X-Forwarded-For` is attacker-controlled (rotate it → a fresh bucket per request). Configure
+`server.forward-headers-strategy=framework` (or `native`) and let your ingress overwrite, not append, the header —
+then read `request.getRemoteAddr()`, never the header yourself.
 - **Client Layer**: Best for protecting your own downstream dependencies (see external-client).
 
 ## 5. Response Protocol

@@ -1,16 +1,35 @@
-package {{basePackage}}.exception;
+package {{basePackage}}.exception.handler;
+import {{basePackage}}.exception.BadRequestException;
+import {{basePackage}}.exception.BaseDomainException;
+import {{basePackage}}.exception.ConflictException;
+import {{basePackage}}.exception.ForbiddenException;
+import {{basePackage}}.exception.NotFoundException;
+import {{basePackage}}.exception.TooManyRequestsException;
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.UnsupportedApiVersionException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ValidationException;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+/** Needs spring-security on the classpath (the permissions skill adds it) for the AccessDeniedException / AuthenticationException rethrow. */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    /** Seconds a client should wait before retrying a 429 / 503. Tune per service. */
+    private static final String RETRY_AFTER_SECONDS = "30";
     @ExceptionHandler(NotFoundException.class)
     public ProblemDetail onNotFound(NotFoundException e) { return build(HttpStatus.NOT_FOUND, e); }
     @ExceptionHandler(ConflictException.class)
@@ -19,35 +38,80 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail onBadRequest(BadRequestException e) { return build(HttpStatus.BAD_REQUEST, e); }
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail onForbidden(ForbiddenException e) { return build(HttpStatus.FORBIDDEN, e); }
+    @ExceptionHandler(UnsupportedApiVersionException.class)
+    public ProblemDetail onUnsupportedApiVersion(UnsupportedApiVersionException e) { return build(HttpStatus.NOT_ACCEPTABLE, e); }
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ProblemDetail> onTooManyRequests(TooManyRequestsException e) {
+        return withRetryAfter(build(HttpStatus.TOO_MANY_REQUESTS, e));
+    }
+    /** A downstream dependency is down or timed out (external-client) — 503 + Retry-After, as api-design requires. */
+    @ExceptionHandler(UnavailableException.class)
+    public ResponseEntity<ProblemDetail> onUnavailable(UnavailableException e) {
+        log.warn("Dependency unavailable: {}", e.getMessage(), e);
+        return withRetryAfter(build(HttpStatus.SERVICE_UNAVAILABLE, e));
+    }
+    /** Any other domain exception (the bare base type) is an unexpected server-side failure. */
+    @ExceptionHandler(BaseDomainException.class)
+    public ProblemDetail onDomain(BaseDomainException e) { return build(HttpStatus.INTERNAL_SERVER_ERROR, e); }
     /** Bean Validation failures on @PathVariable / @RequestParam (class-level @Validated) arrive as this exception, not as a Spring MVC one. */
     @ExceptionHandler(ConstraintViolationException.class)
     public ProblemDetail onConstraintViolation(ConstraintViolationException e) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed.");
-        pd.setProperty("errorCode", "ERR-BAD-REQUEST");
+        pd.setProperty("errorCode", ExceptionMessages.ERR_BAD_REQUEST);
+        List<Map<String, String>> errors = e.getConstraintViolations().stream()
+            .map(v -> Map.of("field", v.getPropertyPath().toString(), "message", v.getMessage()))
+            .toList();
+        pd.setProperty("errors", errors);
         return pd;
+    }
+    /**
+     * Hibernate Validator wraps anything a ConstraintValidator throws (e.g. a rule bean's downstream call failing) in a
+     * ValidationException. An outage still answers 503; anything else is a bug (500). ConstraintViolationException is a
+     * subclass but has its own, closer handler above.
+     */
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<ProblemDetail> onValidationInfrastructure(ValidationException e) {
+        if (e.getCause() instanceof UnavailableException unavailable) {
+            return onUnavailable(unavailable);
+        }
+        log.error("Validator failed", e);
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
+        pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
+        return ResponseEntity.internalServerError().body(pd);
     }
     /** A concurrent update hit a stale @Version (persistence skill) — the client must re-read and retry, so 409, not 500. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ProblemDetail onOptimisticLock(OptimisticLockingFailureException e) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The resource was modified concurrently; re-read and retry.");
-        pd.setProperty("errorCode", "ERR-CONFLICT");
+        pd.setProperty("errorCode", ExceptionMessages.ERR_CONFLICT);
         return pd;
     }
     @ExceptionHandler(Exception.class)
     public ProblemDetail onUnexpected(Exception e) throws Exception {
         // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.
-        if (e.getClass().getName().startsWith("org.springframework.security.")) {
+        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
             throw e;
         }
         log.error("Unhandled exception", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
-        pd.setProperty("errorCode", "ERR-INTERNAL");
+        pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
         return pd;
     }
     private ProblemDetail build(HttpStatus status, BaseDomainException e) {
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, e.getMessage());
+        // 5xx: never echo the message (it may carry downstream details) — log it with the cause, return a generic detail.
+        // The 503 message is our own catalogue text, so it is safe to return.
+        boolean hideDetail = status.is5xxServerError() && status != HttpStatus.SERVICE_UNAVAILABLE;
+        if (hideDetail) {
+            log.error("Domain failure [{}]", e.getErrorCode(), e);
+        }
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, hideDetail ? "Internal server error" : e.getMessage());
         pd.setProperty("errorCode", e.getErrorCode());
         return pd;
+    }
+    private ResponseEntity<ProblemDetail> withRetryAfter(ProblemDetail pd) {
+        return ResponseEntity.status(pd.getStatus())
+            .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
+            .body(pd);
     }
 }

@@ -22,18 +22,23 @@ three pillars uniform across every service.
 Already wired by `spring-boot-starter-actuator` + `micrometer-registry-prometheus`.
 Conventions:
 
-- **Naming.** `<service>.<domain>.<verb>` — e.g. `foo.invoices.exported`.
-  All lowercase + dots; never CamelCase.
-- **Tags.** Keep cardinality bounded. `status` (`success`/`error`),
-  `target_format`, `caller_type`. **Never** a free-form id, URL, or message.
+Metric names and tag style follow `request-metrics` (guild #24), so every metric in a service looks the same:
+
+- **Naming.** `<service>.<domain>.<verb>` — e.g. `foo.invoices.export`.
+  All lowercase + dots; never CamelCase. Also set the common tag
+  `management.metrics.tags.application: ${spring.application.name}` so dashboards can filter by service.
+- **Tags.** camelCase tag names (`requestMethod`, `responseStatus`, `clientId`, `status` = `success`/`error`, `targetFormat`, `callerType`), names
+  kept as constants (`MonitoringConstants`). Keep cardinality bounded: values come from a closed set, with `UNKNOWN` /
+  `OTHER` sentinels. **Never** a free-form id, URL, or message. `clientId` is allowed because it is the OAuth client
+  (`azp`) — a small, registered set of callers — never an end-user id.
 - **Types.** `Counter` for events; `Timer` for latencies (records count +
   histogram); `Gauge` for current values (queue depth, pool size).
-- **Use the Filter + Recorder Registry pattern** from `code-structure` §3 so
+- **Use the Filter + Recorder Registry pattern** from `request-metrics` so
   business metrics are added by *new classes*, never by editing the filter.
 
 ```java
-meterRegistry.timer("foo.invoices.exported",
-        "source_format", src, "target_format", tgt, "status", "success")
+meterRegistry.timer("foo.invoices.export",
+        "sourceFormat", src, "targetFormat", tgt, "status", "success")
     .record(elapsed);
 ```
 
@@ -57,7 +62,7 @@ its extra encoder options.
 <dependency>
     <groupId>net.logstash.logback</groupId>
     <artifactId>logstash-logback-encoder</artifactId>
-    <version>7.4</version>
+    <version>8.0</version>   <!-- 8.x is the line for Logback 1.5 (Boot 3.4+); let Renovate bump it -->
 </dependency>
 ```
 
@@ -77,8 +82,10 @@ its extra encoder options.
 - Put `callerId` (and other request-scoped keys) into MDC at the request boundary
   (`OncePerRequestFilter`), clear them in `finally`. `traceId` / `spanId` are put
   into MDC by Micrometer Tracing (§3) — do not set them by hand.
-- For `@Async` / `CompletableFuture`, decorate the executor with
-  `MdcTaskDecorator` so MDC survives the thread hop.
+- For `@Async` / `CompletableFuture`, decorate the executor with Spring's
+  `ContextPropagatingTaskDecorator` (Spring Framework 6.1 / Boot 3.2+; a `TaskDecorator` bean is applied to the
+  auto-configured executor, call `setTaskDecorator(...)` on your own) so MDC and the trace context survive the
+  thread hop. There is no Spring `MdcTaskDecorator`; don't hand-roll one.
 - For `Mono`/`Flux`, enable automatic context propagation
   (`spring.reactor.context-propagation: auto`, Boot 3.2+) so MDC follows the
   Reactor Context — the hand-written `MdcContextLifter` hook is no longer needed.
@@ -107,7 +114,7 @@ its extra encoder options.
 ```yaml
 management:
   tracing:
-    sampling.probability: 1.0   # 100% in dev / staging; 0.05 in prod, raise per incident
+    sampling.probability: 0.05  # base / prod: 5 %; raise per incident
   otlp:
     tracing:
       endpoint: http://otel-collector:4318/v1/traces   # OTLP over HTTP (Boot's default transport; gRPC needs management.otlp.tracing.transport=grpc)
@@ -117,6 +124,15 @@ management:
 spring:
   application.name: {{artifactId}}                      # becomes the OpenTelemetry service.name
 ```
+
+`application-local.yaml` (and dev / staging profiles) raise sampling to 100 %:
+
+```yaml
+management.tracing.sampling.probability: 1.0
+```
+
+These property names are for Spring Boot 3.5. Boot 4 moved the OpenTelemetry/OTLP properties and starters — check
+its migration guide before upgrading.
 
 Conventions:
 - W3C TraceContext headers (`traceparent`/`tracestate`) propagate
@@ -135,8 +151,12 @@ Each service publishes (in `docs/SLO.md`) at least:
 | SLI | Target | Window |
 | --- | --- | --- |
 | Availability — `2xx / total` on public endpoints | 99.9 % | 28 days rolling |
-| Latency — p95 of `Timer{success}` on the primary use case | < 500 ms | 28 days rolling |
+| Latency — share of primary-use-case requests faster than 500 ms (`le="0.5"` SLO bucket of the `request-metrics` Timer ÷ count) | ≥ 95 % | 28 days rolling |
 | Freshness (if applicable) | service-specific | service-specific |
+
+The latency SLI is computed from the Timer's SLO buckets (`MetricsTimerHelper`), not from a p95: percentile
+histograms are off by default to bound cardinality. If a true p95 is needed, enable
+`management.metrics.distribution.percentiles-histogram.<metric>: true` for that metric only.
 
 Error budget = `1 − SLO`. Alerts fire on **burn rate** (multi-window),
 never on raw error counts.
@@ -159,8 +179,8 @@ public class QueueMonitor {
     private final AtomicInteger queueSize = new AtomicInteger(0);
 
     public QueueMonitor(MeterRegistry registry) {
-        Gauge.builder("business.queue.size", queueSize, AtomicInteger::get)
-            .description("Current number of items in the business queue")
+        Gauge.builder("foo.exports.queued", queueSize, AtomicInteger::get)   // <service>.<domain>.<state>
+            .description("Current number of exports waiting in the queue")
             .register(registry);
     }
 
@@ -186,4 +206,4 @@ redact PII.
 ❌ Never invent a correlation header — W3C TraceContext is the standard.
 ❌ Never sample at 100 % in production — the bill and the storage will hurt.
 
-The logic for tag extraction belongs in a `monitor/parsers/` class, keeping the `Operation` logic clean.
+The logic for tag extraction belongs in a `monitor/parser/` class (`request-metrics`), keeping the `Operation` logic clean.

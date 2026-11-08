@@ -1,5 +1,12 @@
+spring:
+  application:
+    name: {{repoName}}
+  lifecycle:
+    timeout-per-shutdown-phase: 30s   # keep below the pod's terminationGracePeriodSeconds (graceful-shutdown)
+
 server:
   port: {{appPort}}
+  shutdown: graceful
   servlet:
     context-path: {{contextPath}}
 

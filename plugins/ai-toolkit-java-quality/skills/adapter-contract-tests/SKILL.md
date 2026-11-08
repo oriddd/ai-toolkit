@@ -36,17 +36,18 @@ interchangeable.
 
 ```
 src/test/java/<basePackage>/
-└── spi/x/
-    ├── CachePortContract.java          # abstract TCK — all behavioural assertions
-    └── adapters/
-        ├── RedisCacheAdapterContractIT.java          # extends CachePortContract (Testcontainers → *IT, Failsafe)
-        ├── InfinispanCacheAdapterContractTest.java   # extends CachePortContract
-        └── NoOpCacheAdapterContractTest.java         # extends CachePortContract (documents no-op semantics)
+├── spi/cache/
+│   └── CachePortContract.java          # abstract TCK — all behavioural assertions
+└── adapter/cache/                       # mirrors main: adapter/<capability>/<vendor>/
+    ├── redis/RedisCacheAdapterContractIT.java              # extends CachePortContract (Testcontainers → *IT, Failsafe)
+    ├── infinispan/InfinispanCacheAdapterContractTest.java  # extends CachePortContract
+    └── noop/NoOpCacheAdapterContractTest.java              # extends CachePortContract (documents no-op semantics)
 ```
 
 One abstract contract per port; one concrete subclass per adapter. The
-subclasses contain **no assertions** — only the wiring that produces an instance
-of the port.
+subclasses contain **no copies of the shared assertions** — only the wiring that
+produces an instance of the port. The two exceptions are documented overrides
+(§3) and composition-specific tests for a composite adapter (§4).
 
 ## 2. The abstract contract (TCK)
 
@@ -59,9 +60,12 @@ public abstract class CachePortContract {
     /** Each adapter supplies a ready-to-use instance (real backend or testcontainer). */
     protected abstract CachePort newCache();
 
-    private CachePort cache;
+    /** Wipe backend state shared across tests (e.g. a static Redis container); no-op for in-memory adapters. */
+    protected abstract void clearBackend();
 
-    @BeforeEach void setUp() { cache = newCache(); }
+    protected CachePort cache;
+
+    @BeforeEach void setUp() { clearBackend(); cache = newCache(); }
 
     @Test
     void get_missingKey_returnsEmpty() {
@@ -69,14 +73,14 @@ public abstract class CachePortContract {
     }
 
     @Test
-    void put_thenGet_returnsStoredValue() {
+    void get_afterPut_returnsStoredValue() {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
-        assertThat(cache.get(key)).map(String::new).contains("v1");
+        assertThat(cache.get(key)).map(b -> new String(b, UTF_8)).contains("v1");
     }
 
     @Test
-    void evict_removesValue() {
+    void evict_storedKey_removesValue() {
         var key = new CacheKey("k2");
         cache.put(key, "v".getBytes(UTF_8), Duration.ofMinutes(5));
         cache.evict(key);
@@ -84,8 +88,8 @@ public abstract class CachePortContract {
     }
 
     @Test
-    void providerId_isStableAndNonBlank() {
-        assertThat(cache.providerId()).isNotBlank();
+    void providerId_anyAdapter_isStableAndNonBlank() {
+        assertThat(cache.providerId()).isNotBlank().isEqualTo(cache.providerId());
     }
 
     // Add one test per behavioural guarantee in the port's Javadoc:
@@ -117,19 +121,51 @@ class RedisCacheAdapterContractIT extends CachePortContract {   // *IT: Failsafe
     static final GenericContainer<?> REDIS =
         new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
+    private RedisTemplate<String, byte[]> template;
+
     @Override
     protected CachePort newCache() {
-        var template = redisTemplate(REDIS.getHost(), REDIS.getMappedPort(6379));
         return new RedisCacheAdapter(template);
+    }
+
+    @Override
+    protected void clearBackend() {
+        template = redisTemplate(REDIS.getHost(), REDIS.getMappedPort(6379));
+        template.execute((RedisCallback<Void>) c -> { c.serverCommands().flushDb(); return null; });
+    }
+
+    /** Outside a Spring context the factory and template must be initialised and started by hand. */
+    private static RedisTemplate<String, byte[]> redisTemplate(String host, int port) {
+        var factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration(host, port));
+        factory.afterPropertiesSet();
+        factory.start();
+        var t = new RedisTemplate<String, byte[]>();
+        t.setConnectionFactory(factory);
+        t.setKeySerializer(RedisSerializer.string());
+        t.setValueSerializer(RedisSerializer.byteArray());
+        t.afterPropertiesSet();
+        return t;
     }
 }
 ```
 
+(In a real suite create the template once per class and close the factory in
+`@AfterAll`; the per-test creation above keeps the example short.)
+
 ```java
 class NoOpCacheAdapterContractTest extends CachePortContract {
     @Override protected CachePort newCache() { return new NoOpCacheAdapter(); }
-    // NoOp legitimately overrides the tests whose semantics differ (e.g. get always empty),
-    // documenting exactly where the no-op contract diverges — and why.
+    @Override protected void clearBackend() { }   // nothing is stored
+
+    // Divergence: a no-op cache never stores anything, so a read after a put is a miss.
+    // That is its documented contract (pluggable-architecture safe default), not a bug.
+    @Override
+    @Test
+    void get_afterPut_returnsStoredValue() {
+        var key = new CacheKey("k1");
+        cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
+        assertThat(cache.get(key)).isEmpty();
+    }
 }
 ```
 
@@ -177,10 +213,29 @@ many delegates are active.
   check can assert that every class ending in `Adapter` has a matching
   `*ContractTest` (or `*ContractIT` for real-backend adapters).
 
+The check must see **test** classes, so it cannot use the usual
+`ImportOption.DoNotIncludeTests` import. A plain JUnit test with its own
+`ClassFileImporter` (main + test classes on the test classpath) does it:
+
 ```java
-@ArchTest static final ArchRule everyAdapterHasAContractTest =
-    classes().that().haveSimpleNameEndingWith("Adapter")
-        .should(haveAMatchingContractTest());   // custom condition: <Name>ContractTest or <Name>ContractIT exists
+class AdapterContractCoverageTest {
+
+    @Test
+    void everyAdapter_withoutContractTest_failsTheBuild() {
+        JavaClasses all = new ClassFileImporter().importPackages("{{basePackage}}");   // main + test classes
+        Set<String> names = all.stream().map(JavaClass::getSimpleName).collect(toSet());
+
+        List<String> missing = all.stream()
+            .filter(c -> c.getSimpleName().endsWith("Adapter"))
+            .filter(c -> !c.isInterface() && !c.getModifiers().contains(JavaModifier.ABSTRACT))
+            .filter(c -> !names.contains(c.getSimpleName() + "ContractTest")
+                      && !names.contains(c.getSimpleName() + "ContractIT"))
+            .map(JavaClass::getName)
+            .toList();
+
+        assertThat(missing).as("adapters without <Name>ContractTest / <Name>ContractIT").isEmpty();
+    }
+}
 ```
 
 ## Do / Don't

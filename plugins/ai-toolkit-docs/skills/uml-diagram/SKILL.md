@@ -47,8 +47,6 @@ Apply this skill when:
 
 ## Diagram Types
 
-## Diagram Types
-
 ### 1. System Context / Architecture Diagrams
 
 #### System Context Diagram
@@ -58,9 +56,9 @@ Apply this skill when:
 ````markdown
 ```mermaid
 graph TB
-    User[("👤 User<br/>Description")]
+    User(("👤 User<br/>Description"))
     App["📦 Main System<br/><i>What it does</i>"]
-   External[("🔒 External System<br/><i>What it does</i>")]
+    External["🔒 External System<br/><i>What it does</i>"]
     
     User -->|"Uses<br/>Protocol"| App
     App -->|"Integrates with<br/>Protocol"| External
@@ -72,7 +70,7 @@ graph TB
 
 **When to Create**: At project start, or when external dependencies change
 
-**Example**: See [`context/system-context.md`](../context-maintenance/templates/context/system-context.md)
+**Where it lives**: `context/system-context.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/system-context.md) — paste the diagram above and fill it in)
 
 #### Component/Container Diagram
 **Purpose**: Show high-level technology choices and component interactions
@@ -95,7 +93,7 @@ graph TB
 ```
 ````
 
-**Example**: See [`context/component-diagram.md`](../context-maintenance/templates/context/component-diagram.md)
+**Where it lives**: `context/component-diagram.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/component-diagram.md))
 
 ### 2. Sequence Diagrams
 
@@ -169,7 +167,7 @@ sequenceDiagram
 ```
 ````
 
-**Example**: See [`context/domain-flow.md`](../context-maintenance/templates/context/domain-flow.md)
+**Where it lives**: `context/domain-flow.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/domain-flow.md))
 
 ### 3. Class Diagrams
 
@@ -348,6 +346,7 @@ If you need to generate static images:
 # Install globally
 npm install -g @mermaid-js/mermaid-cli@<pinned-version>   # developer-run / CI, pinned — an agent does not install tools
 
+# From a .md input, mmdc writes one image per mermaid block (diagram-1.png, diagram-2.png, …)
 # Generate PNG
 mmdc -i diagram.md -o diagram.png
 
@@ -493,7 +492,7 @@ Diagrams are rendered natively in the browser on GitHub.
 ### In ADRs
 
 ````markdown
-# ADR-001: Use Event-Driven Architecture
+# ADR-0001 — Use Event-Driven Architecture
 
 ## Decision
 We will use event-driven architecture.
@@ -527,9 +526,13 @@ You can use the Mermaid CLI in your pipeline to validate syntax:
 ```yaml
 - name: Validate Mermaid Syntax
   run: |
-    npm install -g @mermaid-js/mermaid-cli@<pinned-version>   # developer-run / CI, pinned — an agent does not install tools
+    # CI step, pinned — an agent does not install tools. mmdc rejects -o /dev/null, so render into a temp dir;
+    # headless Chromium in a container needs --no-sandbox.
+    tmp="$(mktemp -d)"; echo '{"args":["--no-sandbox"]}' > "$tmp/puppeteer.json"
     for f in context/*.md; do
-      mmdc -i "$f" -o /dev/null || exit 1
+      grep -q '^```mermaid' "$f" || continue
+      npx -y @mermaid-js/mermaid-cli@<pinned-version> -p "$tmp/puppeteer.json" \
+        -i "$f" -o "$tmp/$(basename "$f" .md).svg" || exit 1
     done
 ```
 
@@ -548,14 +551,17 @@ You can use the Mermaid CLI in your pipeline to validate syntax:
 
 ## Examples
 
+The `context/` templates shipped by `context-maintenance` are blank scaffolds; the worked examples are the templates in
+this skill.
+
 ### Example 1: Main Domain Flow
-See: [`context/domain-flow.md`](../context-maintenance/templates/context/domain-flow.md)
+Sequence template (§2), saved in `context/domain-flow.md` ([blank template](../context-maintenance/templates/context/domain-flow.md)).
 
 ### Example 2: System Context
-See: [`context/system-context.md`](../context-maintenance/templates/context/system-context.md)
+System Context template (§1), saved in `context/system-context.md` ([blank template](../context-maintenance/templates/context/system-context.md)).
 
 ### Example 3: Component Structure
-See: [`context/component-diagram.md`](../context-maintenance/templates/context/component-diagram.md)
+Component/Container template (§1), saved in `context/component-diagram.md` ([blank template](../context-maintenance/templates/context/component-diagram.md)).
 
 ## Resources
 

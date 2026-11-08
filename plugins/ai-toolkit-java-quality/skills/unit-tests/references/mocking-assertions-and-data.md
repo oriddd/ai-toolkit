@@ -12,8 +12,11 @@ Part of the [`unit-tests`](../SKILL.md) skill. Section numbers and headings are 
   pin the **interaction contract**, not just the return value.
 - Prefer `ArgumentCaptor` over loose `any()` when asserting that the correct
   object was passed to a collaborator.
-- Reset shared static mocks between tests with `clearInvocations(mock)` in
-  `@AfterEach` (see `FooServiceTest`).
+- `MockitoExtension` creates fresh `@Mock`s per test, and a `MockedStatic` is
+  closed by its try-with-resources, so plain unit tests need no reset. Only
+  mocks **shared across tests** — e.g. context-wide `@MockitoBean`s / test-config
+  beans in component tests — need `clearInvocations(mock)` in `@AfterEach`
+  (see `FooServiceTest` and the `component-tests` skill).
 
 ## Static / context mocking
 

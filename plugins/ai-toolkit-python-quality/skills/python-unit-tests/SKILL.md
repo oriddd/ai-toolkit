@@ -31,7 +31,10 @@ tests/
 ## Dependencies
 ```toml
 [dependency-groups]
-dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "pytest-cov>=5.0", "httpx>=0.27", "asgi-lifespan>=2.1"]
+dev = [
+  "pytest>=8.3", "pytest-asyncio>=0.26", "pytest-cov>=5.0", "httpx>=0.27", "asgi-lifespan>=2.1",
+  "httpx2>=2.16",   # only if you use Starlette TestClient: see section 6
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -120,17 +123,33 @@ def test_positiveCents_boundaries_acceptsOnlyInRange(cents: int, valid: bool) ->
 Use `httpx.AsyncClient(transport=ASGITransport(app=app))` with `app.dependency_overrides` pointing
 to fakes. `ASGITransport` does **not** run the lifespan, so anything the lifespan puts on `app.state`
 is missing (`AttributeError` in providers). Wrap the app in `asgi_lifespan.LifespanManager`, or use the
-sync `with TestClient(app) as client:` (the `with` runs the lifespan; with recent Starlette
-`TestClient` emits a `StarletteDeprecationWarning` asking for `httpx2` in place of `httpx`, which is harmless
-but fails the run under `-W error`):
+sync `with TestClient(app) as client:` (the `with` runs the lifespan). Recent Starlette emits a
+`StarletteDeprecationWarning` asking for `httpx2` in place of `httpx` when the test client module is
+imported, so under `-W error` the whole test module fails at import; install it (`uv add --dev httpx2`)
+if you use `TestClient`.
+
+A unit test builds the app with explicit settings, so no `DB_*` environment is needed, and overrides the
+unit-of-work provider with an in-memory fake (`python-fastapi-conventions` §2 and §7). The lifespan still
+creates an engine, but SQLAlchemy connects lazily and nothing uses it, so the test does no I/O:
 
 ```python
+TEST_SETTINGS = AppSettings(
+    db=DatabaseSettings(url="postgresql+asyncpg://test@db/test", password=SecretStr("unused"))
+)
+
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
-    app = create_app()
-    async with LifespanManager(app):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            yield client
+def fake_orders() -> InMemoryOrderRepository:      # tests/fakes/: one fresh, inspectable store per test
+    return InMemoryOrderRepository()
+
+@pytest.fixture
+async def client(fake_orders: InMemoryOrderRepository) -> AsyncIterator[AsyncClient]:
+    app = create_app(TEST_SETTINGS)
+    app.dependency_overrides[get_uow_factory] = lambda: lambda: InMemoryUnitOfWork(fake_orders)
+    async with (
+        LifespanManager(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+    ):
+        yield client
 ```
 
 Assert status, `application/problem+json` and `code` for errors.

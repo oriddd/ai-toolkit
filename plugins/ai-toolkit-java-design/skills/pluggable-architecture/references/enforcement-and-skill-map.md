@@ -23,7 +23,7 @@ class PluggabilityRulesTest {
             .resideInAnyPackage("org.springframework.data.redis..", "com.datadoghq..",
                                 "oracle.jdbc..", "org.apache.kafka..", "software.amazon.awssdk..");
 
-    // Every adapter implements a port and lives under adapter/<vendor>/.
+    // Every adapter implements a port and lives under adapter/<capability>/<vendor>/.
     @ArchTest static final ArchRule adaptersImplementPorts =
         classes().that().resideInAPackage("..adapter..")
             .and().haveSimpleNameEndingWith("Adapter")
@@ -41,8 +41,8 @@ you apply one of these, expose its technology as a port + adapters:
 
 | Capability (skill) | Port example | Adapter examples (illustrative, not exhaustive) |
 | --- | --- | --- |
-| `persistence` | `RepositoryPort` / dialect-isolated repositories | any relational dialect, any document store |
-| `observability` | `MetricsPort`, `TracingPort` | any scrape-based or push-based backend |
+| `persistence` | `RepositoryPort` / dialect-isolated repositories — a Spring Data repository interface is the accepted port (see "Accepted facades" in the SKILL) | any relational dialect, any document store |
+| `observability` | `MetricsPort`, `TracingPort` — Micrometer `MeterRegistry` / Observation API is the accepted facade; use it directly | any scrape-based or push-based backend (a Micrometer registry) |
 | `messaging` | `EventPublisherPort`, `EventConsumerPort` | any broker / streaming platform |
 | `external-client` | `<Domain>ClientPort` | HTTP, gRPC, file, in-process fake |
 | `rate-limiting` | `RateLimiterPort` | local in-memory, distributed |

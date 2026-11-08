@@ -25,6 +25,7 @@ sign-in, purchase, onboarding, deep-link entry. Everything else is cheaper and m
 .maestro/
 ├── config.yaml
 ├── flows/
+│   ├── sign-up.yaml
 │   ├── sign-in.yaml
 │   ├── place-order.yaml
 │   └── deep-link-order.yaml
@@ -68,34 +69,50 @@ business, not for every screen.
 <Pressable testID="checkout-submit" accessibilityRole="button" onPress={submit}>
 ```
 
-Naming: `<feature>-<element>` in kebab-case; list items add the id (`order-card-o-1`). Prefer visible
-text or accessibility labels where users see them; use `testID` for the rest. Never select by index or
-coordinates. IDs do not change without updating flows.
+Naming: `<feature>-<element>` in kebab-case; list items add the id (`order-card-o-1`). Flows select by
+`id:` (the `testID`); select by visible text only for text that is neither translated nor dynamic. Never
+select by index or coordinates. IDs do not change without updating flows.
 
 ## 3. A flow
 
+The sign-up journey, using the test IDs of the `SignupScreen` in `react-native-input-validation` and the
+orders list from `react-native-code-structure`:
+
 ```yaml
-# .maestro/flows/place-order.yaml
+# .maestro/subflows/launch-signed-out.yaml
+appId: com.example.app
+---
+- launchApp:
+    clearState: true              # no stored token: the app starts signed out
+- extendedWaitUntil:
+    visible:
+      id: signup-email
+    timeout: 10000
+```
+
+```yaml
+# .maestro/flows/sign-up.yaml
 appId: com.example.app
 tags: [critical]
 ---
-- launchApp:
-    clearState: true
 - runFlow: ../subflows/launch-signed-out.yaml
 - tapOn:
-    id: signin-email
+    id: signup-email
 - inputText: ${E2E_USER}
 - tapOn:
-    id: signin-password
+    id: signup-password
 - inputText: ${MAESTRO_E2E_PASSWORD}
-- tapOn: Sign in
+- tapOn:
+    id: signup-confirm-password
+- inputText: ${MAESTRO_E2E_PASSWORD}
+- tapOn:
+    id: signup-submit
 - assertVisible:
     id: orders-list
-- tapOn:
-    id: order-card-seed-1
-- tapOn: Place order
-- assertVisible: Order confirmed
 ```
+
+`E2E_USER` is an address the seeded test backend resets before each run (section 4), so the sign-up
+succeeds every time. Other journeys (sign-in, place order) follow the same shape with their own screens' IDs.
 
 Credentials come from the environment or CI secrets, never from the repo, and only for a dedicated, low-privilege
 test account. A password passed with `-e E2E_PASSWORD=...` appears in the process list, shell history and CI logs,
@@ -118,8 +135,10 @@ pinned version, not verified here). Non-secret values such as `E2E_USER` may use
 maestro test .maestro/flows --include-tags critical -e E2E_USER="$E2E_USER"
 ```
 
-Run critical flows on every PR against a debug/preview build on one iOS and one Android target; run the
-full set nightly. Upload JUnit reports and screenshots as CI artifacts (see `react-native-ci`).
+E2E is not a required PR check: device builds are slow and flakier than the `verify` gate. Run the critical
+flows nightly and on demand (`workflow_dispatch`, e.g. before merging a change to a critical journey) on one
+iOS and one Android target, and the full set nightly; this is the `e2e.yml` workflow in `react-native-ci`.
+Upload JUnit reports and screenshots as CI artifacts.
 
 ## Do / Don't
 

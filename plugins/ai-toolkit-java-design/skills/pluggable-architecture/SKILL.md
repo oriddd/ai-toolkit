@@ -44,8 +44,16 @@ non-negotiable and combined with Spring's conditional wiring so that:
 Apply this skill **whenever** a task introduces or modifies contact with an
 external technology or third-party library. If the agent is about to type an
 `import` for a vendor SDK (Redis, Datadog, Oracle JDBC, Kafka, AWS S3, …) in
-anything other than an adapter or auto-configuration class, **stop** and apply
-this skill first.
+anything other than an adapter (or its vendor `@Configuration` in the same
+`adapter/<capability>/<vendor>/` package), **stop** and apply this skill first.
+
+**Accepted facades.** Some Spring abstractions already *are* a vendor-neutral
+port, and the other skills use them directly: Spring Data repository interfaces
+(`persistence`; the dialect is swapped by driver + configuration) and the
+Micrometer `MeterRegistry` / Observation API (`observability`, `request-metrics`;
+the registry is the adapter). Do not wrap them in another port. The rule still
+applies to the vendor types *behind* them (e.g. no JDBC-driver class or
+backend-specific registry class imported in business code).
 
 ## 1. The three layers of every capability
 
@@ -61,11 +69,12 @@ For a capability named `X`, generate exactly three concerns in separate places:
 ├── adapter/                               # the ADAPTERS — one sub-package per vendor
 │   └── x/
 │       ├── redis/   RedisXAdapter.java     # implements XPort using a vendor SDK
-│       ├── infinispan/ InfinispanXAdapter.java
-│       └── noop/    NoOpXAdapter.java      # safe default / disabled mode
+│       │            RedisXConfiguration.java  # vendor @Configuration (conditions + vendor beans)
+│       ├── infinispan/ InfinispanXAdapter.java, InfinispanXConfiguration.java
+│       └── noop/    NoOpXAdapter.java      # safe default / disabled mode (harmless capabilities only)
 └── config/                                # the WIRING — conditional selection only
     └── x/
-        └── XAutoConfiguration.java         # @ConditionalOn… picks the adapter(s)
+        └── XAutoConfiguration.java         # @Import(vendor configurations) + fallback; no vendor imports
 ```
 
 Rules:
@@ -74,11 +83,13 @@ Rules:
   is ever allowed here.** No `org.springframework.data.redis.*`, no
   `com.datadoghq.*`, no `oracle.jdbc.*`. The port speaks the project's
   language, not the vendor's.
-- **`adapter/<vendor>/`** is the *only* place a vendor SDK may be imported. Each
-  adapter is `package-private` where possible and registered as a bean by the
-  capability's auto-configuration.
+- **`adapter/<capability>/<vendor>/`** is the *only* place a vendor SDK may be
+  imported. It holds the adapter and a `public` vendor `@Configuration` class that
+  creates the adapter bean. Because that configuration sits in the same package,
+  the adapter itself can stay `package-private`.
 - **`config/x/`** holds the conditional wiring and nothing else — no business
-  logic, no vendor calls, just bean definitions guarded by `@ConditionalOn…`.
+  logic, no vendor calls, no vendor imports: it `@Import`s the vendor
+  configurations and declares the fallback, guarded by `@ConditionalOn…`.
 
 ## 2. The port contract (DIP + OCP)
 
@@ -89,6 +100,11 @@ public interface CachePort {
     void put(CacheKey key, byte[] value, Duration ttl);
     void evict(CacheKey key);
     String providerId();           // for observability + composition routing
+}
+
+// spi/x/CacheKey.java — port DTO: a record of JDK types
+public record CacheKey(String value) {
+    public CacheKey { Objects.requireNonNull(value, "value"); }
 }
 ```
 
@@ -119,7 +135,11 @@ Before returning a diff that touches an external technology, verify:
 - [ ] **1..N adapters** exist under `adapter/<capability>/<vendor>/`, each the
       *only* place its vendor SDK is imported.
 - [ ] A **safe default** adapter (`NoOp` or local) is provided via
-      `@ConditionalOnMissingBean`.
+      `@ConditionalOnMissingBean` — **only** for harmless capabilities (cache,
+      metrics, feature flags with coded defaults). Security-relevant capabilities
+      (encryption, key provider, secrets, identity, permissions) get **no** NoOp
+      default: a missing or misconfigured provider fails startup with a clear
+      message.
 - [ ] Selection/composition lives **only** in `config/<capability>/…` and is
       driven by a typed `@ConfigurationProperties` (enum provider key).
 - [ ] Swapping providers requires **only** a property change (and optionally a
@@ -135,9 +155,12 @@ Before returning a diff that touches an external technology, verify:
 ## Do / Don't
 
 ✅ Depend on a **port interface** from domain/application code — always.
-✅ Put the **only** vendor import inside `adapter/<vendor>/`.
+✅ Put the **only** vendor import inside `adapter/<capability>/<vendor>/`.
 ✅ Select and compose providers **by configuration** (`@ConditionalOnProperty`
-   + typed enum), with a `@ConditionalOnMissingBean` safe default.
+   + typed enum), with a `@ConditionalOnMissingBean` safe default for harmless
+   capabilities.
+❌ Never default a security capability (encryption, secrets, identity) to NoOp —
+   fail fast at startup instead.
 ✅ Make every brick replaceable by a consumer-supplied bean of the same port
    type (lego-brick override).
 ✅ Support multi-provider fan-out via a **composite adapter**, with per-provider
@@ -149,7 +172,7 @@ Before returning a diff that touches an external technology, verify:
    (`if (provider == REDIS) …`) — that belongs in the composite/config layer.
 ❌ Never make the domain aware of *how many* providers are active.
 ❌ Never hard-wire a single vendor with `new RedisTemplate(...)` outside an
-   adapter/config class.
+   adapter's vendor configuration.
 ❌ Never let a provider's failure in `broadcast` mode take down the others.
 
 ## Cross-references

@@ -6,8 +6,8 @@ and `observability` §4). Keep this file a summary that links to it, never a
 diverging copy.
 -->
 ## 1. Availability SLO (REQUIRED)
-e.g. 99.9% success rate.
+<!-- e.g. 99.9% success rate. -->
 ## 2. Latency SLO (REQUIRED)
-e.g. P95 < 200ms.
+<!-- e.g. P95 < 200ms. -->
 ## 3. Error Budget (REQUIRED)
-How we handle SLO violations.
+<!-- How we handle SLO violations. -->

@@ -35,14 +35,33 @@ Every commit message:
 | `fix`     | Patch bump |
 | `refactor` / `style` / `docs` / `chore` / `test` / `build` / `ci` | No bump |
 | `perf` | Patch bump (the default rules of both release-please and semantic-release) |
-| `feat!` or `BREAKING CHANGE:` footer | **Major** bump |
+| `!` after any type/scope (`feat!:`, `fix(api)!:`) or a `BREAKING CHANGE:` footer — either is enough | **Major** bump |
 
-Enforced by `commitlint` (npm) in pre-commit / CI:
+Enforced by `commitlint` (npm) in pre-commit / CI (see `git-commit-conventions` for the local commit-msg hook).
+commitlint skips merge and `fixup!` / `squash!` commits by default.
+
+```js
+// commitlint.config.mjs
+export default { extends: ['@commitlint/config-conventional'] };
+```
 
 ```yaml
 # .github/workflows/lint-commits.yml
-- uses: wagoid/commitlint-github-action@v6
+name: lint-commits
+on: [pull_request]
+permissions: { contents: read, pull-requests: read }
+jobs:
+  commitlint:            # this job name is the required status check in branch protection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # commitlint needs the whole PR range
+      - uses: wagoid/commitlint-github-action@v6
 ```
+
+On Jenkins (`ci`), run the same check in a PR-only stage:
+`npx --yes -p @commitlint/cli -p @commitlint/config-conventional commitlint --from origin/<default-branch> --to HEAD`.
+Make the check required only once the job exists — a required check that never reports blocks every PR.
 
 ## 2. Semantic Versioning
 
@@ -75,7 +94,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
-        with: { release-type: maven, package-name: my-service }   # python | node | simple for other stacks
+        # A tag or release created with the default GITHUB_TOKEN does not trigger other workflows, so the
+        # image build on `v*` tags would never run. Use a PAT or GitHub App token (same as `github-actions-ci`).
+        with: { token: "${{ secrets.RELEASE_PLEASE_TOKEN }}" }   # settings come from the two files below
+```
+
+Package settings live in two files at the repo root (v4 has no `package-name` input). `release-type` is `maven`,
+`python`, `node` or `simple` per stack; `extra-files` keeps the Helm chart's `appVersion` equal to the release (§6);
+the manifest holds the last released version and the bot updates it.
+
+```json
+{
+  "packages": {
+    ".": {
+      "release-type": "maven",
+      "package-name": "my-service",
+      "extra-files": [{ "type": "yaml", "path": "helm-chart/Chart.yaml", "jsonpath": "$.appVersion" }]
+    }
+  }
+}
+```
+`release-please-config.json` (above) and `.release-please-manifest.json`:
+```json
+{ ".": "1.3.0" }
 ```
 
 ### b) `semantic-release`
@@ -90,7 +131,7 @@ Whichever you pick, the **git tag is the release's source of truth**; the versio
 
 | Ecosystem | Version file | Working version |
 | --- | --- | --- |
-| Maven | `pom.xml` | `1.0.0-SNAPSHOT` |
+| Maven | `pom.xml` | `<next-release>-SNAPSHOT`, e.g. `1.0.0-SNAPSHOT` |
 | Python | `pyproject.toml` | `1.0.0.dev0` or the last release |
 | Node / React Native | `package.json` (+ native build numbers) | last release |
 
@@ -100,10 +141,15 @@ Whichever you pick, the **git tag is the release's source of truth**; the versio
 
 ## 5. CHANGELOG.md
 
+This is the one CHANGELOG format for every skill and agent (`context-maintenance`, `update-context` follow it).
+
 Conventionally generated when a release bot is configured — then do not hand-edit released sections. Without a bot,
 hand-edit only `[Unreleased]` (one bullet per user-visible change) and let the release step rename it. Sections per release:
 
 ```
+## [Unreleased]
+### Features
+- foo: add bulk export
 ## [1.4.0] — 2026-06-24
 ### Features
 - foo: support PDF/A export (#412)
@@ -115,9 +161,10 @@ hand-edit only `[Unreleased]` (one bullet per user-visible change) and let the r
 
 ## 6. Image tag = version
 
-The `ci` skill's image build uses `${BUILD_NUMBER}` for snapshots and the
-git tag (`v1.4.0` → image tag `1.4.0`) for releases. Helm `Chart.appVersion`
-mirrors the same value.
+Release images are tagged from the git tag (`v1.4.0` → image tag `1.4.0`). Snapshot images from `main` are
+optional: the Jenkins `ci` skill pushes them tagged `${BUILD_NUMBER}`, `github-actions-ci` builds images for `v*` tags
+only. A snapshot image is never deployed as a release. Helm `Chart.appVersion` mirrors the release version — set it
+with release-please `extra-files` (§3a) or `helm package --app-version <version>` at package time, never by hand.
 
 ## 7. Deprecation policy
 
@@ -125,8 +172,10 @@ mirrors the same value.
   `warnings.warn(..., DeprecationWarning)`, `@deprecated` TSDoc) and with `Deprecation` + `Sunset`
   headers on HTTP endpoints.
 - Remove only in the next **MAJOR** release (removing an API is a breaking change, §2), and not before at least **2 minor releases**
-  after the deprecation — longer for public APIs.
-- CHANGELOG documents every deprecation under `### Deprecations`.
+  after the deprecation — longer for public APIs (HTTP APIs also keep `api-design`'s minimum sunset period; the later date wins).
+- CHANGELOG documents every deprecation: under `### Deprecations` when the changelog is hand-maintained. With a bot,
+  the deprecating commit carries it — subject `feat(<scope>): deprecate <thing> (removal in <major>)`, which the bot
+  lists under Features; hand edits are not needed.
 
 ## 8. Branch model
 

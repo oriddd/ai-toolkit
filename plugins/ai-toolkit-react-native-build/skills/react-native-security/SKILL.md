@@ -33,10 +33,11 @@ features/links/model/linkSchemas.ts
 ## Dependencies
 
 ```json
-{ "dependencies": { "react-native-keychain": "^9.1.0", "react-native-url-polyfill": "^4.0.0" } }
+{ "dependencies": { "react-native-keychain": "^11.0.0", "react-native-url-polyfill": "^4.0.0" } }
 ```
 
-(Expo apps may use `expo-secure-store` behind the same interface.)
+(Expo apps may use `expo-secure-store` behind the same interface.) `react-native-keychain` 11 peers on
+React Native >= 0.82; an older app stays on the newest major that supports its React Native version.
 
 ## 1. Secure storage behind an interface
 
@@ -56,7 +57,21 @@ export const createKeychainStore = (service: string): SecureStore => ({
 ```
 
 Tokens, refresh tokens and keys go here. `AsyncStorage`/MMKV is plaintext: use it for preferences only.
-Clear the store on sign-out and when a refresh fails.
+Clear the store on sign-out and when a refresh fails, together with everything else that holds the previous
+user's data, so the next user never sees it:
+
+```ts
+// shared/session/signOut.ts: the one sign-out path (sign-out button, failed refresh, 401)
+export async function signOut(queryClient: QueryClient, secure: SecureStore): Promise<void> {
+  await secure.remove('token');                 // and the refresh token
+  queryClient.clear();                          // in-memory query and mutation caches
+  useSessionStore.getState().signOut();         // every user-scoped Zustand store
+  // persisted cache (react-query-persist-client): also `await persister.removeClient()`
+}
+```
+
+Wire the 401 case once: the `QueryCache` / `MutationCache` `onError` in `QueryProvider`
+(`react-native-state-and-data` §7) calls `signOut` when the error is an `UnauthorizedError`.
 
 ## 2. No secrets in the bundle
 
@@ -72,12 +87,15 @@ be extracted. Therefore:
 Treat every link as untrusted input: allow-list the routes and parse the params.
 
 ```ts
-// index.js, first import: React Native's built-in URL throws "not implemented" on hostname,
-// pathname and searchParams up to at least 0.79; the polyfill makes this code version-independent.
+// First import of the app entry file: `index.js`/`index.ts` (React Native CLI, plain Expo), or the root
+// `app/_layout.tsx` in an Expo Router app (its entry, `expo-router/entry`, is not your file).
+// React Native's built-in URL throws "not implemented" on hostname, pathname and searchParams up to at
+// least 0.79; the polyfill makes this code version-independent.
 import 'react-native-url-polyfill/auto';
 
 // features/links/model/linkSchemas.ts
-const orderLink = z.object({ orderId: z.string().uuid() });
+export type Route = { name: 'OrderDetail'; params: OrdersParamList['OrderDetail'] };   // navigation target
+const orderLink = z.object({ orderId: z.uuid().brand<'OrderId'>() });   // same brand as orderSchema's id
 
 const parseUrl = (url: string): URL | null => {
   try { return new URL(url); } catch { return null; }   // malformed links are untrusted input too
@@ -112,15 +130,23 @@ from a link without the allow-list. Links never carry tokens or trigger a state-
 ## 5. Logging without PII
 
 ```ts
-export interface Logger { debug(msg: string, ctx?: LogContext): void; info(...): void; warn(...): void; error(...): void; }
-type LogContext = Record<string, string | number | boolean>;
+export type LogContext = Record<string, string | number | boolean>;
+export interface Logger {
+  debug(msg: string, ctx?: LogContext): void;
+  info(msg: string, ctx?: LogContext): void;
+  warn(msg: string, ctx?: LogContext): void;
+  error(msg: string, ctx?: LogContext): void;
+}
 // ✅ logger.info('order_cancelled', { orderId });
 // ❌ logger.info(`user ${email} token ${token}`)
 ```
 
 Never log tokens, passwords, emails, phone numbers, addresses or full request bodies. Log ids and
-codes. Strip `console.*` from release builds (`babel-plugin-transform-remove-console`) and redact
-fields in the Sentry `beforeSend` hook (see `react-native-observability`).
+codes. Strip `console.log`/`info`/`debug` from release builds
+(`['transform-remove-console', { exclude: ['error', 'warn'] }]` in `babel-plugin-transform-remove-console`;
+Sentry turns `console.error`/`warn` into breadcrumbs) and redact fields in the Sentry `beforeSend` hook (see
+`react-native-observability`). `no-console` stays an error everywhere except the one logger implementation
+that writes to the console (a file-level override in `eslint.config.mjs`, see `react-native-static-analysis`).
 
 ## 6. Device and platform hygiene
 

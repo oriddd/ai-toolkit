@@ -2,7 +2,7 @@
 name: unit-tests
 description: >
   Java / Spring Boot JUnit 5 + Mockito unit tests — positive, negative and edge cases, every error branch,
-  methodName_Condition_ExpectedResult naming, Jacoco threshold. Use when a class is created or changed in
+  methodName_condition_expectedResult naming, Jacoco and PIT gates. Use when a class is created or changed in
   src/main/java, or coverage is below the threshold.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith]
@@ -90,12 +90,14 @@ For each target class `Foo`:
    - any `Stream.filter(...).findFirst()` → "found" + "not found" tests.
 4. **Generate `FooTest`** in the mirror package using the
    [`templates/UnitTest.java.tmpl`](./templates/UnitTest.java.tmpl) skeleton.
-5. **Run** `mvn -q -pl . test -Dtest=FooTest jacoco:report`. Open
+5. **Run** `mvn -q test -Dtest=FooTest org.jacoco:jacoco-maven-plugin:report`
+   (the full coordinates work even before the plugin is declared). Open
    `target/site/jacoco/<package>/Foo.html` and add tests for any remaining
    uncovered branch. Iterate until you cannot meaningfully cover more.
-6. **Sanity check** – delete each generated test one-by-one mentally: if the
-   class would still pass `mvn verify` after deletion, the test is not
-   meaningful and should be removed/strengthened.
+6. **Sanity check** – for each test, break the production line it targets
+   (flip a condition, drop a call) mentally or for real: if the test would
+   still pass, it is not meaningful and must be strengthened. PIT automates
+   exactly this check (see the mutation reference).
 
 ## Do / Don't
 
@@ -112,12 +114,24 @@ non-null-returning method – that proves nothing.
 
 ## Build checklist
 
-- [ ] Add PIT mutation testing for core logic.
-- [ ] Integrate Jacoco check with a coverage threshold of 85 % line / 75 % branch per class (the same numbers as above and in `quality-review`).
+- [ ] PIT mutation testing wired into `verify` with a ≥ 75 % threshold (guild #12; the `ci` `pom.xml.tmpl` ships it).
+- [ ] Integrate Jacoco check with a coverage threshold of 85 % line / 75 % branch per class (the same numbers as above and in `quality-review`; the `ci` `pom.xml.tmpl` ships the `check` goal).
 
 ## Architecture Tests (ArchUnit)
 
 Unit tests are not just for business logic; they also protect the **structure** of your code. ArchUnit allows you to write tests that ensure design patterns are followed.
+
+ArchUnit needs `com.tngtech.archunit:archunit-junit5` (test scope) and an
+`@AnalyzeClasses` header on the test class, or the `@ArchTest` fields run nothing.
+The canonical class is `code-structure` §4i (`ArchitectureTest.java.tmpl`); add the
+examples below to it:
+
+```java
+@AnalyzeClasses(packages = "{{basePackage}}", importOptions = ImportOption.DoNotIncludeTests.class)
+class ArchitectureTest {
+    // the rules below go here
+}
+```
 
 ### Example: Enforce Strategy + Handler Pattern
 

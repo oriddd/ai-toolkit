@@ -1,5 +1,9 @@
 package {{basePackage}}.exception;
-/** Base type for every domain exception. Always carries an error code. */
+/**
+ * Base type for every domain exception. Unchecked, so it needs no {@code throws} clause and
+ * {@code @Transactional} rolls back on it by default. Always carries an error code from
+ * {@code exception.constants.ExceptionMessages}; the HTTP status is chosen by the advice, never stored here.
+ */
 public abstract class BaseDomainException extends RuntimeException {
     private final String errorCode;
     protected BaseDomainException(String errorCode, String message) {

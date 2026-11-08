@@ -34,10 +34,11 @@ shared/errors/
 ## Dependencies
 
 ```json
-{ "dependencies": { "react-error-boundary": "^4.1.0", "@sentry/react-native": "<current>" } }
+{ "dependencies": { "react-error-boundary": "^6.0.0", "@sentry/react-native": "<current>" } }
 ```
 
 `<current>`: pin the latest stable `@sentry/react-native` release (same version as `react-native-observability`).
+`react-error-boundary` 6 types `FallbackProps.error` and the `onError` error as `unknown`: narrow before use.
 
 ## 1. Typed hierarchy
 
@@ -142,6 +143,7 @@ Inline errors for queries; toast/banner for mutations; never `Alert.alert(error.
 Boundaries catch **render** errors only; async errors flow through query/mutation state.
 
 ```tsx
+// CrashScreen is the app's own full-screen "something went wrong" view with a restart button.
 // hoisted: an inline arrow is a new component type every render and would remount the fallback
 const CrashFallback = ({ resetErrorBoundary }: FallbackProps) => <CrashScreen onRestart={resetErrorBoundary} />;
 
@@ -165,11 +167,21 @@ One boundary at the app root, plus one per navigator or risky widget so a failur
 // shared/errors/reportError.ts
 export interface ErrorReporter { report(error: unknown, context?: Record<string, unknown>): void; }
 export const useErrorReporter = (): ErrorReporter => useServices().errorReporter; // useServices: @shared/services/ServicesContext
+
+const REPORTED: ReadonlySet<ErrorCode> = new Set(['UNKNOWN', 'SERVER', 'BAD_REQUEST']);
+export const isReportable = (e: unknown): boolean => !isAppError(e) || REPORTED.has(e.code);
 ```
+
+`shared/errors` imports `useServices` from `shared/services`, and `ServicesContext.tsx` imports the
+`ErrorReporter` type back. Keep that second import `import type { ErrorReporter }`: it is erased at
+compile time, so there is no runtime import cycle (`consistent-type-imports` in `react-native-static-analysis`
+enforces the form).
 
 The Sentry implementation lives behind this interface (see `react-native-observability`). Report
 unexpected errors (`UNKNOWN`, `SERVER`, `BAD_REQUEST` because our own client sent it, render crashes); do not
-report expected ones such as `NETWORK_OFFLINE`, `UNAUTHORIZED`, `FORBIDDEN`, `RATE_LIMITED` or `VALIDATION_FAILED`. Wire it once in the `QueryCache` `onError`, not per call.
+report expected ones such as `NETWORK_OFFLINE`, `UNAUTHORIZED`, `FORBIDDEN`, `RATE_LIMITED` or `VALIDATION_FAILED`
+(`isReportable` above). Wire it once in the `QueryCache` / `MutationCache` `onError` of the `QueryClient` that
+`QueryProvider` creates inside the services provider (see `react-native-state-and-data` §7), not per call.
 
 ## Do / Don't
 

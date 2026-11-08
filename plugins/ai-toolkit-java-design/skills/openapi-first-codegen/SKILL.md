@@ -75,12 +75,11 @@ default for the plugin). They MUST be:
         <inputSpec>${project.basedir}/api.yaml</inputSpec>
         <generatorName>spring</generatorName>
         <library>spring-boot</library>
-        <apiPackage>{{basePackage}}.api</apiPackage>
-        <modelPackage>{{basePackage}}.api.model</modelPackage>
-        <invokerPackage>{{basePackage}}.api.invoker</invokerPackage>
+        <!-- a dedicated `generated` package, so exclusions never hit hand-written `api` packages -->
+        <apiPackage>{{basePackage}}.generated.api</apiPackage>
+        <modelPackage>{{basePackage}}.generated.api.model</modelPackage>
         <configOptions>
-          <useSpringBoot3>true</useSpringBoot3>
-          <useJakartaEe>true</useJakartaEe>
+          <useSpringBoot3>true</useSpringBoot3>      <!-- also switches imports to jakarta.* (useJakartaEe) -->
           <interfaceOnly>true</interfaceOnly>          <!-- controllers stay hand-written -->
           <useTags>true</useTags>
           <skipDefaultInterface>true</skipDefaultInterface>
@@ -96,8 +95,8 @@ default for the plugin). They MUST be:
 </plugin>
 ```
 
-Pin the generator version in `<properties>` and let dependency-management
-bump it.
+Pin the generator version in `<properties>` and let Renovate bump it.
+`invokerPackage` is omitted on purpose: with `interfaceOnly=true` the generator emits no invoker classes.
 
 ## 3. Static-analysis / coverage exclusions
 
@@ -106,12 +105,12 @@ Add to the relevant plugins (paths are repo-relative):
 
 | Plugin | Exclusion |
 | --- | --- |
-| **Jacoco** (`jacoco-maven-plugin`)         | `<exclude>**/api/**</exclude>` and `<exclude>**/api/model/**</exclude>` in the `<configuration><excludes>` block. |
+| **Jacoco** (`jacoco-maven-plugin`)         | `<exclude>**/generated/api/**</exclude>` in the `<configuration><excludes>` block (covers `generated/api/model/` too). |
 | **Spotless**                                | `<excludes><exclude>target/generated-sources/**</exclude></excludes>` inside the `<java>` block. |
-| **SpotBugs / FindSecBugs**                  | `<excludeFilterFile>` referencing a filter that matches `{{basePackage}}.api.**`. |
-| **ArchUnit** (in tests)                     | `ImportOption.DoNotIncludeArchives` plus a custom `ImportOption` that drops `target/generated-sources/**`. |
+| **SpotBugs / FindSecBugs**                  | `<excludeFilterFile>` referencing a filter that matches `{{basePackage}}.generated.api.**`. |
+| **ArchUnit** (in tests)                     | Exclude **by package**: generated and hand-written classes both compile to `target/classes`, so a path filter on `target/generated-sources/**` matches nothing. Use `ImportOption.DoNotIncludeArchives` plus a custom `ImportOption` such as `location -> !location.contains("/generated/api/")`, or `.resideOutsideOfPackage("..generated.api..")` in each rule. |
 | **NullAway / Error-Prone**                  | `-XepExcludedPaths:.*/generated-sources/.*`. |
-| **Sonar (optional)**                        | `sonar.coverage.exclusions=**/api/**`, `sonar.exclusions=**/api/**`. |
+| **Sonar (optional)**                        | `sonar.coverage.exclusions=**/generated/api/**`, `sonar.exclusions=**/generated/api/**`. |
 
 Without these, every spec change inflates the coverage delta and triggers
 false-positive findings.
@@ -124,12 +123,12 @@ false-positive findings.
 class FooController implements FooApi {                    // FooApi is generated
 
     private final FooService service;
-    private final FooDtoAdapter adapter;                   // hand-written
+    private final FooResponseMapper mapper;                // hand-written, in mapper/
 
     @Override
-    public ResponseEntity<FooResponse> getFoo(String id) { // signature comes from FooApi
+    public ResponseEntity<FooResponse> getFoo(UUID id) {   // signature comes from FooApi (`format: uuid` → UUID)
         Foo domain = service.findById(EntityId.of(id));
-        return ResponseEntity.ok(adapter.toResponse(domain));
+        return ResponseEntity.ok(mapper.toResponse(domain));
     }
 }
 ```
@@ -141,8 +140,8 @@ Rules:
 - Controllers contain **zero business logic**. Delegate to a domain
   service. (See `code-structure`.)
 - Generated DTOs (`FooRequest`, `FooResponse`) **must not leak** past the
-  controller. Convert at the boundary using a hand-written `*DtoAdapter` —
-  same Adapter rule as `external-client`.
+  controller. Convert at the boundary using a hand-written `*ResponseMapper`
+  (and `*RequestMapper`) in `mapper/` — the same "remote DTOs stay at the boundary" rule as `external-client`.
 
 ## 5. Hygiene
 

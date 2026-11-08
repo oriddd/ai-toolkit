@@ -1,2 +1,3 @@
-package {{basePackage}}.client.cache;
+package {{basePackage}}.adapter.cache.http;
+/** Remote DTO of the HTTP cache service (GET response and PUT body). Never leaves adapter/cache/http/. */
 public record CacheEntryResponse(String key, String value, long ttlMillis) {}

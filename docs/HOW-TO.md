@@ -1,14 +1,18 @@
 # How to Use This AI Toolkit
 
 A practical guide for developers and AI agents using this skills catalogue
-to build production-grade Java 21 / Spring Boot microservices faster.
+to build production-grade services faster. Most of this guide uses the Java 21 / Spring Boot
+set (the most complete one); Python / FastAPI and React Native follow the same structure — see
+[`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md).
 
 ---
 
 ## What is this toolkit?
 
 A **vendor-neutral catalogue of reusable coding patterns** (Skills) and
-**documentation templates** (Context) for Java 21 / Spring Boot microservices.
+**documentation templates** (Context), shipped as Claude Code plugins: per-language sets for
+Java 21 / Spring Boot, Python / FastAPI (draft) and React Native (draft), plus language-neutral
+workflow, docs and quality plugins.
 
 Core philosophy: every service you build should read like an open-source SDK —
 clean interfaces, pluggable providers, SOLID by construction, testable in
@@ -49,10 +53,11 @@ The agent will:
 ### Option B — Topic agent (recommended for a focused task)
 
 Pick the relevant agent from [`plugins/ai-toolkit-java-agents/agents/`](agents/README.md)
-and paste it as your system prompt. Topic agents are concise and fast:
+and paste it as your system prompt. Topic agents are concise and fast. The ten Java agents
+(Python and React Native have their own `*-agents` plugins):
 
 ```
-agents/
+plugins/ai-toolkit-java-agents/agents/
   scaffold-repo.md           Create a new Spring Boot service from scratch
   new-endpoint.md            Add a REST endpoint
   new-feature.md             Implement a feature end-to-end
@@ -63,6 +68,8 @@ agents/
   test-writer.md             Write tests for existing classes (worker the other agents delegate to)
   code-review.md             Pre-PR quality review
   refactor.md                Migrate legacy code to catalogue patterns
+
+plugins/ai-toolkit-docs/agents/   (language-neutral)
   update-context.md          Update docs + CHANGELOG after a code change
 ```
 
@@ -167,15 +174,14 @@ See [`sdk-publishing`](../plugins/ai-toolkit-java-build/skills/sdk-publishing/SK
 When you see the same pattern repeated in a third service, extract it:
 
 ```bash
-# 1. Create the folder
-mkdir -p plugins/*/skills/my-skill
+# 1. Create the folder in the plugin that owns the skill's phase (e.g. ai-toolkit-java-design)
+mkdir -p plugins/ai-toolkit-java-design/skills/my-skill
 
-# 2. Write SKILL.md following AUTHORING.md
-#    Minimum frontmatter required:
-#    name, description, tier, applies_to, depends_on,
+# 2. Write SKILL.md following AUTHORING.md §2 — frontmatter keys:
+#    name, description, tier (required, validated), applies_to, depends_on,
 #    ships_templates, hitl, version, last_reviewed
 
-# 3. Add a row to docs/README.md
+# 3. Add a row to docs/README.md and name the skill in docs/INDEX_BY_USE_CASE.md
 
 # 4. Validate — the tool tells you exactly what is missing
 bash tools/validate-skills.sh
@@ -195,11 +201,15 @@ bash tools/validate-skills.sh
 # Rebuild REGISTRY.md and BACKEND_GUILD.md matrix/graph from frontmatter
 python3 tools/build-indexes.py
 
-# Validate context files (required sections are non-empty)
-bash context/validate-context.sh
+# Validate the shipped context templates (required sections are non-empty)
+bash plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh
+
+# Links, hook behaviour, git modes
+python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh
 ```
 
-All three must exit 0 before any PR that touches `plugins/*/skills/` or `context/`.
+All of these must exit 0 before any PR that touches `plugins/` or `docs/` (CI runs them). In a service repo
+that copied the templates, the validator lives at `context/validate-context.sh`.
 
 ---
 
@@ -222,9 +232,13 @@ code-structure
   ├─► input-validation
   └─► request-metrics
 
-ci ──► cd ──► create-repo
-static-analysis ──► ci ──► quality-review ──► refactoring-playbook
+static-analysis ──► ci ──► cd ──► create-repo
+static-analysis ──► quality-review ──► refactoring-playbook
+unit-tests ─────────┘
 ```
+
+Simplified (Java skills). The full graph is generated from `depends_on` in
+[`BACKEND_GUILD.md`](BACKEND_GUILD.md) §1b.
 
 ---
 

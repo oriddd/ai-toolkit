@@ -17,7 +17,7 @@ elements (`message`, `groups`, `payload`) and declares its validator via
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface EditableProductId {
-    String message() default "Product with id '%s' is of type '%s' which is not editable";
+    String message() default "Product '{productId}' is not editable";   // {productId}: message parameter set by the validator
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }
@@ -25,9 +25,11 @@ public @interface EditableProductId {
 
 Rules:
 - **Always include `message`, `groups`, `payload`** — Jakarta requires them.
-- Use a `%s`-style template in `message` when the violation text must include
-  runtime values (product id, type, …); the validator formats it dynamically
-  (§2c).
+- When the violation text must include runtime values, put a **named
+  parameter** (`{productId}`) in `message` and set it in the validator with
+  `HibernateConstraintValidatorContext.addMessageParameter` (§2b). Never a
+  `%s` placeholder: Bean Validation does not format it, so the default
+  violation would show a literal `%s`.
 - `@Target` must include `ElementType.PARAMETER` to apply to controller method
   parameters (the most common case) and optionally `ElementType.FIELD` for DTO
   fields.
@@ -36,15 +38,17 @@ Rules:
 
 ### 2b. The validator class
 
-The validator is a Spring `@Component` that implements
-`ConstraintValidator<AnnotationType, ValueType>`. Spring's `LocalValidatorFactoryBean`
-auto-discovers and injects Spring beans into `ConstraintValidator` implementations —
-constructor injection works exactly as in any other Spring bean.
+The validator implements `ConstraintValidator<AnnotationType, ValueType>`.
+It is **not** a `@Component` (validators are not component-scanned):
+Spring Boot's `LocalValidatorFactoryBean` uses a `SpringConstraintValidatorFactory`,
+which creates each validator through the application context
+(`AutowireCapableBeanFactory.createBean`), so constructor injection of Spring
+beans works. Hibernate Validator then caches one instance per constraint and
+shares it across threads.
 
 ```java
 // validator/EditableProductIdValidator.java
-@Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @Slf4j
 public class EditableProductIdValidator
         implements ConstraintValidator<EditableProductId, String> {
@@ -52,13 +56,9 @@ public class EditableProductIdValidator
     private final ProductLookupService productLookupService;  // Spring bean from rule/
     private final ProductEditabilityRule productEditabilityRule;  // domain rule bean
 
-    private String messageTemplate;  // captured from annotation in initialize()
-
     @Override
     public void initialize(final EditableProductId annotation) {
-        this.messageTemplate = annotation.message();
-        // Capture any other annotation attributes (destinationCountry, shippingMethod, …) here.
-        // Example: this.destinationCountry = annotation.destinationCountry();
+        // Capture any annotation attributes here (see §2d: this.allowed = Set.of(annotation.allowed())).
     }
 
     @Override
@@ -70,16 +70,15 @@ public class EditableProductIdValidator
 
         // delegate to an injected lookup / rule bean — never a database or remote call written directly in the validator (input-validation SKILL: domain rule beans)
         final String productType = productLookupService.getProductType(productId);
-        if (StringUtils.isBlank(productType)) {
-            return rejectWith(ctx, String.format("Type for product '%s' could not be determined", escape(productId)));
-        }
 
-        if (productEditabilityRule.isEditable(productType)) {
+        // "unknown" and "not editable" give the SAME message: this runs before authorization, so it must not reveal
+        // whether the product exists or what its type is (permissions §10)
+        if (productType != null && productEditabilityRule.isEditable(productType)) {
             return true;
         }
-
-        // Use the captured messageTemplate with runtime values
-        return rejectWith(ctx, String.format(messageTemplate, escape(productId), escape(productType)));
+        ctx.unwrap(HibernateConstraintValidatorContext.class)
+                .addMessageParameter("productId", productId);   // parameter values are inserted literally, not re-interpolated
+        return false;                                            // default violation: the annotation's message
     }
 
     /**
@@ -93,8 +92,9 @@ public class EditableProductIdValidator
     }
 
     /**
-     * The message is a Bean Validation *template*: `{...}` and `${...}` in it are interpolated. Request data (a path variable
-     * here) is attacker-controlled, so escape it before it goes into a template — otherwise `${...}` is evaluated and echoed back.
+     * The message is a Bean Validation *template*: `{...}` and `${...}` in it are interpolated. Request data is
+     * attacker-controlled, so if you ever build a template from it (prefer addMessageParameter), escape it first —
+     * otherwise `${...}` is evaluated and echoed back.
      */
     private static String escape(final String runtimeValue) {
         return runtimeValue == null ? "" : runtimeValue.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").replace("$", "\\$");
@@ -105,16 +105,17 @@ public class EditableProductIdValidator
 Rules:
 - **`initialize()`** must capture every annotation attribute you need at
   validation time. The annotation instance passed here is the one from the
-  annotated element — that is where `destinationCountry`, `shippingMethod`, and
-  other annotation parameters live.
+  annotated element — that is where `allowed` (§2d) and other annotation
+  parameters live.
 - **`isValid()`** must return `false` + call `rejectWith(...)` when invalid, or
   return `true` when valid. Never throw inside `isValid()` for an expected
   failure — Hibernate Validator wraps it in `jakarta.validation.ValidationException`, which is **not** a violation and surfaces as a `500`.
   Catch what you expect and return `false`.
 - **Never put request data into a violation template unescaped** (see `escape` above): `{...}` / `${...}` would be interpolated.
 - Use `ctx.disableDefaultConstraintViolation()` + `buildConstraintViolationWithTemplate()`
-  whenever you compute the message at runtime (runtime values in the template).
-  Skip it only when the annotation's static `message` is sufficient.
+  whenever you compute the message at runtime. For runtime *values* in the
+  annotation's message, prefer `addMessageParameter` and keep the default
+  violation. Skip both only when the annotation's static `message` is sufficient.
 - The private `rejectWith(ctx, message)` helper (or equivalent) eliminates the
   three-line violation-building boilerplate and keeps `isValid` readable.
 - **Null/blank check is always the first guard** — by Jakarta convention,
@@ -130,7 +131,7 @@ single-field `@RequestBody`):
 @RestController
 @RequestMapping("/api/v1/products")
 @Validated  // REQUIRED on the controller — enables parameter-level validation
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class ProductController {
 
     @PatchMapping("/{productId}")
@@ -153,20 +154,20 @@ public class ProductController {
 
 ### 2d. Annotation with extra attributes
 
-When the same constraint is parameterized (e.g. "is shipping method X available
-to destination country Y"):
+When the same constraint is parameterised by a **static policy** — values
+fixed where the annotation is written (e.g. "shipping method must be one of
+the methods this endpoint supports"):
 
 ```java
-// annotation/ValidShippingMethod.java
-@Constraint(validatedBy = {ShippingMethodValidator.class})
-@Target(ElementType.PARAMETER)
+// annotation/SupportedShippingMethod.java
+@Constraint(validatedBy = {SupportedShippingMethodValidator.class})
+@Target({ElementType.PARAMETER, ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface ValidShippingMethod {
-    String destinationCountry();    // required annotation attribute
-    String shippingMethod();        // required annotation attribute
+public @interface SupportedShippingMethod {
+    String[] allowed();             // required annotation attribute — the static policy
 
-    String message() default "Order '%s' cannot be shipped with method '%s' to destination country '%s'";
+    String message() default "Shipping method ''{value}'' is not supported here";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }
@@ -175,11 +176,13 @@ public @interface ValidShippingMethod {
 ```java
 // Usage on controller parameter:
 public ResponseEntity<ShipmentResponse> createShipment(
-        @PathVariable @ValidShippingMethod(
-                destinationCountry = "DE",
-                shippingMethod     = "EXPRESS"
-        ) String orderId) { ... }
+        @PathVariable String orderId,
+        @RequestParam @SupportedShippingMethod(allowed = {"STANDARD", "EXPRESS"}) String shippingMethod) { ... }
 ```
 
-The validator captures `destinationCountry` and `shippingMethod` in `initialize()`
-and uses them in `isValid()`.
+The validator captures `allowed` in `initialize()` (`this.allowed = Set.of(annotation.allowed())`)
+and checks membership in `isValid()`; on a miss it sets `{value}` with
+`addMessageParameter("value", shippingMethod)` and returns `false`. A rule that depends on **other request
+values** (e.g. "method X is available for the order's destination country") is
+cross-field: write a Spring `Validator` (§3) instead of hard-coding request
+values into annotation attributes.

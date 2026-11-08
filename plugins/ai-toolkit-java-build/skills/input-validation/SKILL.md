@@ -33,17 +33,26 @@ RFC 7807 `ProblemDetail` 400 responses — wired automatically by the
 
 ### OpenAPI Handles These Validations (DON'T Create Custom Validators)
 
-| Validation Type | OpenAPI Syntax | Example |
-|-----------------|----------------|---------|
-| **Enum values** | `enum: [value1, value2]` | `layout: enum: [all, metadata]` |
-| **Format** | `format: email/uri/date` | `email: {type: string, format: email}` |
-| **Range** | `minimum/maximum` | `age: {type: integer, minimum: 0, maximum: 150}` |
-| **Length** | `minLength/maxLength` | `name: {type: string, minLength: 1, maxLength: 100}` |
-| **Pattern** | `pattern: "regex"` | `phone: {type: string, pattern: "^\\+[0-9]+$"}` |
-| **Required** | `required: [field]` | `required: [userId, action]` |
-| **Array size** | `minItems/maxItems` | `tags: {type: array, minItems: 1}` |
+The spec only protects you when the **generated code** enforces it
+(`openapi-first-codegen` with `useBeanValidation: true`). Enforced:
 
-**If OpenAPI can express it → DON'T create custom validator (redundant!)**
+| Validation Type | OpenAPI Syntax | Example | Generated as |
+|-----------------|----------------|---------|--------------|
+| **Enum values** | an enum schema under `components` referenced with `$ref` | `Layout: {type: string, enum: [all, metadata]}` | a Java `enum` — unknown values fail binding (400) |
+| **Format → Java type** | `format: date / date-time / uuid` | `since: {type: string, format: date}` | `LocalDate` / `OffsetDateTime` / `UUID` — unparsable values fail binding (400) |
+| **Range** | `minimum/maximum` | `age: {type: integer, minimum: 0, maximum: 150}` | `@Min` / `@Max` |
+| **Length** | `minLength/maxLength` | `name: {type: string, minLength: 1, maxLength: 100}` | `@Size` |
+| **Pattern** | `pattern: "regex"` | `phone: {type: string, pattern: "^\\+[0-9]+$"}` | `@Pattern` |
+| **Required** | `required: [field]` | `required: [userId, action]` | `@NotNull` |
+| **Array size** | `minItems/maxItems` | `tags: {type: array, minItems: 1}` | `@Size` |
+
+**Not enforced** by default: **inline** string enums on a parameter or
+property (often generated as a plain `String`) and string formats with no
+Java type (`format: email`, `uri`, `hostname` …). Use a `$ref` enum or a
+`pattern`, or keep a validator — and check the generated sources before you
+delete one.
+
+**If the generated code enforces it → DON'T create custom validator (redundant!)**
 
 ### Custom Validators ONLY For These
 
@@ -84,7 +93,6 @@ parameters:
 @Constraint(validatedBy = OrderLayoutValidator.class)
 public @interface ValidOrderLayout { ... }
 
-@Component
 public class OrderLayoutValidator implements ConstraintValidator<ValidOrderLayout, String> {
     public boolean isValid(String value, ConstraintValidatorContext context) {
         return value.equals("all") || value.equals("metadata");  // ← Duplicates OpenAPI
@@ -107,7 +115,9 @@ Both styles wire seamlessly into Spring MVC's validation pipeline and are
 mapped to 400 by the `@RestControllerAdvice` (see `exception-handling`):
 - Jakarta violations → `ConstraintViolationException` or
   `MethodArgumentNotValidException` → 400 `ProblemDetail`.
-- Spring `Errors` rejections → `BindException` → 400 `ProblemDetail`.
+- Spring `Errors` rejections on a `@RequestBody @Valid` argument →
+  `MethodArgumentNotValidException` (on `@ModelAttribute` / query-object
+  binding → `BindException`) → 400 `ProblemDetail`.
 
 ## 1. Package layout
 
@@ -131,7 +141,10 @@ Rules:
   These are injectable, unit-testable in isolation, and reusable across multiple
   validators. No Jakarta or Spring MVC imports allowed here — they speak the
   domain language only. **May call external services** (via injected clients) to
-  fetch configuration or lookup data.
+  fetch configuration or lookup data. Such a call runs on every request: cache
+  the lookup (with a TTL), rely on the client's timeouts, and let an outage
+  surface as `UnavailableException` (503, `exception-handling`) — never as a
+  `false` that turns into a misleading 400.
 - **`config/`** holds `ValidationConfig` and nothing else.
 
 ## Reference map — load only the part you are working on
@@ -160,9 +173,10 @@ When adding a new validation rule:
       `@RestControllerAdvice` if not already covered (see `exception-handling`).
 - [ ] Unit-test the rule bean, unit-test the validator, add a component test
       asserting the 400 response.
-- [ ] Add a `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`)
-      for the validator (Spring style) or for the rule bean (Jakarta style) in
-      affected controller component tests.
+- [ ] In web-slice tests, add a `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated
+      `@MockBean`) for the **rule beans and downstream services** the validators
+      need (or provide them in `ComponentTestConfiguration` for full-context
+      component tests). Never mock a registered Spring `Validator` itself.
 
 ## Do / Don't
 
@@ -185,10 +199,15 @@ When adding a new validation rule:
 ❌ Never perform database or remote calls directly inside a validator — use an
    injected `rule/` bean (easier to test, easier to cache).
 ❌ Never share a thread-unsafe field (mutable instance state other than values
-   captured in `initialize()`) inside a `ConstraintValidator` — Spring
-   validators are singletons.
-❌ Never skip `@MockitoBean` for registered validators in controller component
-   tests — the context will fail to load.
+   captured in `initialize()`) inside a `ConstraintValidator` — the instance is
+   cached per constraint and shared by all request threads.
+❌ Never mock a Spring `Validator` registered through `@InitBinder` — a Mockito
+   mock's `supports()` returns `false`, so `addValidators` throws and the
+   request fails with a 500. Mock the rule beans and downstream services the
+   slice does not load instead.
+❌ Never let a validator that loads a resource run before authorization and
+   reveal what it found (type, owner, existence) — keep it syntactic or reply
+   with one generic message (`permissions` §10).
 
 ## Cross-references
 

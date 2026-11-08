@@ -88,7 +88,10 @@ See `domain-modeling` §2.
 Symptom: a `for (int i = 0; i < 3; i++)` loop in client code.
 
 Steps:
-1. Add `resilience4j-spring-boot3`.
+1. Add `resilience4j-spring-boot3` (import `io.github.resilience4j:resilience4j-bom`
+   at the current 2.x version in `<dependencyManagement>`; Boot does not manage it)
+   **and** `spring-boot-starter-aop`. Without the AOP starter `@Retry` /
+   `@CircuitBreaker` are silently ignored — nothing fails, nothing retries.
 2. Configure thresholds in `application.yaml` per dependency.
 3. Annotate the client method with `@Retry(name = "foo")` (+
    `@CircuitBreaker` if external).
@@ -121,6 +124,8 @@ Steps:
 1. Set `ddl-auto=validate` in prod, `none` elsewhere.
 2. Add `flyway-core`, plus the database module on Flyway 10+ (e.g.
    `flyway-database-postgresql`) — without it Flyway rejects the database as unsupported.
+   (Boot 4 note: there `flyway-core` alone is not auto-configured; use
+   `spring-boot-starter-flyway` plus the database module. The toolkit targets Boot 3.5.)
 3. Dump the current schema as DDL (e.g. `pg_dump --schema-only`) and commit it as `V1__baseline.sql` — `flyway baseline` only writes a history row, it
    does not produce a SQL file. Existing databases must skip that script: set `spring.flyway.baseline-on-migrate=true` and `baseline-version=1`,
    or a `V1` applied to a populated schema fails.
@@ -147,6 +152,10 @@ Steps:
 2. Replace the inline call with
    `applicationEventPublisher.publishEvent(new FooHappenedEvent(...))`.
 3. Move the side-effect into a `@TransactionalEventListener(phase = AFTER_COMMIT)`.
+   It fires **only** if the event is published inside an active transaction:
+   keep the publisher `@Transactional`, or — for a publisher with no
+   transaction — set `fallbackExecution = true` (or use a plain
+   `@EventListener`). Otherwise the side-effect is silently dropped.
 
 See `spring-boot-conventions` §10.
 
@@ -168,8 +177,11 @@ Steps:
 2. Remove the annotation from `<ServiceName>Application.java`.
 3. Repeat for `@EnableAsync` → `AsyncConfig`, `@EnableCaching` →
    `CachingConfig`.
-4. Component tests that want the scheduler off simply exclude
-   `SchedulingConfig` via `@SpringBootTest(classes = ...)` or a test slice.
+4. Make the scheduler switchable: annotate `SchedulingConfig` with
+   `@ConditionalOnProperty(name = "app.scheduling.enabled", havingValue = "true", matchIfMissing = true)`
+   and set `app.scheduling.enabled: false` in the test profile. (`@SpringBootTest(classes = ...)`
+   does not exclude a component-scanned `SchedulingConfig`; test slices such as
+   `@WebMvcTest` never load it anyway.)
 
 See `spring-boot-conventions` §7b and `code-structure` §6 bootstrapping
 checklist.
@@ -193,7 +205,8 @@ Steps:
 
 Applies equally to `@Configuration` beans that expose `@Value`-bound
 fields with getters: promote them to a `record` with `@NotBlank` /
-`@Positive` validation so misconfiguration fails at startup.
+`@Positive` validation **and annotate the record with `@Validated`** (without
+it the constraints are never checked) so misconfiguration fails at startup.
 
 ## 13. Monolithic integration package → responsibility split
 

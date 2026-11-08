@@ -4,5 +4,5 @@ Standards apply only if the skill is read first. Before writing code, #file the 
 any class → code-structure + testable-code-principles; tests → unit-tests; errors → exception-handling;
 validation → input-validation; endpoint → api-design + permissions; external call → external-client;
 config/async/cache → spring-boot-conventions; commit → git-commit-conventions. (Python: python-*, React Native: react-native-*.)
-Full map: ~/.ai-toolkit/docs/INDEX_BY_USE_CASE.md. Keep patterns minimal (docs/PATTERN_SELECTION_GUIDE.md).
-Never commit until asked; before saying done, apply completion-gate (plugins/ai-toolkit-quality).
+Full map: ~/.ai-toolkit/docs/INDEX_BY_USE_CASE.md. Keep patterns minimal (~/.ai-toolkit/docs/PATTERN_SELECTION_GUIDE.md).
+Never commit until asked; before saying done, apply completion-gate (~/.ai-toolkit/plugins/ai-toolkit-quality/skills/completion-gate/SKILL.md).

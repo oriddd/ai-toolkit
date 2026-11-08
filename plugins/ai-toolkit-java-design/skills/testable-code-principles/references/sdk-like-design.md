@@ -18,13 +18,23 @@ public List<Invoice> getInvoices() { }
 
 ### 2b. Fail fast on invalid input
 ```java
-// ✅ Good: Validates immediately
+// ✅ Good: Fails immediately — request rules ("content not empty") are enforced
+// before this call by the validation layer (@Valid + validators, see input-validation),
+// and Invoice rejects empty content in its own constructor (domain invariant).
+// The method only guards what it relies on.
 public void processInvoice(Invoice invoice) {
     Objects.requireNonNull(invoice, "Invoice cannot be null");
-    if (invoice.getContent() == null || invoice.getContent().length == 0) {
-        throw new IllegalArgumentException("Invoice content cannot be empty");
-    }
     // ... process
+}
+
+// Invariant lives in the domain type, not in every service method
+public record Invoice(String id, byte[] content) {
+    public Invoice {
+        Objects.requireNonNull(content, "content");
+        if (content.length == 0) {
+            throw new IllegalArgumentException("Invoice content cannot be empty");
+        }
+    }
 }
 
 // ❌ Bad: Fails later with NullPointerException
@@ -66,9 +76,7 @@ public class InvoiceService {
 }
 
 // ❌ Bad: Deep inheritance, hard to test
-public class InvoiceService extends BaseService 
-    extends AbstractService 
-    extends GenericService<Invoice> {
-    // Inherits complexity from 3 levels
-}
+public class InvoiceService extends BaseService { }   // BaseService extends AbstractService,
+                                                    // which extends GenericService<Invoice>
+// Inherits complexity (and hidden state) from 3 levels
 ```

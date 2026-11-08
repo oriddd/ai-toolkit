@@ -1,5 +1,9 @@
 package {{basePackage}}.component;
 
+// FILL IN before compiling: every /* … */ below is a placeholder for your use case
+// (the deterministic-mock triggers, the expected values and the method parameters).
+// The file does not compile until each one is replaced.
+
 import {{basePackage}}.testconfig.ComponentTestConfiguration;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -15,8 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.text.MessageFormat;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ComponentTestConfiguration.class)
@@ -31,35 +34,34 @@ class {{UseCase}}ComponentTest {
     // ─── happy path ──────────────────────────────────────────────
     static Stream<Arguments> success() {
         return Stream.of(
-                Arguments.of(/* deterministic-mock-trigger */, /* expected fields */)
+                Arguments.of(/* FILL IN: deterministic-mock-trigger */, /* FILL IN: expected fields */)
         );
     }
 
     @ParameterizedTest
     @MethodSource("success")
-    void {{useCase}}_returns2xx(/* params */) {
+    void {{useCase}}_validRequest_returns2xx(/* FILL IN: params */) {
         final String url = MessageFormat.format(URL_TEMPLATE, String.valueOf(port) /* + path params */);
-        final ResponseEntity<?> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, Object.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
+        final ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotBlank();   // then assert the fields with JsonPath (SKILL.md)
     }
 
     // ─── failure matrix ──────────────────────────────────────────
     static Stream<Arguments> failures() {
         return Stream.of(
-                Arguments.of(/* trigger */, HttpStatus.BAD_REQUEST),
-                Arguments.of(/* trigger */, HttpStatus.FORBIDDEN),
-                Arguments.of(/* trigger */, HttpStatus.NOT_FOUND),
-                Arguments.of(/* trigger */, HttpStatus.INTERNAL_SERVER_ERROR)
+                Arguments.of(/* FILL IN: trigger */, HttpStatus.BAD_REQUEST),
+                Arguments.of(/* FILL IN: trigger */, HttpStatus.FORBIDDEN),
+                Arguments.of(/* FILL IN: trigger */, HttpStatus.NOT_FOUND),
+                Arguments.of(/* FILL IN: trigger */, HttpStatus.INTERNAL_SERVER_ERROR)
         );
     }
 
     @ParameterizedTest
     @MethodSource("failures")
-    void {{useCase}}_returnsMappedErrorStatus(/* trigger */, final HttpStatus expected) {
+    void {{useCase}}_failureTrigger_returnsMappedErrorStatus(final String trigger, final HttpStatus expected) {
         final String url = MessageFormat.format(URL_TEMPLATE, String.valueOf(port) /* + trigger */);
-        final ResponseEntity<?> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, Object.class);
-        assertEquals(expected, response.getStatusCode());
+        final ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, String.class);
+        assertThat(response.getStatusCode()).isEqualTo(expected);
     }
 }
-

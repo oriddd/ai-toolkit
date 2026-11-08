@@ -27,6 +27,7 @@ fails the build. Never silence a rule to make a PR green.
 ```
 eslint.config.mjs
 .prettierrc.json
+.prettierignore            # coverage/ (and any other generated output)
 tsconfig.json              # strict, see react-native-code-structure
 .husky/pre-commit
 package.json               # scripts + lint-staged
@@ -35,15 +36,17 @@ package.json               # scripts + lint-staged
 ## Dependencies
 
 ```json
-{ "devDependencies": { "typescript": "^5.6.0", "eslint": "^9.14.0", "typescript-eslint": "^8.13.0",
-  "eslint-plugin-react-hooks": "^5.0.0", "eslint-plugin-react-native": "^5.0.0", "eslint-plugin-boundaries": "^5.0.0",
+{ "devDependencies": { "typescript": ">=5.6 <6.1", "eslint": "^9.39.0", "typescript-eslint": "^8.13.0",
+  "eslint-plugin-react-hooks": "^7.0.0", "eslint-plugin-react-native": "^5.0.0", "eslint-plugin-boundaries": "^5.0.0",
   "eslint-import-resolver-typescript": "^4.0.0",
   "eslint-plugin-testing-library": "^7.0.0", "eslint-plugin-jest": "^28.8.0", "eslint-config-prettier": "^9.1.0",
   "prettier": "^3.3.0", "husky": "^9.1.0", "lint-staged": "^15.2.0" } }
 ```
 
 These ranges were installed together under ESLint 9 with no peer-dependency conflict (`eslint-plugin-react-native`
-needs v5; v4 peers on ESLint <= 8). `typescript-eslint` supports TypeScript below 6.1, so keep `typescript` on 5.x.
+needs v5; v4 peers on ESLint <= 8). Stay on ESLint 9 although 10 is current: `eslint-plugin-react-native` 5
+still peers on ESLint <= 9 (npm ERESOLVE on 10); move when it supports 10. `typescript-eslint` supports
+TypeScript below 6.1, so use TypeScript 5.x or 6.0 (whichever your Expo SDK ships).
 
 ## 1. Scripts: the single source of truth
 
@@ -66,15 +69,18 @@ in that order, stopping at the first failure. `--max-warnings 0` makes warnings 
 
 ```js
 // eslint.config.mjs
+import { defineConfig } from 'eslint/config';     // replaces the deprecated tseslint.config()
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactNative from 'eslint-plugin-react-native';
 import boundaries from 'eslint-plugin-boundaries';
+import testingLibrary from 'eslint-plugin-testing-library';
+import jest from 'eslint-plugin-jest';
 import prettier from 'eslint-config-prettier';
 
-export default tseslint.config(
+export default defineConfig(
   { ignores: ['node_modules', 'ios', 'android', 'coverage', '.expo'] },
-  ...tseslint.configs.strictTypeChecked,
+  tseslint.configs.strictTypeChecked,
   { languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } } },
   {
     linterOptions: { reportUnusedDisableDirectives: 'error' },
@@ -109,15 +115,19 @@ export default tseslint.config(
       ] }],
     },
   },
+  // test files: testing-library (RNTL follows the React rule set) and jest, plus the one test-only relaxation
+  { files: ['**/*.test.{ts,tsx}'], ...testingLibrary.configs['flat/react'] },
+  { files: ['**/*.test.{ts,tsx}'], ...jest.configs['flat/recommended'] },
   { files: ['**/*.test.{ts,tsx}'], rules: { '@typescript-eslint/no-non-null-assertion': 'off' } },
+  // the one logger implementation that writes to the console (react-native-security §5)
+  { files: ['src/shared/services/logger/ConsoleLogger.ts'], rules: { 'no-console': 'off' } },
   // eslint.config.mjs, jest.config.js, babel.config.js are outside tsconfig: lint them without type information
   { files: ['**/*.{js,mjs,cjs}'], ...tseslint.configs.disableTypeChecked },
   prettier,
 );
 ```
 
-Register `testing-library` and `jest` for `*.test.*` files the same way (their flat configs are
-documented upstream). `boundaries/element-types` turns the dependency direction from
+`eslint-plugin-react-hooks` 7's `recommended` rules include the React Compiler checks. `boundaries/element-types` turns the dependency direction from
 `react-native-code-structure` into a failing check and `boundaries/entry-point` limits cross-feature imports
 to a feature's `index.ts`. Keep the `disableTypeChecked` override last (before `prettier`), otherwise
 type-aware rules throw on config files ("not found by the project service").
@@ -125,7 +135,8 @@ type-aware rules throw on config files ("not found by the project service").
 Prove the boundaries once after setup: add `import { App } from '@app/App'` to a file under `src/shared/` and
 `import { x } from '@features/orders/hooks/x'` to a file under `src/app/`. `npm run lint` must fail with
 `boundaries/element-types` and `boundaries/entry-point`; then delete both. If it passes, the resolver
-is not resolving the aliases. (Verified on ESLint 9.39, `eslint-plugin-boundaries` 5.4, resolver 4.4.)
+is not resolving the aliases. (Verified on ESLint 9.39, `eslint-plugin-boundaries` 5.4, resolver 4.4,
+`eslint-plugin-react-hooks` 7.1, `eslint-plugin-testing-library` 7.16, `eslint-plugin-jest` 28.14.)
 
 ## 3. Prettier
 
@@ -133,7 +144,10 @@ is not resolving the aliases. (Verified on ESLint 9.39, `eslint-plugin-boundarie
 { "singleQuote": true, "trailingComma": "all", "printWidth": 100, "semi": true }
 ```
 
-Prettier owns formatting; ESLint carries no stylistic rules (`eslint-config-prettier` last).
+Prettier owns formatting; ESLint carries no stylistic rules (`eslint-config-prettier` last). Add
+`coverage` to `.prettierignore`: `prettier --check .` otherwise fails on the HTML report the previous
+`jest --coverage` run left behind. Code snippets in these skills are compressed for reading; run
+`npx prettier --write .` after pasting them.
 
 ## 4. Pre-commit: fast feedback
 

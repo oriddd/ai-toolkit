@@ -1,0 +1,13 @@
+package {{basePackage}}.adapter.cache.http;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Base64;
+/** Translates between the remote DTO and the CachePort's values, so the DTO never leaves this package. */
+class CacheEntryConverter {
+    byte[] toValue(CacheEntryResponse response) {
+        return Base64.getDecoder().decode(response.value().getBytes(StandardCharsets.US_ASCII));
+    }
+    CacheEntryResponse toRemote(String key, byte[] value, Duration ttl) {
+        return new CacheEntryResponse(key, Base64.getEncoder().encodeToString(value), ttl.toMillis());
+    }
+}

@@ -81,14 +81,21 @@ Validators are pure: no I/O, no clock, no database. Use `@field_validator` for n
 class Rule[T](Protocol):
     async def check(self, value: T) -> None: ...      # raises a DomainError
 
+class EmailAlreadyRegisteredError(ConflictError):
+    code = ErrorCodes.EMAIL_ALREADY_REGISTERED          # catalogue entry: see `python-error-handling`
+
 class EmailNotRegisteredRule:
     def __init__(self, users: UserRepository) -> None:
         self._users = users
 
     async def check(self, email: str) -> None:
         if await self._users.exists_by_email(email):
-            raise EmailAlreadyRegisteredError(email=email)
+            raise EmailAlreadyRegisteredError()          # no email param: it would reach `detail` and the logs
 ```
+
+A "this email is taken" answer tells anyone probing the endpoint which addresses have accounts
+(account enumeration). On a public sign-up endpoint, prefer a uniform response ("check your inbox") and
+tell the owner by email; keep the 409 only where the caller is already authenticated or the risk is accepted.
 
 The operation receives the rules through its constructor and calls them before acting; the rule raises
 a typed error from the catalogue (see `python-error-handling`). Compose with a small validator class

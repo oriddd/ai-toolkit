@@ -2,10 +2,13 @@ package {{basePackage}};
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 // Only @SpringBootApplication: it already scans this package (with the exclude filters test slices rely on) and loads application.yaml.
+// @ConfigurationPropertiesScan registers the @ConfigurationProperties records (spring-boot-conventions §1); without it they are never bound.
 // @EnableScheduling / @EnableAsync / @EnableCaching each go on their own @Configuration class (SchedulingConfig, …).
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class {{applicationClassName}} {
     public static void main(String[] args) {
         SpringApplication.run({{applicationClassName}}.class, args);

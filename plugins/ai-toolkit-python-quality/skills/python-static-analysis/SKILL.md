@@ -92,7 +92,7 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v<ruff-version>     # latest stable ruff-pre-commit tag; keep it equal to the ruff in uv.lock
     hooks:
-      - id: ruff
+      - id: ruff-check          # the hook was renamed from `ruff`, which is now a legacy alias
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
   - repo: local
@@ -112,13 +112,14 @@ Install once with `uv run pre-commit install`. Hooks are a convenience; CI is th
 
 ## 5. Non-skippable: the verify sequence
 The same commands run locally, in pre-commit and in CI, and fail the build. This is **the verify
-sequence** (canonical definition in `python-ci`):
+sequence**, and this section is its canonical definition: the quality plugin supplies the gate commands
+that `completion-gate` runs; `python-ci` runs the same sequence as CI jobs.
 
 ```
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"
 ```
-plus `uv run pytest -m integration` when Docker is available. `--no-verify` and ignoring CI do not make
-code mergeable.
+plus `uv run pytest -m integration` when Docker is available (exit code 5 means no integration test was
+collected yet and counts as a pass). `--no-verify` and ignoring CI do not make code mergeable.
 
 ## 6. Suppressions
 A suppression is a documented exception, never a fix: `# noqa: S603 - args are constants` /

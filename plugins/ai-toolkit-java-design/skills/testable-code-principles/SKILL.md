@@ -107,17 +107,27 @@ public int calculatePriority(Request request) {
     return request.getCategory().getPriority();
 }
 
-// ✅ Better: Inject Clock for testability
-public int calculatePriority(Request request, Clock clock) {
-    if (LocalTime.now(clock).getHour() < 9) {
-        return 1;
+// ✅ Better: Inject Clock (constructor injection) for testability
+@Component
+@RequiredArgsConstructor
+public class PriorityCalculator {
+    private final Clock clock;   // Clock.systemUTC() bean in prod, Clock.fixed(...) in tests
+
+    public int calculatePriority(Request request) {
+        if (LocalTime.now(clock).getHour() < 9) {
+            return 1;
+        }
+        return request.getCategory().getPriority();
     }
-    return request.getCategory().getPriority();
 }
 ```
 
 ### 1d. No hidden side effects
-Every method should do exactly what its name says, nothing more:
+Every method should do exactly what its name says, nothing more. A hidden
+side effect is a **state change** the caller cannot see from the name —
+mutating arguments or shared state, writing a cache, sending something.
+Logging and metrics are observability, not hidden side effects (see
+`observability`); keep them, at the right level.
 
 ```java
 // ✅ Good: Does what it says
@@ -125,12 +135,13 @@ public ValidationResult validate(Invoice invoice) {
     return validator.check(invoice);
 }
 
-// ❌ Bad: Hidden side effects (logging, caching, metrics)
+// ❌ Bad: Hidden side effects (state mutation, caching)
 public ValidationResult validate(Invoice invoice) {
-    log.info("Validating {}", invoice.getId());     // Side effect
-    metrics.increment("validation.count");       // Side effect
+    log.debug("Validating {}", invoice.getId());    // OK: observability, not a hidden side effect
+    metrics.increment("validation.count");       // OK: observability
     ValidationResult result = validator.check(invoice);
-    cache.put(invoice.getId(), result);              // Side effect
+    cache.put(invoice.getId(), result);              // Side effect: later reads now depend on this call
+    invoice.markValidated();                         // Side effect: mutates the argument
     return result;
 }
 
@@ -178,7 +189,7 @@ Before submitting code for review, verify:
 - [ ] **No hidden side effects** — Method does what its name says, nothing more
 - [ ] **Small** — Class ≤ 200 LOC, method ≤ 30 LOC, cyclomatic complexity ≤ 10
 - [ ] **Self-explanatory names** — Minimal comments needed
-- [ ] **Fail fast** — Validates inputs immediately at method entry
+- [ ] **Fail fast** — Request input is rejected by the validation layer (`input-validation`) before the call; methods guard their own invariants at entry (`Objects.requireNonNull`, domain constructors)
 
 ## 7. Cross-references
 

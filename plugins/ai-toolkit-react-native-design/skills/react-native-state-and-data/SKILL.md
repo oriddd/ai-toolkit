@@ -32,7 +32,7 @@ Two kinds of state, two tools, never mixed:
 shared/api-client/   httpClient.ts  types.ts   # mapHttpError lives in shared/errors
 features/orders/
 ├── api/       ordersApi.ts        # only place that calls the http client
-├── hooks/     useOrders.ts  useCancelOrder.ts  orderKeys.ts
+├── hooks/     useOrders.ts  useCancelOrder.ts  orderKeys.ts  useOrdersApi.ts
 └── model/     order.ts  orderSchemas.ts
 shared/state/ useSessionStore.ts
 ```
@@ -53,7 +53,12 @@ export type HttpRequest = Omit<RequestInit, 'headers' | 'body'> & {
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;                                        // JSON-serialised by the client (POST/PUT/PATCH payloads)
 };
-export interface HttpClient { request<T>(req: HttpRequest, schema: z.ZodType<T, unknown>): Promise<T>; }  // input type unknown: a branded or transformed schema's input differs from its output
+export interface HttpClient { request<T>(req: HttpRequest, schema: z.ZodType<T>): Promise<T>; }  // input type defaults to unknown: a branded or transformed schema's input differs from its output
+
+const authHeaders = async (getToken: () => Promise<string | null>): Promise<Record<string, string>> => {
+  const token = await getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export const toQueryString = (query: HttpRequest['query']): string => {
   const params = new URLSearchParams();
@@ -71,7 +76,9 @@ export const createHttpClient = (baseUrl: string, getToken: () => Promise<string
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }).catch((cause: unknown) => { throw toNetworkError(cause); });
     if (!res.ok) throw await mapHttpError(res);          // see react-native-error-handling (reads the 422 body)
-    const payload: unknown = res.status === 204 ? undefined : await res.json();  // 204 has no body: res.json() would throw
+    const payload: unknown = res.status === 204                 // 204 has no body: res.json() would throw
+      ? undefined
+      : await res.json().catch((cause: unknown) => { throw toContractError(cause); });  // malformed 2xx body
     const parsed = schema.safeParse(payload);            // validate the contract at the edge
     if (!parsed.success) throw toContractError(parsed.error);  // a ZodError never escapes: it becomes an AppError here
     return parsed.data;
@@ -79,7 +86,7 @@ export const createHttpClient = (baseUrl: string, getToken: () => Promise<string
 });
 ```
 
-`authHeaders` returns a plain `Record<string, string>` (e.g. `{ Authorization: 'Bearer ...' }`, or `{}` when signed out). An endpoint that
+`authHeaders` returns a plain `Record<string, string>` (`{}` when signed out). An endpoint that
 answers 204 is called with `z.undefined()` as its schema. Every failure the client throws is an `AppError` (network, HTTP status, contract),
 which is what makes the `AppError` narrowing in the hooks below true.
 
@@ -95,11 +102,13 @@ export type OrderFilter = { status?: Order['status']; customerId?: string };
 export const createOrdersApi = (http: HttpClient) => ({
   list: (filter: OrderFilter): Promise<Order[]> =>
     http.request({ path: '/orders', method: 'GET', query: filter }, z.array(orderSchema)),
-  cancel: (id: OrderId): Promise<Order> => http.request({ path: `/orders/${id}/cancel`, method: 'POST' }, orderSchema),
+  cancel: (id: OrderId): Promise<Order> =>
+    http.request({ path: `/orders/${encodeURIComponent(id)}/cancel`, method: 'POST' }, orderSchema),
 });
 ```
 
-Plain functions, typed in and out, no React and no caching here.
+Plain functions, typed in and out, no React and no caching here. Every value interpolated into a path is
+`encodeURIComponent`-encoded; query values go through `query`, which `URLSearchParams` encodes.
 
 ## 3. Query keys: a factory per feature
 
@@ -126,14 +135,33 @@ export const useOrdersApi = () => {
   return useMemo(() => createOrdersApi(http), [http]);
 };
 
+const NO_ORDERS: Order[] = [];                           // one stable empty array: `?? []` would be new each render
+
 export function useOrders(filter: OrderFilter) {
   const ordersApi = useOrdersApi();
   const q = useQuery({ queryKey: orderKeys.list(filter), queryFn: () => ordersApi.list(filter), staleTime: 30_000 });
-  return { orders: q.data ?? [], isLoading: q.isPending, error: q.error as AppError | null, refetch: q.refetch };
+  return {
+    orders: q.data ?? NO_ORDERS,
+    isLoading: q.isPending,
+    isOffline: q.fetchStatus === 'paused',                 // offline with nothing cached: show it, do not spin
+    error: q.error,                                        // AppError | null, via the Register below
+    refetch: q.refetch,
+  };
 }
 ```
 
-The hook narrows the error to `AppError`; the screen never sees raw `Response` or `AxiosError`.
+The error type is `AppError` because the api-client throws nothing else (section 1) and TanStack Query is
+told so once, instead of an `as` cast in every hook:
+
+```ts
+// shared/api-client/queryTypes.ts
+import type { AppError } from '@shared/errors/AppError';
+declare module '@tanstack/react-query' {
+  interface Register { defaultError: AppError }
+}
+```
+
+The screen never sees raw `Response` or `AxiosError`.
 
 ## 5. Mutations and optimistic updates
 
@@ -167,6 +195,7 @@ Optimistic only when failure is rare and rollback is clear; otherwise show a pen
 
 ```ts
 // shared/state/useSessionStore.ts
+type UserId = string;     // or a branded id from a shared schema; `shared` cannot import feature types
 type SessionState = { userId: UserId | null; signIn: (id: UserId) => void; signOut: () => void };
 export const useSessionStore = create<SessionState>()((set) => ({
   userId: null, signIn: (userId) => set({ userId }), signOut: () => set({ userId: null }),
@@ -178,12 +207,32 @@ One small store per concern. Never copy server data into a store; the query cach
 
 ## 7. Offline and retry stance
 
-```ts
+```tsx
 // app/providers/QueryProvider.tsx
-onlineManager.setEventListener((set) => NetInfo.addEventListener((s) => set(!!s.isConnected)));
-const client = new QueryClient({ defaultOptions: { queries: {
-  retry: (n, e) => n < 2 && isRetryable(e), networkMode: 'offlineFirst' }, mutations: { retry: 0 } } });
+onlineManager.setEventListener((set) => NetInfo.addEventListener((s) => { set(!!s.isConnected); }));
+focusManager.setEventListener((handleFocus) => {          // React Native has no window focus: use AppState
+  const sub = AppState.addEventListener('change', (state) => { handleFocus(state === 'active'); });
+  return () => { sub.remove(); };
+});
+
+export const QueryProvider = ({ children }: PropsWithChildren) => {
+  const { errorReporter } = useServices();                  // the client lives inside the services provider
+  const [client] = useState(() => new QueryClient({
+    queryCache: new QueryCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
+    mutationCache: new MutationCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
+    defaultOptions: {
+      queries: { retry: (n, e) => n < 2 && e.retryable, networkMode: 'offlineFirst' },
+      mutations: { retry: 0 },
+    },
+  }));
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+};
 ```
+
+`isReportable` is the "report unexpected errors only" rule from `react-native-error-handling` §6. Render
+`QueryProvider` inside `ServicesProvider`. With `offlineFirst`, a query with no cached data pauses while
+offline (`fetchStatus === 'paused'`) and resumes when `onlineManager` reports a connection: the hook exposes
+that as `isOffline` so the screen shows an offline state instead of a spinner.
 
 - Retry reads only for retryable `AppError`s (network, 5xx). Never retry 4xx.
 - Mutations are not retried automatically unless idempotent (send an idempotency key).

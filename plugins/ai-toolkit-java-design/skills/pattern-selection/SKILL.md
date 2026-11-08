@@ -55,17 +55,19 @@ The documentation said "use external-client pattern for external services" witho
 
 ### Operation Layer Decision
 
-The controller **always** delegates to exactly one `Operation` and holds no logic
-(`code-structure`). Scale decides only how much structure lives **behind** that Operation.
+The controller holds no logic and delegates to exactly **one** collaborator (guild rule #3,
+`code-structure`): a `*Service` when the use case is a single service call, an `*Operation`
+as soon as it orchestrates several. Scale decides how much structure lives behind it.
 
 | Complexity | Pattern | LOC Threshold | Use When |
 |------------|---------|---------------|----------|
+| **Trivial** | Controller → one Service (no Operation) | Service <100 LOC | 1 service call, nothing to orchestrate |
 | **Simple** | Controller → Operation → Services (Operation calls the services directly) | Operation <100 LOC | 2-4 service calls, straightforward sequence |
 | **Medium** | Operation + extracted helper services | Operation ~150 LOC | 5-7 service calls, some conditionals |
-| **Complex** | Operation + dedicated domain services / transaction boundary | Operation >150 LOC | 8+ calls, transactions, multi-step business logic |
+| **Complex** | Operation + dedicated domain services (`@Transactional` stays on the services, guild #7) | Operation >150 LOC | 8+ calls, transactions, multi-step business logic |
 
 **HITL Questions**:
-1. How many service calls? (2-4, 5-7, 8+)
+1. How many service calls? (1, 2-4, 5-7, 8+)
 2. Complex conditional logic between calls?
 3. Multi-step transactions?
 4. Reused from multiple controllers?
@@ -102,11 +104,16 @@ public class GetDataOperation {
 
 | Parameters | Validation | Reuse | Pattern |
 |------------|------------|-------|---------|
-| **1-3 simple** | None | 1-2 methods | Inline with constants for defaults |
+| **1-3 simple** | None or basic null checks | Any | Inline with constants for defaults |
 | **4 simple** | Basic null checks | 1-2 methods | Inline (borderline) |
-| **5+ simple** | Any | Multiple | Record parameter object |
-| **3+ complex** | Cross-field validation | Any | Record parameter object |
-| **Builder needed** | N/A | Any | Record with builder pattern |
+| **4 simple** | Basic null checks | 3+ methods | Record parameter object |
+| **5+ simple** | Any | Any | Record parameter object |
+| **1-2 complex** | No cross-field rule | Any | Inline |
+| **3+ complex** | Any | Any | Record parameter object |
+| **Any count** | Cross-field validation | Any | Record parameter object |
+| **Builder needed** (many optional params) | N/A | Any | Record with builder pattern |
+
+Read the rows top-down; every combination of count, validation and reuse is covered.
 
 **Anti-Pattern**: Record for 2 parameters
 ```java
@@ -159,17 +166,18 @@ public List<Result> search(String term, boolean caseSensitive) {
 ```
 
 #### Before Adding Layers Behind the Operation
-**STOP and ASK**:
-1. How many service calls does this use case (its one Operation) orchestrate?
+**Ask only when the answer is not clear from the code** (otherwise apply the table above):
+1. How many service calls does this use case orchestrate?
 2. Is there complex permission checking + business logic + audit logging?
 3. Are there multi-step transactions spanning multiple repositories?
 
-**Decision** (the controller still delegates to exactly one Operation in every case):
-- 2-4 simple service calls → the Operation calls the services directly (no extra orchestration layer)
+**Decision** (the controller delegates to one `*Operation` when the use case orchestrates, otherwise to one `*Service`):
+- 1 service call → the controller calls that one Service (no Operation)
+- 2-4 simple service calls → one Operation calls the services directly (no extra orchestration layer)
 - 5+ steps OR complex orchestration → split the Operation's work into focused helper / domain services
 
 #### Before Parameter Objects
-**STOP and ASK**:
+**Ask only when the table above is ambiguous** (e.g. 4 parameters with unclear reuse):
 1. How many parameters does this method have?
 2. Are there complex validation rules?
 3. Is this parameter set shared across multiple methods?
@@ -231,6 +239,8 @@ These sections live in `references/` so this file stays small. Read only the fil
 
 **ALWAYS ask for**:
 - External client scale (endpoints, complexity, growth)
+
+**Ask only when ambiguous** (decide from the tables above when the code already answers it):
 - Orchestration complexity (service count, transaction needs)
 - Parameter object necessity (count, validation complexity)
 

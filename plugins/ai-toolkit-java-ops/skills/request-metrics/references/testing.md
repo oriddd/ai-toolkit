@@ -76,9 +76,9 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_recorderFound_callsRecord() throws Exception {
-        when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
-        when(registry.getMetricsRecorder(MonitoringConstants.METRIC_EXPORT_INVOICE))
-                .thenReturn(recorder);
+        when(resolver.resolve(request)).thenReturn(Optional.of(MonitoringConstants.METRIC_EXPORT_INVOICE));
+        when(registry.getRecorder(MonitoringConstants.METRIC_EXPORT_INVOICE))
+                .thenReturn(Optional.of(recorder));
 
         filter.doFilterInternal(request, response, chain);
 
@@ -87,14 +87,25 @@ class MetricsFilterTest {
     }
 
     @Test
-    void doFilter_chainThrows_recorderStillCalled() throws Exception {
-        when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
-        when(registry.getMetricsRecorder(any())).thenReturn(recorder);
+    void doFilter_chainThrows_recorderStillCalledWithStatus500() throws Exception {
+        when(resolver.resolve(request)).thenReturn(Optional.of(MonitoringConstants.METRIC_EXPORT_INVOICE));
+        when(registry.getRecorder(any())).thenReturn(Optional.of(recorder));
         doThrow(new ServletException("boom")).when(chain).doFilter(any(), any());
 
-        assertThrows(ServletException.class,
-                () -> filter.doFilterInternal(request, response, chain));
+        assertThatThrownBy(() -> filter.doFilterInternal(request, response, chain))
+                .isInstanceOf(ServletException.class);
+        verify(response).setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         verify(recorder).recordMetrics(anyLong(), eq(request), eq(response));
+    }
+
+    @Test
+    void doFilter_noMetricForUri_skipsRegistry() throws Exception {
+        when(resolver.resolve(request)).thenReturn(Optional.empty());
+
+        filter.doFilterInternal(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verifyNoInteractions(registry);
     }
 }
 ```

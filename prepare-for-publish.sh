@@ -22,7 +22,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YEL='\033[1;33m'; BLU='\033[0;34m'; NC='\033[0m'
 FAILURES=0
@@ -33,6 +33,8 @@ fail()    { printf "  ${RED}FAIL${NC}  %s\n" "$1"; FAILURES=$((FAILURES + 1)); }
 warn()    { printf "  ${YEL}WARN${NC}  %s\n" "$1"; }
 
 # Only look at files git actually tracks (plus the working tree), never .git internals.
+# Untracked files are not published, so they are not scanned: `git add` them first to include them.
+# Run automatically before every push with: pre-commit install --hook-type pre-push (see .pre-commit-config.yaml).
 tracked() { git ls-files 2>/dev/null; }
 
 # ---------------------------------------------------------------------------
@@ -157,20 +159,22 @@ hist_hit=0
 for term in ${BLOCK[@]+"${BLOCK[@]}"}; do
   n_meta="$(git log --all --format='%an %ae %cn %ce%n%B' | grep -ciF -- "$term")"
   n_content="$(git rev-list --all | xargs -I{} git grep -liI -F -e "$term" {} 2>/dev/null | wc -l | tr -d ' ')"
-  if [ "${n_meta:-0}" -gt 0 ] || [ "${n_content:-0}" -gt 0 ]; then
-    fail "git history contains '$term' (commit metadata lines: $n_meta, file revisions: $n_content) — rewrite history before publishing"; hist_hit=1
+  n_paths="$(git log --all --name-only --format= | sort -u | grep -ciF -- "$term")"   # files renamed/deleted since
+  if [ "${n_meta:-0}" -gt 0 ] || [ "${n_content:-0}" -gt 0 ] || [ "${n_paths:-0}" -gt 0 ]; then
+    fail "git history contains '$term' (commit metadata lines: $n_meta, file revisions: $n_content, file paths: $n_paths) — rewrite history before publishing"; hist_hit=1
   fi
 done
-[ "$hist_hit" -eq 0 ] && pass "git history (metadata + content, all refs) free of blocklisted terms"
+[ "$hist_hit" -eq 0 ] && pass "git history (metadata, content and file paths, all refs) free of blocklisted terms"
 
 # 2e. Heuristic leak classes the blocklist cannot know about (review, do not ignore).
 git grep -nIE "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" -- . ':(exclude)LICENSE' 2>/dev/null \
   | grep -vE "noreply|example\.(com|org)|@types/|Name <email>|@sentry/|@react|@tanstack|@testing|@expo|@typescript|@mermaid|@babel|@eslint" \
   | while IFS= read -r line; do warn "email-like string: ${line:0:120}"; done
-git grep -nIE "\b[A-Z]{2,6}-[0-9]{2,6}\b" -- . 2>/dev/null \
+# No \b: Apple's git grep -E does not support it, so the pattern would never match on macOS.
+git grep -nIE "(^|[^A-Za-z0-9])[A-Z]{2,6}-[0-9]{2,6}([^A-Za-z0-9]|$)" -- . 2>/dev/null \
   | grep -vE "PROJ-|TICKET-|ADR-|JSR-|ISO-|RFC-|UTF-|SHA-|CVE-|TD-0|AES-|HS-|HTTP-|TLS-" \
   | while IFS= read -r line; do warn "ticket-key-like string: ${line:0:120}"; done
-git grep -nIE "https?://[A-Za-z0-9.-]+\.(local|internal|corp|lan)\b|:8443\b" -- . ':(exclude)prepare-for-publish.sh' 2>/dev/null \
+git grep -nIE "https?://[A-Za-z0-9.-]+\.(local|internal|corp|lan)([^A-Za-z0-9.-]|$)|:8443([^0-9]|$)" -- . ':(exclude)prepare-for-publish.sh' 2>/dev/null \
   | while IFS= read -r line; do fail "internal-looking host: ${line:0:120}"; done
 
 # 2f. AI-tool attribution must not appear in tracked content or in any commit message.

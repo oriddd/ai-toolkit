@@ -6,7 +6,7 @@ description: >
   comment, docstring or test.
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
-depends_on: [completion-gate]
+depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0

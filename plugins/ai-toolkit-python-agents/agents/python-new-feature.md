@@ -14,6 +14,9 @@ affected.
 
 ## Skills to apply — determine by feature shape
 
+Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
+
 ```
 IF new REST endpoint:        → python-fastapi-conventions
 IF new entity / DB table:    → python-persistence (repository, Alembic revision)
@@ -50,55 +53,67 @@ IF new metric / trace span:  → python-observability
    - Exception cases and error codes
    Ask the developer to confirm before generating code.
 
-4. GENERATE in layer order:
+4. GENERATE in layer order — ports, leaves, services, operations, routers, tests:
    a. Alembic revision (if new entity)
-   b. ORM model + repository (Protocol + implementation)
-   c. Domain/pydantic models
-   d. Service(s)
-   e. Downstream client(s) behind a Protocol, with timeout and typed errors
-   f. Validation rules
-   g. Operation(s)
+   b. Domain/pydantic models and the Protocols (ports) for repositories and downstream clients
+   c. ORM model + repository implementation
+   d. Downstream client(s) behind their Protocol, with timeout and typed errors
+   e. Validation rules
+   f. Service(s)
+   g. Operation(s) (only when several services are orchestrated, python-code-structure §7)
    h. Router(s), registered in the app factory
-   i. Tests (unit → API → integration)
-   j. Metrics / logging (if needed)
+   i. Metrics / logging (if needed)
+   j. Tests (unit → API → integration), once all code above exists
 
-5. VALIDATE: the verify sequence (see `ai-toolkit-python-ops:python-ci`) is green.
+5. VALIDATE: the verify sequence (see `ai-toolkit-python-quality:python-static-analysis` §5) is green.
 
 6. UPDATE the architecture/context notes and CHANGELOG.
 ```
 
+## Questions when you run as a subagent
+
+A subagent cannot ask the developer — only the main session can. If a CLARIFY / ASK question or a confirmation
+step is still open and your brief does not answer it, write no files: return `NEEDS INPUT:` with the numbered
+questions and the default you would assume for each, then stop. The caller asks the developer in the main session
+and invokes you again with the answers. Never invent the answer to a HITL question.
+
 ## Delegation (use subagents when you can)
 
-Follow the `ai-toolkit-workflow:parallel-delegation` skill. Subagents cannot spawn subagents: if the Agent tool is
-available you are the main-session agent (`claude --agent`) — delegate as below; if it is not,
-do the same steps inline, in order.
+Follow the `ai-toolkit-workflow:parallel-delegation` skill. Delegate as below whenever the Agent tool is available —
+also when you run as a subagent yourself (a subagent can start subagents); if it is not available, do the same
+steps inline, in order.
 
-1. **Sequential (you):** decompose, design, get developer confirmation, then the shared core —
-   Alembic revision, ORM model, repository, domain models, exceptions.
-2. **Parallel fan-out, one message** (disjoint files only):
-   - `general-purpose` per independent layer with no dedicated agent (downstream client,
-     validation rule, metrics) — brief each with its skill and file list;
+1. **Sequential (you):** decompose, design, get developer confirmation, then the shared core (steps a–c) —
+   Alembic revision, domain models, Protocols, ORM model, repository, exceptions.
+2. **Parallel leaves, one message** (disjoint files only): `general-purpose` per independent leaf with no dedicated
+   agent (downstream client, validation rule, metrics — steps d, e, i) — brief each with its skill, the Protocol it
+   implements and its file list.
+   Use these qualified names with the Agent tool; bare names do not resolve. Say in every subagent brief: "do NOT run builds or the test suite; the main thread owns builds" (concurrent runs corrupt shared state) and "never stage, commit, push or stash"; a test-writer runs tests only if the brief explicitly says so.
+3. **Sequential (you):** services, operations and routers (steps f–h) that tie the layers together, plus the
+   `conftest.py` fixtures and fakes the tests need.
+4. **Parallel fan-out, one message — only once all code exists** (step j):
    - `ai-toolkit-python-agents:python-test-writer` per independent group of modules;
-   - `ai-toolkit-docs:update-context` — docs + CHANGELOG.
-   Use these qualified names with the Agent tool; bare names do not resolve. Say in every `python-test-writer` brief: "do NOT run builds or the test suite; the main thread owns builds" (concurrent runs corrupt shared state); it runs tests only if the brief explicitly says so.
-3. **Sequential (you):** wire services/operations/routers that tie the layers together,
-   run the verify sequence, then `ai-toolkit-python-agents:python-code-review` on the combined diff.
+   - `ai-toolkit-docs:update-context` — docs + CHANGELOG (only when no release bot owns it).
+5. **Sequential (you):** run the verify sequence, then `ai-toolkit-python-agents:python-code-review` on the combined diff.
 
 Keep shared files (`pyproject.toml`, the `config/` settings package, the error-code catalogue, Alembic revision chain, `main.py` router
-registration) and the test/lint runs to yourself. Verify every result (read the diff, run the tests) before
+registration, and shared test infrastructure — `conftest.py`, shared fakes and fixtures) and the test/lint runs to yourself;
+add the fixtures and fakes the tests need before the fan-out. Verify every result (read the diff, run the tests) before
 reporting done.
 
 ## Commit policy and completion gate
 
-Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
-Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill and finish with its evidence table.
-For Python its verify sequence is the one defined in `ai-toolkit-python-ops:python-ci`: `uv run ruff check . && uv run ruff
+Never `git commit`, `git push`, `git stash` or tag — leave the changes in the working tree until the developer asks.
+Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill — all nine checks — and finish with its
+evidence table; return that table to your caller unchanged, so it can relay it instead of running the gate again.
+For Python its verify sequence is the one defined in `ai-toolkit-python-quality:python-static-analysis` §5: `uv run ruff check . && uv run ruff
 format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"` (plus
-`uv run pytest -m integration` when Docker is available), followed by coverage of the changed code via
+`uv run pytest -m integration` when Docker is available; exit code 5 = no integration test collected, which counts as a pass), followed by coverage of the changed code via
 diff-cover, `ai-toolkit-quality:code-hygiene` and Sonar where configured. Fix failures at the cause; never suppress or weaken a check to get green (no blanket
 `# noqa` / `# type: ignore`, no lowered coverage threshold, no skipped or deleted tests).
 Gate check 5 (Standards) is the `ai-toolkit-python-agents:python-code-review` run from the delegation plan above: reuse its report as the
-evidence instead of reviewing a second time; re-run it only if you changed code after it.
+evidence instead of reviewing a second time; re-run it only if you changed code after it. Without the Agent tool,
+run check 5 inline: apply the Do/Don't lists of the loaded `python-*` skills to the whole diff, including untracked files.
 
 ## Checklist before returning
 
@@ -108,5 +123,5 @@ evidence instead of reviewing a second time; re-run it only if you changed code 
 - [ ] API tests: every new endpoint.
 - [ ] Integration tests: every new database or downstream boundary.
 - [ ] Migration applies and rolls back cleanly.
-- [ ] Architecture/context notes updated; CHANGELOG `[Unreleased]` appended.
+- [ ] Architecture/context notes updated; CHANGELOG `[Unreleased]` appended — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

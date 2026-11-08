@@ -1,40 +1,34 @@
 package {{basePackage}}.health.indicator;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import {{basePackage}}.health.config.{{Dep}}ReadinessProperties;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
 @Component("{{indicatorBeanName}}")
 public class {{Dep}}HealthIndicator extends AbstractReadinessIndicator {
 
-    private static final String SERVICE_NAME = "{{serviceDisplayName}}";
+    private static final String SERVICE_NAME = "{{dependencyDisplayName}}";
 
-    private final String baseUrl;
-    private final String readinessEndpoint;
+    private final {{Dep}}ReadinessProperties properties;
 
-    @Autowired
-    public {{Dep}}HealthIndicator(final WebClient readinessWebClient,
-                                  @Value("${{{configKey}}.base-url}") final String baseUrl,
-                                  @Value("${{{configKey}}.readiness-endpoint}") final String readinessEndpoint) {
-        super(readinessWebClient);
-        this.baseUrl = baseUrl;
-        this.readinessEndpoint = readinessEndpoint;
+    public {{Dep}}HealthIndicator(final RestClient readinessRestClient,
+                                  final {{Dep}}ReadinessProperties properties) {
+        super(readinessRestClient, properties.cacheTtl());
+        this.properties = properties;
     }
 
     @Override
-    String getServiceName() {
+    protected String getServiceName() {
         return SERVICE_NAME;
     }
 
     @Override
-    int getSuccessStatusCode() {
+    protected int getSuccessStatusCode() {
         return {{successStatusCode}};
     }
 
     @Override
-    String getReadinessURI() {
-        return baseUrl + readinessEndpoint;
+    protected String getReadinessURI() {
+        return properties.baseUrl() + properties.readinessEndpoint();
     }
 }
-

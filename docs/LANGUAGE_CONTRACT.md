@@ -19,7 +19,8 @@ A skill belongs to exactly one phase. Never mix delivery workflow with implement
 
 `completion-gate` is the single definition of done for every language. Each language's `quality` plugin
 supplies the concrete commands (build, tests, static analysis, coverage) that the gate's command table points to —
-when you add a language, add its row there. Nobody commits until the developer asks; `ai-toolkit-workflow` backs that with a best-effort hook (a safety net, not a guarantee).
+when you add a language, add its row there. The `ops` plugin's CI skill runs that same sequence verbatim (the validator
+checks the canonical Python and React Native sequences are identical wherever they are quoted). Nobody commits until the developer asks; `ai-toolkit-workflow` backs that with a best-effort hook (a safety net, not a guarantee).
 
 ## Skill naming
 
@@ -52,15 +53,16 @@ everything else is optional and added as the standards mature.
 ## Routing hook
 
 The `design` plugin ships `hooks/hooks.json` (SessionStart) and `hooks/detect-and-route.sh`, which
-prints `hooks/routing.md` **only when the project is that language**:
+prints `hooks/routing.md` **only when the project is that language** — at the project root or one workspace level
+down (`*/`, `apps/*`, `packages/*`, `services/*`):
 
 | Language | Detect |
 | --- | --- |
-| Java | `pom.xml`, `build.gradle(.kts)`, `settings.gradle(.kts)` |
+| Java | `pom.xml`, `build.gradle(.kts)`, `settings.gradle(.kts)`; also an empty project folder (new-service route) |
 | Python | `pyproject.toml`, `requirements*.txt`, `setup.py`, `setup.cfg`, `Pipfile` |
 | React Native | `package.json` containing `"react-native"` |
 
-`routing.md` is a task → skill table plus 3–4 gates, under ~350 tokens.
+`routing.md` is a task → skill table plus 3–4 gates, under 400 words (enforced by the validator).
 
 ## SKILL.md frontmatter
 
@@ -73,11 +75,12 @@ Plugins declare `dependencies` in `plugin.json` (bare names, same marketplace; C
 The graph must stay acyclic and shallow:
 
 - A plugin depends on **every plugin its skills' `depends_on` name** and nothing more; the validator fails a missing dependency and any cycle.
-  So `-design` depends only on the neutral `ai-toolkit-quality` (its routing table cites `completion-gate`), `-quality` on `-design` (Python / React Native also `-build`), `-ops` on `-design` and `-quality`, and
+  So `-design` depends only on the neutral `ai-toolkit-quality` (its routing table cites `completion-gate`), `-quality` on `-design` (Python / React Native also `-build`), `-ops` on `-design` and `-quality` (React Native also
+  `-build`, Java also `ai-toolkit-workflow`), and
   `-build` on what its skills need (Java: design, ops, quality, workflow). A skill never lists a skill from a *later* phase in `depends_on`;
   mention it in prose instead.
 - `ai-toolkit-<lang>` (java, python, react-native) is a manifest-only plugin that depends on that language's four phase plugins and
-  `ai-toolkit-workflow` (Java also `ai-toolkit-docs`) — installing it is installing the language.
+  `ai-toolkit-workflow` and `ai-toolkit-docs` — installing it is installing the language.
 - `ai-toolkit-<lang>-agents` depends on that language's four phase plugins and `ai-toolkit-docs` (Java also `ai-toolkit-java-scaffold`).
 - `ai-toolkit-docs` depends on `ai-toolkit-workflow`, which depends on `ai-toolkit-quality`, which depends on nothing.
 - References between skills of different plugins are by **name** only (never relative links) — the validator enforces it.

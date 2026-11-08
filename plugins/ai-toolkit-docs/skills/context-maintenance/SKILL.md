@@ -4,7 +4,7 @@ description: Maintain project context documentation including architecture, stan
 tier: must
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [documentation-and-adr]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.0
 last_reviewed: 2026-06-28
@@ -38,8 +38,19 @@ context/
 ├── progress-tracker.md   # Status & metrics
 ├── system-context.md     # C4 system context diagram (Mermaid)
 ├── component-diagram.md  # C4 component diagram (Mermaid)
-└── domain-flow.md        # Main flow sequence diagram (Mermaid)
+├── domain-flow.md        # Main flow sequence diagram (Mermaid)
+├── dependencies.md       # Upstream / downstream systems and infrastructure
+├── glossary.md           # Ubiquitous language
+├── runbooks.md           # Operator procedures
+├── slo.md                # SLO summary (canonical table: docs/SLO.md)
+└── validate-context.sh   # Fails while a (REQUIRED) section is still empty
 ```
+
+### Starting from the templates
+
+This skill ships blank scaffolds in [`templates/context/`](templates/context/README.md). Copy the folder to the repo
+root as `context/`, fill every `(REQUIRED)` section (the prompts are HTML comments, which do not count as content),
+then run `bash context/validate-context.sh` — it fails until each required section has real content.
 
 ## Update Triggers
 
@@ -95,7 +106,7 @@ When adding a caching layer:
 
 #### Redis (New)
 - **Purpose**: Distributed caching
-- **Configuration**: `spring.redis.*` properties (Spring) / `cache.redis.*` settings
+- **Configuration**: `spring.data.redis.*` properties (Spring Boot 3+; the old `spring.redis.*` keys are ignored) / `cache.redis.*` settings
 - **Usage**: `@Cacheable` annotations (Spring), or via the cache port — never the client directly
 ```
 
@@ -164,7 +175,7 @@ If you need a static image for a document that doesn't support Mermaid:
 # Install Mermaid CLI
 npm install -g @mermaid-js/mermaid-cli@<pinned-version>   # developer-run / CI, pinned — an agent does not install tools
 
-# Generate PNG from markdown file containing mermaid block
+# Generate PNG from markdown file containing mermaid block (one image per block: system-context-1.png, …)
 mmdc -i context/system-context.md -o system-context.png
 ```
 
@@ -180,23 +191,25 @@ mmdc -i context/system-context.md -o system-context.png
 The `CHANGELOG.md` is **append-only** at the top (under `[Unreleased]`).
 
 > **Release bot:** when release-please / semantic-release owns the changelog, do not edit it by hand — not the weekly append, not the release
-> rename (see `release-versioning`). Hand-maintained files use the Keep a Changelog headings (Added / Changed / Fixed); bot-generated
-> files use the bot's own headings.
+> rename (see `release-versioning`). The format is the one in `release-versioning` §5 for every repo, hand-maintained or
+> bot-generated: sections named after the Conventional Commit type (Features, Bug Fixes, …) plus Deprecations.
 
 ### Adding Entries
 
 ```markdown
 ## [Unreleased]
 
-### Added
-- New feature description
+### Features
+- scope: new feature description (#PR)
 
-### Changed
-- What changed and why
+### Bug Fixes
+- scope: bug fix description (#PR)
 
-### Fixed
-- Bug fix description
+### Deprecations
+- `legacyThing` — removed in 2.0
 ```
+
+Other changes go under the section of their commit type (e.g. `### Performance Improvements` for `perf`).
 
 ### Release Process
 
@@ -204,14 +217,14 @@ When releasing a version:
 
 1. **Rename [Unreleased] to version**:
    ```markdown
-   ## [1.0.0] - 2026-07-15
+   ## [1.0.0] — 2026-07-15
    ```
 
 2. **Add new [Unreleased] section** at top:
    ```markdown
    ## [Unreleased]
    
-   ## [1.0.0] - 2026-07-15
+   ## [1.0.0] — 2026-07-15
    ```
 
 3. **Update progress-tracker.md** to match
@@ -335,8 +348,15 @@ In `progress-tracker.md`:
 # Check for broken links (requires markdown-link-check)
 npx markdown-link-check@<pinned-version> context/*.md
 
-# Validate Mermaid syntax (requires mermaid-cli)
-for f in context/*.md; do mmdc -i "$f" -o /dev/null; done
+# Validate Mermaid syntax (mermaid-cli via npx; mmdc rejects -o /dev/null, so render into a temp dir)
+tmp="$(mktemp -d)"; echo '{"args":["--no-sandbox"]}' > "$tmp/puppeteer.json"   # --no-sandbox: headless Chromium in containers
+for f in context/*.md; do
+  grep -q '^```mermaid' "$f" || continue
+  npx -y @mermaid-js/mermaid-cli@<pinned-version> -p "$tmp/puppeteer.json" -i "$f" -o "$tmp/$(basename "$f" .md).svg" || exit 1
+done
+
+# Required sections filled in
+bash context/validate-context.sh
 
 # Check for outdated dates (manual review)
 grep -r "Last Updated" context/
@@ -392,11 +412,26 @@ Good context documentation:
 
 ### Git Hooks
 
-Create a pre-commit hook to remind about docs:
+Add a reminder hook to the repo's `.pre-commit-config.yaml` (a hand-written `.git/hooks/pre-commit` is overwritten by
+`pre-commit install`), with the script versioned in the repo:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: context-docs-reminder
+        name: remind to update context/
+        entry: scripts/context-reminder.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+        verbose: true        # print the reminder even though the hook passes
+```
 
 ```bash
 #!/bin/bash
-# .git/hooks/pre-commit
+# scripts/context-reminder.sh (chmod +x) — never fails the commit, only reminds
 
 if git diff --cached --name-only | grep -qE "^(src/main/java|src|app|lib)/"; then
     echo "📝 Remember to update context/ documentation if needed!"
@@ -414,9 +449,15 @@ Add to the CI pipeline (Jenkinsfile shown; the same step works in GitHub Actions
 stage('Documentation Check') {
     steps {
         sh 'npx markdown-link-check@<pinned-version> context/*.md'
-        // Validate mermaid diagrams
-        // developer-run / CI, pinned — an agent does not install tools
-        sh 'npm install -g @mermaid-js/mermaid-cli@<pinned-version> && for f in context/*.md; do mmdc -i "$f" -o /dev/null; done'
+        sh 'bash context/validate-context.sh'
+        // Validate mermaid diagrams — CI only, pinned; an agent does not install tools
+        sh '''
+          tmp="$(mktemp -d)"; echo '{"args":["--no-sandbox"]}' > "$tmp/puppeteer.json"   # --no-sandbox: headless Chromium in containers
+          for f in context/*.md; do
+            grep -q '^```mermaid' "$f" || continue
+            npx -y @mermaid-js/mermaid-cli@<pinned-version> -p "$tmp/puppeteer.json" -i "$f" -o "$tmp/$(basename "$f" .md).svg" || exit 1
+          done
+        '''
     }
 }
 ```

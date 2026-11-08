@@ -62,8 +62,11 @@ Context:     what already exists (paths, class names, signatures it must call)
 Skills:      load <skill-a>, <skill-b> before writing code
 Files:       may create/edit: <list>; must not touch anything else
 Constraints: non-negotiables that apply, naming, package, test naming
-Done when:   concrete check (e.g. one test file passes: `mvn -q test -Dtest=FooTest` / `pytest tests/test_foo.py` / `jest foo.test.ts` — report; do not run it if the main thread owns builds)
-Return:      files changed + 3-line summary + anything you could not do
+Done when:   a check the subagent can do itself (files exist, compile-level self-review, the listed cases are covered);
+             the main thread runs the build/tests (e.g. `mvn -q test -Dtest=FooTest` / `pytest tests/test_foo.py` / `jest foo.test.ts`)
+Rules:       never stage, commit, push or stash; do not run builds or tests unless this brief says you own them
+Return:      files changed + 3-line summary + anything you could not do, plus open questions or assumptions
+             (a subagent cannot ask the developer — it returns its questions instead)
 ```
 
 Brief it like a peer: state what is already ruled out, and do not hand over your conclusion
@@ -80,8 +83,9 @@ as a question — hand over the task.
   `general-purpose` only for generation that has no dedicated agent.
 - Tell every test-writer in its brief: **do not run builds or tests — the main thread owns builds** (concurrent runs
   corrupt shared build output and coverage files).
-- Subagents cannot spawn subagents. If *you* are a subagent, the Agent tool is not
-  available — do the same steps inline, in order.
+- A subagent can spawn subagents (one more level) when the Agent tool is available to it; if it is not, do the same
+  steps inline, in order. A subagent cannot ask the developer: HITL questions and approvals happen in the main
+  session, so a subagent returns its open questions or assumptions instead of asking.
 
 ## 6. Verify what comes back
 

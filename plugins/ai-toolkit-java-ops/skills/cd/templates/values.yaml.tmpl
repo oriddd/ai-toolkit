@@ -1,18 +1,41 @@
 image:
-  registry: {{imageRegistry}}
+  registry: {{imageRegistry}}   # an umbrella chart's global.imageRegistry takes precedence
   repository: {{chartName}}
   pullPolicy: IfNotPresent
+  # tag: defaults to .Chart.AppVersion
+
+serviceAccount:
+  create: true
+  name: ""          # defaults to the release-scoped full name
+  automount: false  # true only if the service calls the Kubernetes API
+
+service:
+  port: {{appPort}}
 
 autoscaling:
+  enabled: true
   minReplicas: 1
   maxReplicas: {{autoscaling.maxReplicas}}
   targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  maxUnavailable: 1   # rendered only when autoscaling.minReplicas > 1
+
+serviceMonitor:
+  enabled: true       # also needs the Prometheus Operator CRD in the cluster; skipped automatically without it
+  interval: 30s
+
+springProfilesActive: k8s   # spring-boot-conventions profiles: default / test / k8s / prod
+
+credentials:
+  existingSecret: ""  # preferred: a Secret managed by External Secrets / Sealed Secrets / SOPS
+  values: {}          # dev/test only — rendered into <fullname>-credentials; never commit real credentials
 
 resources:
   requests:
     memory: "{{resources.requests.memory}}"
     cpu: "{{resources.requests.cpu}}"
-    ephemeral-storage: "1Mi"
+    ephemeral-storage: "64Mi"
   limits:
     memory: "{{resources.limits.memory}}"
     cpu: "{{resources.limits.cpu}}"
@@ -20,5 +43,8 @@ resources:
 
 logLevel: INFO
 
-# Add service-specific config blocks below (libraries, integrations, etc.)
+extraEnv: []           # list of {name, value} or {name, valueFrom: {secretKeyRef: …{{ "}}" }}
+extraVolumes: []       # e.g. license files, fonts, certs
+extraVolumeMounts: []
 
+# Add service-specific config blocks below (libraries, integrations, etc.)

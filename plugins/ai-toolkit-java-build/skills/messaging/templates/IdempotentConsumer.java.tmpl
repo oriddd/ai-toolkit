@@ -1,4 +1,7 @@
 package {{basePackage}}.messaging;
+import java.nio.charset.StandardCharsets;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -7,24 +10,34 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Idempotent consumer skeleton — replace `processEvent` and the
  * dedup-store calls with project specifics. Retry / DLQ topology lives
  * in application.yaml under `spring.kafka.*` + RetryTopicConfiguration.
+ * The event id is the `event-id` record header the outbox relay sends (SKILL.md §3), never a payload field.
  */
 @Component
 public class IdempotentConsumer {
+    static final String EVENT_ID_HEADER = "event-id";
     private final TransactionTemplate tx;
     public IdempotentConsumer(TransactionTemplate tx) { this.tx = tx; }
     @KafkaListener(topics = "${kafka.topics.example.name}",
                    groupId = "${kafka.topics.example.group-id}")
-    public void onMessage(String payload, Acknowledgment ack) {
-        String eventId = extractEventId(payload);
-        // dedupe insert + business effect commit in ONE transaction (SKILL.md §4)
+    public void onMessage(ConsumerRecord<String, String> rec, Acknowledgment ack) {
+        String eventId = eventId(rec);
+        // dedupe insert + business effect commit in ONE transaction (SKILL.md §4). Domain exceptions are unchecked,
+        // so a failing effect rolls back the dedupe row as well and the redelivery is processed again.
         tx.executeWithoutResult(status -> {
             if (tryRecord(eventId)) {               // false = already processed — skip the effect
-                processEvent(payload);
+                processEvent(rec.value());
             }
         });
         ack.acknowledge();                          // only after the transaction committed
     }
-    private String extractEventId(String payload) { /* TODO */ return payload; }
+    /** A record without the header can never be deduplicated: fail it as non-retryable so it goes to the DLT. */
+    private String eventId(ConsumerRecord<String, String> rec) {
+        Header header = rec.headers().lastHeader(EVENT_ID_HEADER);
+        if (header == null) {
+            throw new IllegalArgumentException("Record without " + EVENT_ID_HEADER + " header at offset " + rec.offset());
+        }
+        return new String(header.value(), StandardCharsets.UTF_8);
+    }
     /** INSERT ... ON CONFLICT DO NOTHING into the processed-events table; true if the row was inserted. */
     private boolean tryRecord(String eventId) { /* TODO */ return true; }
     private void processEvent(String payload) { /* TODO */ }

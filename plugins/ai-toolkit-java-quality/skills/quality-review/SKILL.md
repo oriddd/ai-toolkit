@@ -31,7 +31,7 @@ other skills).
 - A class, a package, or a list of changed files.
 - Optionally: the test class(es) for the code under review.
 
-## Review checklist (run **every** item; report PASS / FAIL / N/A + evidence)
+## Review checklist (run **every** item; report PASS / WARN / FAIL / N/A + evidence)
 
 Full review: read **every** file below, in order — do not skip a category. Load a single file only for a scoped review.
 
@@ -51,4 +51,8 @@ to look for the template.
 fixes via the dedicated skill.
 ❌ Never report on issues that the parent BOM, ResponseEntityExceptionHandler, or
 the Spring Boot starters already solve.
-- `code-hygiene`, `completion-gate` — the language-neutral hygiene check and definition of done that run alongside this review.
+
+## Cross-references
+
+- `code-hygiene`, `completion-gate` (from `ai-toolkit-quality`, if installed) — the language-neutral hygiene check and
+  definition of done that run alongside this review.

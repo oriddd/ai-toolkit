@@ -1,0 +1,32 @@
+{{ "{{" }}- /* Release-scoped name: two releases (or two services in one umbrella chart) never collide. */{{ "}}" }}
+{{ "{{" }}- define "{{chartName}}.fullname" -{{ "}}" }}
+{{ "{{" }}- if contains .Chart.Name .Release.Name -{{ "}}" }}
+{{ "{{" }}- .Release.Name | trunc 63 | trimSuffix "-" -{{ "}}" }}
+{{ "{{" }}- else -{{ "}}" }}
+{{ "{{" }}- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -{{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+
+{{ "{{" }}- define "{{chartName}}.selectorLabels" -{{ "}}" }}
+app.kubernetes.io/name: {{ "{{" }} .Chart.Name {{ "}}" }}
+app.kubernetes.io/instance: {{ "{{" }} .Release.Name {{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+
+{{ "{{" }}- define "{{chartName}}.labels" -{{ "}}" }}
+{{ "{{" }} include "{{chartName}}.selectorLabels" . {{ "}}" }}
+app.kubernetes.io/version: {{ "{{" }} .Values.image.tag | default .Chart.AppVersion | quote {{ "}}" }}
+app.kubernetes.io/managed-by: {{ "{{" }} .Release.Service {{ "}}" }}
+helm.sh/chart: {{ "{{" }} printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" {{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+
+{{ "{{" }}- define "{{chartName}}.serviceAccountName" -{{ "}}" }}
+{{ "{{" }}- if .Values.serviceAccount.create -{{ "}}" }}
+{{ "{{" }}- .Values.serviceAccount.name | default (include "{{chartName}}.fullname" .) -{{ "}}" }}
+{{ "{{" }}- else -{{ "}}" }}
+{{ "{{" }}- .Values.serviceAccount.name | default "default" -{{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}
+
+{{ "{{" }}- define "{{chartName}}.credentialsSecretName" -{{ "}}" }}
+{{ "{{" }}- .Values.credentials.existingSecret | default (printf "%s-credentials" (include "{{chartName}}.fullname" .)) -{{ "}}" }}
+{{ "{{" }}- end -{{ "}}" }}

@@ -114,5 +114,6 @@ The complete, generated list is [`docs/REGISTRY.md`](../../docs/REGISTRY.md). Ev
 | `new-metric` | `~/.ai-toolkit/plugins/ai-toolkit-java-agents/agents/new-metric.md` |
 | `code-review` | `~/.ai-toolkit/plugins/ai-toolkit-java-agents/agents/code-review.md` |
 | `refactor` | `~/.ai-toolkit/plugins/ai-toolkit-java-agents/agents/refactor.md` |
+| `test-writer` | `~/.ai-toolkit/plugins/ai-toolkit-java-agents/agents/test-writer.md` (worker the other agents delegate to) |
 | `update-context` | `~/.ai-toolkit/plugins/ai-toolkit-docs/agents/update-context.md` |
 

@@ -29,13 +29,13 @@ docs/    → indexes, guild rules, LANGUAGE_CONTRACT      tools/ → validators 
 ## Install
 
 ```
-/plugin marketplace add <git-url-or-path-to-this-repo>
-/plugin install ai-toolkit-workflow@ai-toolkit
-/plugin install ai-toolkit-python@ai-toolkit             # pick your language
+/plugin marketplace add oriddd/ai-toolkit                # or a local path / git URL of your fork
+/plugin install ai-toolkit-python@ai-toolkit             # pick your language (java / python / react-native)
 ```
 
 The `*-design` plugin's SessionStart hook injects task→skill routing only for projects of that
-language. Installing `ai-toolkit-<lang>` already pulls in that language's `-design`, `-build`, `-quality` and `-ops`; each `<lang>-agents` plugin depends on all four.
+language. Installing `ai-toolkit-<lang>` already pulls in that language's `-design`, `-build`, `-quality` and `-ops` plus the
+neutral `ai-toolkit-workflow`, `ai-toolkit-docs` and `ai-toolkit-quality` (no separate install needed); each `<lang>-agents` plugin depends on all four.
 
 ---
 
@@ -43,7 +43,7 @@ language. Installing `ai-toolkit-<lang>` already pulls in that language's `-desi
 
 ```bash
 # once: symlink the toolkit globally
-ln -s /path/to/ai-toolkit ~/.ai-toolkit
+ln -sfn /path/to/ai-toolkit ~/.ai-toolkit   # -n: replace an existing link instead of creating one inside it
 ```
 
 Then in any Copilot chat — load only what you need, when you need it:

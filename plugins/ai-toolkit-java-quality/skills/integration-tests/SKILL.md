@@ -30,6 +30,9 @@ service with **real downstream systems** (or contract-faithful stubs).
 - **Surefire** runs `**/*Test.java` → unit + component (fast).
 - **Failsafe** runs `**/*IT.java` → integration (slow, may need Docker).
 
+The `ci` skill's `pom.xml.tmpl` already declares Failsafe (version and
+executions come from the Spring Boot parent); the explicit form is:
+
 ```xml
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
@@ -61,7 +64,16 @@ Surefire (fast inner loop).
 
 ## Testcontainers — real downstream
 
+Spring Boot 3.5 manages Testcontainers 1.x, so the artifacts below need no
+version. (Boot 4 moves to Testcontainers 2.x with `testcontainers-*` artifact
+names; the toolkit targets 3.5.)
+
 ```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-testcontainers</artifactId>
+    <scope>test</scope>
+</dependency>
 <dependency>
     <groupId>org.testcontainers</groupId>
     <artifactId>junit-jupiter</artifactId>
@@ -74,6 +86,9 @@ Surefire (fast inner loop).
 </dependency>
 ```
 
+Preferred wiring (Boot 3.1+): `@ServiceConnection` derives the connection
+properties from the container, so no `@DynamicPropertySource` is needed:
+
 ```java
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 @Testcontainers
@@ -81,22 +96,28 @@ Surefire (fast inner loop).
 class FooRepositoryIT {
 
     @Container
+    @ServiceConnection
     static PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry reg) {
-        reg.add("spring.datasource.url",      db::getJdbcUrl);
-        reg.add("spring.datasource.username", db::getUsername);
-        reg.add("spring.datasource.password", db::getPassword);
-    }
 
     @Autowired FooRepository repo;
 
     @Test
-    void persistsAndReads() {
+    void save_newFoo_isReadBack() {
         repo.save(new Foo("id-1", "hello"));
         assertThat(repo.findById("id-1")).hasValueSatisfying(f -> assertThat(f.value()).isEqualTo("hello"));
     }
+}
+```
+
+Without `@ServiceConnection` (a container type Boot has no connection
+details for), register the properties yourself:
+
+```java
+@DynamicPropertySource
+static void props(DynamicPropertyRegistry reg) {
+    reg.add("spring.datasource.url",      db::getJdbcUrl);
+    reg.add("spring.datasource.username", db::getUsername);
+    reg.add("spring.datasource.password", db::getPassword);
 }
 ```
 
@@ -128,7 +149,7 @@ too heavy), use **WireMock**:
 <dependency>
     <groupId>org.wiremock</groupId>
     <artifactId>wiremock-standalone</artifactId>
-    <version>3.9.1</version>   <!-- not managed by the Spring Boot BOM -->
+    <version>3.13.0</version>   <!-- not managed by the Spring Boot BOM: keep on the current 3.x release -->
     <scope>test</scope>
 </dependency>
 ```
@@ -151,19 +172,22 @@ class FooClientIT {
     @Autowired FooDependencyClient client;
 
     @Test
-    void deserializesSuccessfulResponse() {
+    void simpleSearch_2xxResponse_returnsMappedHits() {
         wm.stubFor(post("/api").willReturn(okJson("""
             { "hits": [ { "id": "x" } ] }
             """)));
 
-        assertThat(client.simpleSearch(new Request("x"))).isNotNull();
+        assertThat(client.simpleSearch(new Request("x")).hits())
+            .extracting(Hit::id).containsExactly("x");
+        wm.verify(postRequestedFor(urlEqualTo("/api"))
+            .withRequestBody(matchingJsonPath("$.query", equalTo("x"))));
     }
 
     @Test
-    void translatesNon2xxToDomainException() {
+    void simpleSearch_5xxResponse_throwsFooUnavailableException() {
         wm.stubFor(post("/api").willReturn(serverError()));
         assertThatThrownBy(() -> client.simpleSearch(new Request("x")))
-            .isInstanceOf(FooException.class);
+            .isInstanceOf(FooUnavailableException.class);
     }
 }
 ```
@@ -196,13 +220,31 @@ verifies on every build.
 
 Pick **one** of the two per organization. Whichever is chosen:
 - **Producer**: contract verification is a required CI step (Pact JUnit 5:
-  `@Provider` + `@PactBroker` on a `@TestTemplate` extended with
+  `@Provider("foo-service")` + `@PactBroker` on the **test class**, and a
+  `@TestTemplate` method extended with
   `PactVerificationInvocationContextProvider`; Spring Cloud Contract: the
   tests that `spring-cloud-contract-maven-plugin` generates from the contracts).
 - **Consumer**: stub-based integration tests use the same contract artifact
   so the consumer cannot drift (Spring Cloud Contract:
-  `@AutoConfigureStubRunner(stubsMode = LOCAL)`; Pact: consumer tests with
+  `@AutoConfigureStubRunner(ids = "com.example:foo-service:+:stubs:8090",
+  stubsMode = StubRunnerProperties.StubsMode.LOCAL)`; Pact: consumer tests with
   `PactConsumerTestExt`).
+
+```java
+@Provider("foo-service")
+@PactBroker
+@SpringBootTest(webEnvironment = RANDOM_PORT)
+class FooProviderPactIT {
+    @LocalServerPort int port;
+
+    @BeforeEach
+    void target(PactVerificationContext ctx) { ctx.setTarget(new HttpTestTarget("localhost", port)); }
+
+    @TestTemplate
+    @ExtendWith(PactVerificationInvocationContextProvider.class)
+    void pactVerification(PactVerificationContext ctx) { ctx.verifyInteraction(); }
+}
+```
 
 ## Test data lifecycle
 
@@ -220,8 +262,13 @@ mvn -B test                          # fast — unit + component
 mvn -B -Dgroups=integration verify   # slow — integration (requires Docker)
 ```
 
-Make integration green a **required** check on `main`; do not block PRs on
-it unless the changed code touched a `client/` package or a repository.
+Make integration green a **required** check on `main`. The `ci` /
+`github-actions-ci` pipelines run `mvn verify`, so Failsafe ITs run on every
+build, PRs included. If they are too slow for PR feedback, a PR build may pass
+`-DskipITs`, but do not skip them when the changed code touched a `client/`
+package or a repository. Publish the Failsafe reports
+(`target/failsafe-reports`) next to the Surefire ones, or IT failures stay
+invisible.
 
 ## Do / Don't
 
