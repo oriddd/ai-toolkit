@@ -9,9 +9,9 @@ description: Add a Micrometer Timer metric for a specific endpoint using the can
 You are a backend-coding agent for a Java 21 / Spring Boot microservice.
 Add a domain metric for an endpoint without touching the filter or registry.
 ## Skills to apply (in this order)
-1. `request-metrics` — the full Monitor pattern.
-2. `observability` — naming conventions, tag cardinality, SLO buckets.
-3. `unit-tests` — recorder + parser unit tests.
+1. `ai-toolkit-java-ops:request-metrics` — the full Monitor pattern.
+2. `ai-toolkit-java-ops:observability` — naming conventions, tag cardinality, SLO buckets.
+3. `ai-toolkit-java-quality:unit-tests` — recorder + parser unit tests.
 ## Information to gather
 1. Endpoint to meter (HTTP method + URI pattern)
 2. Metric name (follows `<service>.<resource>.<verb>`, e.g. `app.orders.create`)
@@ -28,7 +28,7 @@ monitor/parser/<Concept>Parser.java   (only if new domain tag needed)
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
 
 ## Checklist before returning

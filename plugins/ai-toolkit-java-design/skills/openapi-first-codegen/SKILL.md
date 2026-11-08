@@ -159,12 +159,12 @@ Rules:
 
 | Concern | Skill |
 | --- | --- |
-| API design rules the spec must satisfy            | [`api-design`](../api-design/SKILL.md) |
+| API design rules the spec must satisfy            | `api-design` |
 | Generic Spring Boot conventions (springdoc note)  | `spring-boot-conventions` §5 |
 | ProblemDetail error contract referenced from spec | `exception-handling` |
 | Controllers wired to domain services              | `code-structure` |
 | Publishing a generated client SDK                 | `sdk-publishing` |
-| Multipart endpoints (file + JSON DTO)             | [`api-design`](../api-design/SKILL.md) §6b |
+| Multipart endpoints (file + JSON DTO)             | `api-design` §6b |
 
 ## Do / Don't
 
@@ -174,6 +174,6 @@ Rules:
 | Exclude `target/generated-sources/**` from every analysis tool. | Let generated DTOs leak into services or repositories. |
 | Use `interfaceOnly=true` and hand-write controllers. | Use `generateApiTests=true` — those tests are tautological. |
 | Pin the generator version. | Rely on the transitive default version from the plugin chain. |
-| Add a CI step that fails on stale generated sources (run `mvn generate-sources` and `git diff --exit-code`). | Commit `target/` or the `.openapi-generator-ignore` overrides without review. |
+| Add a CI step that fails on stale generated sources (run `mvn clean verify` so sources are regenerated from `api.yaml` and a controller out of step with the spec fails the compile — they are git-ignored, so `git diff --exit-code` cannot detect drift). | Commit `target/` or the `.openapi-generator-ignore` overrides without review. |
 | Reference shared `ProblemDetail` schema for every error response. | Inline `{ "message": "..." }` ad-hoc error shapes. |
 

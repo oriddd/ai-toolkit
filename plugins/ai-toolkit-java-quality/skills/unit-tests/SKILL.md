@@ -13,7 +13,7 @@ version: 1.1
 last_reviewed: 2026-07-12
 ---
 
-# this Unit Tests Skill
+# Unit Tests Skill
 
 Generate **meaningful** unit tests (not coverage-padding) for any class under
 `src/main/java`. Tests live in the mirror package under `src/test/java`.
@@ -30,14 +30,16 @@ Generate **meaningful** unit tests (not coverage-padding) for any class under
 - **Mockito** with `@ExtendWith(MockitoExtension.class)` and field injection
   via `@Mock` / `@InjectMocks`. Use constructor injection in `src/main` so
   Mockito wires automatically.
-- **AssertJ or Jupiter `Assertions`** – pick one per repo and stay consistent
-  (this repo uses Jupiter `Assertions`).
+- **AssertJ** (`assertThat`, `assertThatThrownBy`) is the assertion library –
+  see "Assertions — AssertJ (default)" in the references. Jupiter
+  `Assertions` only for the simplest `assertEquals`.
 - Parameterised cases via `@ParameterizedTest` + `@MethodSource` /
   `@ValueSource` / `@CsvSource`. Group inputs in a `record` when each case
-  carries multiple fields (see `FooServiceTest.ExceptionTestCase`).
+  carries multiple fields (see the `ExceptionCase` record in the template).
 - Test method names use the convention
-  `<state>_<action>_<expectedOutcome>()` or the BDD style
-  `when<Condition>_<Then>()`. Be descriptive – no `test1`, `test2`.
+  `methodName_condition_expectedResult()` (e.g.
+  `processInvoice_nullInput_throwsIllegalArgumentException()`). Be
+  descriptive – no `test1`, `test2`.
 - Arrange / Act / Assert comments (`// given`, `// when`, `// then`) when the
   test has more than a handful of lines.
 - For static method mocking use `try (MockedStatic<X> m = mockStatic(X.class))`
@@ -55,8 +57,8 @@ For every non-trivial method you must cover, **at minimum**:
 3. **Every `if`/`switch` branch**, including `null` / empty-collection inputs
    if the method accepts collections or nullable params.
 4. **Short-circuit / propagation behaviour** – when a collaborator throws,
-   verify subsequent collaborators were `never()` called (see
-   `FooServiceTest#whenPermissionsHandlerThrowsException…`).
+   verify subsequent collaborators were `never()` called (see the
+   `..._propagatesAndShortCircuits` test in the template).
 5. **Boundary values** – min / max / empty / one-element / many-elements,
    `Optional.empty()` vs `Optional.of(...)`, case sensitivity flags.
 
@@ -97,21 +99,23 @@ For each target class `Foo`:
 
 ## Do / Don't
 
-✅ One assertion concept per test; many `assertEquals` are fine if they all
+✅ One assertion concept per test; many `assertThat`s are fine if they all
 verify the same logical outcome.
 ✅ Use `record` test-case holders for parameterised tests.
 ✅ Co-locate test fixtures under `src/test/java/.../testdata/`.
 ✅ Wire Jacoco quality gates in `pom.xml` so coverage regressions break the build.
-❌ Never write a test whose only assertion is `assertNotNull(result)` on a
+❌ Never write a test whose only assertion is `assertThat(result).isNotNull()` on a
 non-null-returning method – that proves nothing.
 ❌ Never assert on log lines unless logging *is* the contract.
 ❌ Never use `Thread.sleep` – use Awaitility for async waits.
 ❌ Never share mutable state between tests without `@AfterEach` cleanup.
 
-  - [ ] Add PIT mutation testing for core logic.
-  - [ ] Integrate Jacoco check with a coverage threshold of 85 % line / 75 % branch per class (the same numbers as above and in `quality-review`).
+## Build checklist
 
-## 6. Architecture Tests (ArchUnit)
+- [ ] Add PIT mutation testing for core logic.
+- [ ] Integrate Jacoco check with a coverage threshold of 85 % line / 75 % branch per class (the same numbers as above and in `quality-review`).
+
+## Architecture Tests (ArchUnit)
 
 Unit tests are not just for business logic; they also protect the **structure** of your code. ArchUnit allows you to write tests that ensure design patterns are followed.
 
@@ -136,6 +140,6 @@ static final ArchRule servicesMustNotDependOnControllers =
 
 See the `code-structure` skill for more examples. Always include an `ArchitectureTest.java` in your project to turn conventions into build failures.
 
-## 7. Templates
+## Templates
 
 - [`UnitTest.java.tmpl`](./templates/UnitTest.java.tmpl) — Standard Mockito unit test skeleton.

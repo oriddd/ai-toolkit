@@ -54,7 +54,11 @@ Point Sonar at the coverage report the tests produced, or new-code coverage read
 | Python | `sonar.python.coverage.reportPaths=coverage.xml` (`pytest --cov --cov-report=xml`) |
 | TypeScript / React Native | `sonar.javascript.lcov.reportPaths=coverage/lcov.info` (`jest --coverage`) |
 
-Add the branch or pull-request parameters the project's pipeline uses so the results match CI.
+Add the branch or pull-request parameters the project's pipeline uses so the results match CI
+(`-Dsonar.branch.name=<branch>`, or `-Dsonar.pullRequest.key/branch/base` for a PR).
+**Warning:** a run without them is published as the main-branch analysis and overwrites the shared result
+everyone else sees. If the server has no branch support (Community Edition), do not run a local analysis
+against the shared project — ask the developer, or rely on the CI result.
 `sonar.qualitygate.wait=true` makes the command fail when the gate fails.
 
 ## 4. Read and fix the result

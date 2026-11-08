@@ -16,26 +16,26 @@ every file change needed to satisfy all guild non-negotiables.
 
 ## Skills to apply (in this order)
 
-1. `api-design` — resource/verb/URL
+1. `ai-toolkit-java-design:api-design` — resource/verb/URL
    conventions, status codes, versioning, pagination shape.
-2. `openapi-first-codegen`
+2. `ai-toolkit-java-design:openapi-first-codegen`
    — update `api.yaml` first if the project uses OpenAPI codegen.
-3. `code-structure` Pattern C —
+3. `ai-toolkit-java-design:code-structure` Pattern C —
    controller → operation → service layering.
-4. `exception-handling` —
+4. `ai-toolkit-java-build:exception-handling` —
    domain exception subclass + `ExceptionMessages` entry.
-5. `permissions` — `PermissionsHandler`
+5. `ai-toolkit-java-build:permissions` — `PermissionsHandler`
    check inside the operation.
-6. `input-validation` —
+6. `ai-toolkit-java-build:input-validation` —
    Jakarta `@Constraint` for parameter rules, Spring `Validator` for
    object/cross-field rules, rule beans in `validation/rule/`.
-7. `observability` — MDC correlation
+7. `ai-toolkit-java-ops:observability` — MDC correlation
    ID flows through; log at INFO once per request in the operation.
-8. `request-metrics` — if this
+8. `ai-toolkit-java-ops:request-metrics` — if this
    endpoint needs a domain Timer metric, add a `MetricsRecorder`.
-9. `unit-tests` — operation + service +
+9. `ai-toolkit-java-quality:unit-tests` — operation + service +
    validator rule beans.
-10. `component-tests` — full
+10. `ai-toolkit-java-quality:component-tests` — full
     controller slice: happy path, 400, 401/403, 404.
 
 ## Step-by-step procedure
@@ -98,8 +98,10 @@ Verify every result (read the diff, run the tests) before reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

@@ -48,8 +48,12 @@ shared/state/ useSessionStore.ts
 
 ```ts
 // shared/api-client/httpClient.ts
-export type HttpRequest = Omit<RequestInit, 'headers' | 'body'> & { path: string; query?: Record<string, string | number | boolean | undefined> };
-export interface HttpClient { request<T>(req: HttpRequest, schema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T>; }  // input type unknown: a branded or transformed schema's input differs from its output
+export type HttpRequest = Omit<RequestInit, 'headers' | 'body'> & {
+  path: string;
+  query?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;                                        // JSON-serialised by the client (POST/PUT/PATCH payloads)
+};
+export interface HttpClient { request<T>(req: HttpRequest, schema: z.ZodType<T, unknown>): Promise<T>; }  // input type unknown: a branded or transformed schema's input differs from its output
 
 export const toQueryString = (query: HttpRequest['query']): string => {
   const params = new URLSearchParams();
@@ -60,20 +64,33 @@ export const toQueryString = (query: HttpRequest['query']): string => {
 
 export const createHttpClient = (baseUrl: string, getToken: () => Promise<string | null>): HttpClient => ({
   async request(req, schema) {
-    const { path, query, ...init } = req;               // path/query are ours, not RequestInit fields
-    const res = await fetch(`${baseUrl}${path}${toQueryString(query)}`, { ...init, headers: await authHeaders(getToken) })
-      .catch((cause: unknown) => { throw toNetworkError(cause); });
-    if (!res.ok) throw mapHttpError(res);                // see react-native-error-handling
-    return schema.parse(await res.json());               // validate the contract at the edge
+    const { path, query, body, ...init } = req;         // path/query/body are ours, not RequestInit fields
+    const res = await fetch(`${baseUrl}${path}${toQueryString(query)}`, {
+      ...init,
+      headers: { ...(await authHeaders(getToken)), 'Content-Type': 'application/json', Accept: 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }).catch((cause: unknown) => { throw toNetworkError(cause); });
+    if (!res.ok) throw await mapHttpError(res);          // see react-native-error-handling (reads the 422 body)
+    const payload: unknown = res.status === 204 ? undefined : await res.json();  // 204 has no body: res.json() would throw
+    const parsed = schema.safeParse(payload);            // validate the contract at the edge
+    if (!parsed.success) throw toContractError(parsed.error);  // a ZodError never escapes: it becomes an AppError here
+    return parsed.data;
   },
 });
 ```
+
+`authHeaders` returns a plain `Record<string, string>` (e.g. `{ Authorization: 'Bearer ...' }`, or `{}` when signed out). An endpoint that
+answers 204 is called with `z.undefined()` as its schema. Every failure the client throws is an `AppError` (network, HTTP status, contract),
+which is what makes the `AppError` narrowing in the hooks below true.
 
 The client is provided through the services context in `shared/services/` (`useServices`, see `react-native-code-structure`) so tests inject a fake.
 
 ## 2. Feature api module
 
 ```ts
+// features/orders/model/order.ts: a type alias (not an interface) so it fits HttpRequest['query']
+export type OrderFilter = { status?: Order['status']; customerId?: string };
+
 // features/orders/api/ordersApi.ts
 export const createOrdersApi = (http: HttpClient) => ({
   list: (filter: OrderFilter): Promise<Order[]> =>

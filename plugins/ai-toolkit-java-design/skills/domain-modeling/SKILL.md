@@ -37,16 +37,16 @@ public class Invoice {                        // Aggregate Root
     private final InvoiceId id;               // Value Object
     private String name;
     private Status status;
-    private final List<File> files = new ArrayList<>();
+    private final List<InvoiceLine> lines = new ArrayList<>();
 
-    public void rename(String newName) {        // invariant: name not blank, invoice not deleted
+    public void rename(String newName, Clock clock) {   // invariant: name not blank, invoice not deleted
         requireNotDeleted();
         if (newName == null || newName.isBlank()) throw new InvariantViolationException(...);
         this.name = newName;
-        registerEvent(new InvoiceRenamedEvent(id, newName, Instant.now()));
+        registerEvent(new InvoiceRenamedEvent(id, newName, Instant.now(clock)));   // caller passes its injected Clock, never Instant.now()
     }
 
-    public List<File> files() { return List.copyOf(files); }   // immutable view
+    public List<InvoiceLine> lines() { return List.copyOf(lines); }   // immutable view
 }
 ```
 
@@ -71,7 +71,7 @@ public record Money(BigDecimal amount, Currency currency) {
 ```
 
 Examples: `Money`, `InvoiceId`, `EmailAddress`, `DateRange`, `Coordinates`.
-**Never** pass primitive `String id` around — wrap in a `InvoiceId` so the
+**Never** pass primitive `String id` around — wrap in an `InvoiceId` so the
 compiler catches mix-ups.
 
 ## 4. Domain Event
@@ -119,7 +119,7 @@ translates **their** language into ours.
 
 ```
 operation/    ─► acl/SupplierAdapter ─► client/supplier/SupplierClient
-                       (their Customer → our Account)
+                       (their SupplierInvoice → our Invoice)
 ```
 
 Without an ACL, the partner's concepts leak into your domain and the

@@ -38,7 +38,7 @@ shared/validation/
 ## Dependencies
 
 ```json
-{ "dependencies": { "zod": "^3.23.8", "react-hook-form": "^7.53.0", "@hookform/resolvers": "^3.9.0" } }
+{ "dependencies": { "zod": "^4.0.0", "react-hook-form": "^7.55.0", "@hookform/resolvers": "^5.1.0" } }
 ```
 
 ## 1. Field schemas, reusable and named
@@ -62,6 +62,7 @@ export const vm = {
   passwordShort: 'Use at least 12 characters.',
   passwordDigit: 'Include at least one number.',
   passwordMismatch: 'Passwords do not match.',
+  serverRejected: 'This value was not accepted.',       // fallback for a server field code with no entry of its own
 } as const;
 ```
 
@@ -98,6 +99,7 @@ export function SignupScreen() {
     <>
       <FormTextField control={control} name="email" label="Email" testID="signup-email" />
       <FormTextField control={control} name="password" label="Password" secureTextEntry testID="signup-password" />
+      <FormTextField control={control} name="confirmPassword" label="Confirm password" secureTextEntry testID="signup-confirm-password" />
       <Button title="Create account" disabled={isPending} onPress={() => void handleSubmit((v) => mutate(v))()} />
     </>
   );
@@ -132,7 +134,18 @@ where failure is an error to map. Apply the same to persisted values after app u
 ## 7. Server-side validation errors
 
 Map a 422 body to field errors with `setError(field, { message })` inside the submit hook, via the
-mapper's `VALIDATION_FAILED` details, so server and client rules show in the same place.
+mapper's `ValidationError.fieldErrors` (`VALIDATION_FAILED`, see `react-native-error-handling`), so server and client rules show in the same place:
+
+```ts
+onError: (e) => {
+  if (!(e instanceof ValidationError)) return;            // other AppErrors go to the toast/banner
+  for (const [field, code] of Object.entries(e.fieldErrors))
+    if (field in signupSchema.shape)                      // ignore fields this form does not render
+      setError(field as keyof SignupForm, { message: code in vm ? vm[code as keyof typeof vm] : vm.serverRejected });
+},
+```
+
+Messages come from the catalogue, never from the server's text.
 
 ## Do / Don't
 

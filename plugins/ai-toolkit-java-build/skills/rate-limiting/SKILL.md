@@ -42,9 +42,13 @@ resilience4j:
 
 ```java
 // one bucket PER CLIENT (a single shared bucket would let one caller starve everyone) — key it by client id / api key
-private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+// bounded (Caffeine): an unbounded map grows with every client id ever seen; idle clients' buckets are evicted
+private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
+    .expireAfterAccess(Duration.ofMinutes(10))   // longer than the refill window, so an evicted bucket would have been full anyway
+    .maximumSize(100_000)
+    .build();
 
-Bucket bucket = buckets.computeIfAbsent(clientId, id -> Bucket.builder()
+Bucket bucket = buckets.get(clientId, id -> Bucket.builder()
     .addLimit(limit -> limit.capacity(10).refillIntervally(10, Duration.ofMinutes(1)))   // Bandwidth.classic / Refill are deprecated in Bucket4j 8.x
     .build());
 

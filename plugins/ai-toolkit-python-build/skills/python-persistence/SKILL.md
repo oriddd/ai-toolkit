@@ -129,9 +129,11 @@ commit, no implicit lazy load in async code):
 `factory = async_sessionmaker(engine, expire_on_commit=False)`.
 
 ```python
+# expected_version comes from the CLIENT (If-Match header or body field), never from the row just read:
+# passing order.version here would always match, so a stale client would silently overwrite.
 async with uow_factory() as uow:
     order = await uow.orders.get(order_id)
-    new_version = await uow.orders.save(order.pay(), expected_version=order.version)
+    new_version = await uow.orders.save(order.pay(), expected_version=request.version)
     await uow.commit()
 return OrderResponse(id=order.id, status="paid", version=new_version)   # the client sends this back next time
 ```

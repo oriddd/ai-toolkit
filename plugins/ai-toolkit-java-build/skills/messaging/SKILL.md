@@ -101,7 +101,8 @@ public class OutboxRelay {
     public void publishPending() {
         // FOR UPDATE SKIP LOCKED: several instances can run the relay without publishing the same row twice
         outboxRepo.fetchPendingForUpdateSkipLocked(100).forEach(row -> {
-            kafkaTemplate.send(row.topic(), row.key(), row.payload()).join();   // wait for the broker ack before marking
+            // topic from the aggregate type (a constant map, never a literal per row); key = aggregate id (§6)
+            kafkaTemplate.send(topicFor(row.getAggregateType()), row.getAggregateId(), row.getPayload()).join();   // wait for the broker ack before marking
             row.markPublished();
         });
     }
@@ -132,7 +133,6 @@ Brokers guarantee at-least-once. The consumer must be **idempotent**:
 @RequiredArgsConstructor
 public class InvoiceCreatedConsumer {
 
-    private final ProcessedEventRepository processed;
     private final FooService service;
 
     @KafkaListener(topics = "invoices", groupId = "foo-service")
@@ -144,7 +144,10 @@ public class InvoiceCreatedConsumer {
 }
 
 @Service
+@RequiredArgsConstructor
 public class FooService {
+    private final ProcessedEventRepository processed;
+
     @Transactional
     public void handleOnce(String eventId, InvoiceCreatedEvent event) {
         if (!processed.tryRecord(eventId)) {
@@ -212,7 +215,10 @@ idempotent; partition key = aggregate id; DLT after N retries.
 ❌ Never publish from inside an HTTP handler without going through the outbox
 ("save then publish" race).
 ❌ Never block a consumer thread on a sync HTTP call to a slow downstream —
-hand off to a `@Async` executor with backpressure.
+bound the call with a short timeout + circuit breaker (`resilience-patterns`) and let failures flow to the
+retry topics (§5), or hand off to a `@Async` executor with backpressure — but only if the ack waits for the
+async work to commit. Never ack early: an ack before the work commits loses the message on a crash and breaks
+§4's at-least-once.
 ❌ Never use messaging for request/response. Use HTTP or gRPC.
 
 ## 8. Templates

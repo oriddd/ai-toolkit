@@ -53,7 +53,8 @@ Create it **only if it does not already exist**. Place it under
 `src/main/java/{{basePackagePath}}/health/indicator/AbstractReadinessIndicator.java`.
 It must:
 - Implement `HealthIndicator` (`org.springframework.boot.actuate.health.HealthIndicator`).
-- Accept a `WebClient` via constructor.
+- Accept a `WebClient` via constructor. `WebClient` lives in `spring-webflux`: a servlet-only
+  service must add `spring-boot-starter-webflux` to `pom.xml` (it stays a servlet app).
 - Define `abstract` getters: `getServiceName()`, `getSuccessStatusCode()`,
   `getReadinessURI()`.
 - Apply a response timeout to the blocking call (about 2 s) — a hung dependency must not hang the probe.
@@ -97,11 +98,11 @@ by the readiness group in `application.yaml`. Keep them in sync.
 
 ```yaml
 management:
-  endpoints.web.exposure.include: prometheus,health,info,httptrace
+  endpoints.web.exposure.include: prometheus,health,info,httpexchanges   # Boot 3: httptrace → httpexchanges (needs an HttpExchangeRepository bean)
   endpoint:
-    prometheus.enabled: true
+    prometheus.access: unrestricted   # Boot 3.4+: replaces the deprecated prometheus.enabled
     health:
-      enabled: true
+      access: unrestricted            # Boot 3.4+: replaces the deprecated health.enabled
       probes.enabled: true
       group:
         readiness:

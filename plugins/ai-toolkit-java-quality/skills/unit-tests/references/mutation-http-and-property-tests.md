@@ -1,4 +1,4 @@
-# this Unit Tests Skill — Mutation, HTTP client and property-based tests
+# Unit Tests Skill — Mutation, HTTP client and property-based tests
 
 Part of the [`unit-tests`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 
@@ -100,6 +100,10 @@ boolean roundTripsAnyAscii(@ForAll @AlphaChars String s) {
 
 jqwik **shrinks** counter-examples automatically — failure messages point
 at the minimal input that breaks the property.
+
+## Worked examples to model on
+
+Illustrative class names — map each to the matching test in your repo:
 
 - Strategy pattern: `PermissionsHandlerTest` – shows `MockedStatic`,
   list-injection, multiple branch tests.

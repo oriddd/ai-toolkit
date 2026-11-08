@@ -17,6 +17,9 @@ import static org.mockito.Mockito.*;
 @Profile("component-test")
 public class ComponentTestConfiguration {
 
+    // Must be the only SecurityFilterChain: annotate the production security
+    // config with @Profile("!component-test"), otherwise Spring Security 6
+    // fails at startup (two any-request chains) or the production chain wins.
     @Bean
     public SecurityFilterChain testSecurityFilterChain(final HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)

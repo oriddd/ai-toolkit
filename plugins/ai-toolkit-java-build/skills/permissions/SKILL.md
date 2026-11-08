@@ -83,12 +83,14 @@ service actually accepts (Phase 1 #2).
 public interface CallerContextResolver {
     /** @return the context of the current request's principal, or {@code null} if absent. */
     CallerContext resolve();
+    /** @return the current principal's OAuth2 scopes, {@code SCOPE_} prefix stripped (empty if none). */
+    Set<String> grantedScopes();
 }
 ```
 
 A default `SpringSecurityCallerContextResolver` reads
 `SecurityContextHolder.getContext().getAuthentication()` and inspects the
-authorities to bucket the call into one of the enum values. You can override this bean to read
+authorities to bucket the call into one of the enum values, and exposes the granted scopes. You can override this bean to read
 your own claim instead.
 
 ### 4. `PermissionsCheckStrategy` (interface)
@@ -154,9 +156,10 @@ public class PermissionsRegistry {
 ### 6. Concrete strategies (generate only the ones the developer selected)
 
 - **`ScopeBasedPermissionsCheck`** – for `SERVICE_ACCOUNT`. Reads an
-  allow-list of OAuth2 scopes from configuration and checks the
-  authorities of the current `Authentication` (stripping the `SCOPE_`
-  prefix that Spring Security adds).
+  allow-list of OAuth2 scopes from configuration and checks the caller's
+  scopes obtained from `CallerContextResolver.grantedScopes()` (the resolver
+  strips the `SCOPE_` prefix that Spring Security adds) — it never reads
+  `SecurityContextHolder` itself.
 
 - **`ResourcePermissionsCheck`** – for `USER` / `EXTERNAL_SYSTEM`. Calls an
   abstract `ResourceAuthorizationSource` SPI; this skill ships an
@@ -224,8 +227,9 @@ For each concrete strategy, cover:
 - Every thrown-exception branch (missing authorities, scope not allowed,
   authorization source returns "no access", etc.).
 
-If a strategy reads from `SecurityContextHolder`, use
-`MockedStatic<SecurityContextHolder>` inside a `try-with-resources` block.
+Strategies never read `SecurityContextHolder` (see Do / Don't) — stub the
+injected `CallerContextResolver` instead. Only the `SpringSecurityCallerContextResolver`
+test reads it: use `MockedStatic<SecurityContextHolder>` inside a `try-with-resources` block.
 
 ## Component test wiring
 In `ComponentTestConfiguration`, provide a `@Primary` mock `PermissionsHandler`
@@ -263,7 +267,7 @@ and wire the real implementation via the `external-client` skill.
 ❌ Never embed permission logic in the controller advice – the advice only
 maps the exception to a status code.
 
-## 4. Templates
+## 11. Templates
 
 - [`PermissionsHandler.java.tmpl`](./templates/PermissionsHandler.java.tmpl) — Central permission dispatcher.
 - [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl) — Routes a `CallerContext` to its strategy.

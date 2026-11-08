@@ -12,18 +12,27 @@ The default mode: exactly one adapter is active, chosen by a property.
 @EnableConfigurationProperties(CacheProperties.class)
 public class CacheAutoConfiguration {
 
-    @Bean
-    @ConditionalOnProperty(prefix = "platform.cache", name = "provider", havingValue = "redis")
+    // Vendor-typed beans live in nested static classes: @ConditionalOnClass on the CLASS is checked
+    // before its methods are introspected, so an absent SDK never causes NoClassDefFoundError
+    // (on a @Bean method with vendor-typed parameters it would).
+    @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = "org.springframework.data.redis.core.RedisTemplate")
-    CachePort redisCachePort(RedisTemplate<String, byte[]> template) {
-        return new RedisCacheAdapter(template);
+    @ConditionalOnProperty(prefix = "platform.cache", name = "provider", havingValue = "redis")
+    static class RedisCacheConfiguration {
+        @Bean
+        CachePort redisCachePort(RedisTemplate<String, byte[]> template) {
+            return new RedisCacheAdapter(template);
+        }
     }
 
-    @Bean
-    @ConditionalOnProperty(prefix = "platform.cache", name = "provider", havingValue = "infinispan")
+    @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = "org.infinispan.Cache")
-    CachePort infinispanCachePort(EmbeddedCacheManager manager) {
-        return new InfinispanCacheAdapter(manager);
+    @ConditionalOnProperty(prefix = "platform.cache", name = "provider", havingValue = "infinispan")
+    static class InfinispanCacheConfiguration {
+        @Bean
+        CachePort infinispanCachePort(EmbeddedCacheManager manager) {
+            return new InfinispanCacheAdapter(manager);
+        }
     }
 
     @Bean
@@ -41,13 +50,20 @@ platform:
     provider: redis        # redis | infinispan | noop
 ```
 
+Register the auto-configuration in
+`src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+(one fully-qualified class name per line). Boot then processes it **after** the application's own
+configuration, so `@ConditionalOnMissingBean` sees consumer overrides, and `@SpringBootApplication`'s
+`AutoConfigurationExcludeFilter` stops component scanning of `config/x/` from loading it a second time, too early.
+
 Selection levers (use in this order of preference):
 
 1. **`@ConditionalOnProperty`** — the explicit, documented switch the operator
    flips. Always the primary mechanism.
 2. **`@ConditionalOnClass`** — guard so an adapter silently backs off when its
    vendor SDK is not on the classpath (lets consumers exclude a dependency to
-   shrink the image).
+   shrink the image). Put it on a nested `@Configuration` class, not on a `@Bean`
+   method whose signature uses vendor types.
 3. **`@ConditionalOnMissingBean`** — provide a default (often `NoOp`) so the
    context always has *a* `CachePort`, and so a consumer can override any brick
    by declaring their own bean (the lego-brick override contract from
@@ -103,6 +119,7 @@ One typed `@ConfigurationProperties` record per capability (see
 `spring-boot-conventions` §1):
 
 ```java
+@Validated                                          // without it @NotNull is never checked
 @ConfigurationProperties(prefix = "platform.cache")
 public record CacheProperties(
         @NotNull Provider provider,                 // enum: REDIS, INFINISPAN, NOOP

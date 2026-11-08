@@ -11,7 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,7 +28,7 @@ class {{classUnderTest}}Test {
 
     // ─── happy path ──────────────────────────────────────────────
     @Test
-    void when{{Condition}}_{{methodName}}_returns{{Outcome}}() {
+    void {{methodName}}_{{condition}}_returns{{Outcome}}() {
         // given
         when({{collaborator1Name}}.{{stub}}(...)).thenReturn(...);
 
@@ -35,7 +36,7 @@ class {{classUnderTest}}Test {
         var result = {{instanceName}}.{{methodName}}(...);
 
         // then
-        assertEquals(..., result);
+        assertThat(result).isEqualTo(...);
         verify({{collaborator1Name}}, times(1)).{{stub}}(...);
     }
 
@@ -51,18 +52,18 @@ class {{classUnderTest}}Test {
 
     @ParameterizedTest
     @MethodSource("exceptions")
-    void when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) throws Exception {
+    void {{methodName}}_when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) throws Exception {
         when({{collaborator1Name}}.{{stub}}(any())).thenThrow(tc.thrown());
 
-        assertThrows(tc.expected(), () -> {{instanceName}}.{{methodName}}(...));
+        assertThatThrownBy(() -> {{instanceName}}.{{methodName}}(...)).isInstanceOf(tc.expected());
 
         verifyNoInteractions(/* downstream collaborators that must NOT run */);
     }
 
     // ─── edge cases (null, empty, boundary) ──────────────────────
     @Test
-    void when{{Input}}IsNull_throws{{Expected}}() {
-        assertThrows({{Expected}}.class, () -> {{instanceName}}.{{methodName}}(null));
+    void {{methodName}}_null{{Input}}_throws{{Expected}}() {
+        assertThatThrownBy(() -> {{instanceName}}.{{methodName}}(null)).isInstanceOf({{Expected}}.class);
     }
 }
 

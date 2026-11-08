@@ -38,7 +38,7 @@ resilience4j:
     enableExponentialBackoff: true          # without this the multiplier below is ignored
     exponentialBackoffMultiplier: 2
     retryExceptions:
-      # the exception your *Client* translates a transient failure (5xx, timeout) into — Retry never sees the raw
+      # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees the raw
       # WebClientResponseException because handleResponse() has already wrapped it
       - com.example.client.foo.FooUnavailableException
 ```
@@ -46,9 +46,10 @@ resilience4j:
 ```java
 @CircuitBreaker(name = "foo-service", fallbackMethod = "fallback")
 @Retry(name = "foo-service")
-public FooSearchResponseDto search(final FooSearchRequestDto request) { … }
+public FooSearchResponseDto search(final FooSearchRequestDto request) throws FooException { … }
 
-private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t) {
+// FooException is checked (exception-handling §1) — the fallback and the guarded method must both declare it
+private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t) throws FooException {
     throw new FooException(ExceptionMessages.FOO_SERVICE_UNAVAILABLE, t);
 }
 ```

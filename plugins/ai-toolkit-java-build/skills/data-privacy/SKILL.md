@@ -31,9 +31,7 @@ Use a custom `@Mask` annotation on DTO fields and a corresponding Jackson `JsonS
 
 ```java
 @Retention(RetentionPolicy.RUNTIME)
-@JacksonAnnotationsInside
-@JsonSerialize(using = MaskingSerializer.class)   // without this the annotation does nothing
-public @interface Mask {}
+public @interface Mask {}   // marker only — no @JsonSerialize, so the ObjectMapper writing API responses ignores it
 
 public record UserProfile(
     String id,
@@ -47,6 +45,18 @@ public record UserProfile(
 
 > Do not register `@Mask` on the ObjectMapper that serializes real API responses — it would mask what clients legitimately receive.
 > Use it with a dedicated mapper for log / audit output, and keep PII records' `toString()` free of PII.
+
+```java
+// Dedicated mapper for log / audit output only — the only place @Mask takes effect
+ObjectMapper logMapper = JsonMapper.builder()
+    .annotationIntrospector(new JacksonAnnotationIntrospector() {
+        @Override
+        public Object findSerializer(Annotated a) {
+            return a.hasAnnotation(Mask.class) ? MaskingSerializer.class : super.findSerializer(a);
+        }
+    })
+    .build();
+```
 
 #### Jackson Masking Implementation
 ```java

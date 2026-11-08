@@ -25,7 +25,7 @@ code in this mode.
    if the change warrants a new Architecture Decision Record.
 3. `uml-diagram` — if component
    relationships or sequence flows changed.
-4. `ai-toolkit-workflow:release-versioning` §
+4. `ai-toolkit-workflow:release-versioning` §5
    CHANGELOG — for updating `[Unreleased]` entries.
 
 ## Step-by-step procedure
@@ -42,7 +42,8 @@ code in this mode.
    - component-diagram.md → internal component relationship changed
    - domain-flow.md       → business flow / sequence changed
    - glossary.md          → new domain term introduced
-   - slo.md               → new SLI/SLO defined
+   - slo.md               → new SLI/SLO defined (summary; the canonical
+                            table is docs/SLO.md — update both)
    - runbooks.md          → new operational procedure
 3. UPDATE each affected file — fill in, not overwrite. Respect the
    existing section structure.
@@ -74,7 +75,8 @@ Then show the full updated content of each changed file.
 
 - Never delete existing content — only add or update. (Pruning outdated content is the human monthly review in `context-maintenance`, not this agent.)
 - Every `context/` change must be in the **same logical unit** as the
-  code change it describes (same PR / commit).
+  code change it describes (same PR / commit — the developer commits; this
+  agent does not commit or push unless asked).
 - CHANGELOG entries use Conventional Commits format.
 - ADRs once written are **immutable** — add a superseding ADR instead of
   editing the old one.

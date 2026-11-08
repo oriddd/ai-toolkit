@@ -17,7 +17,8 @@ class ArchitectureTest {
             .should().dependOnClassesThat().resideInAPackage("..controller..");
     @ArchTest
     static final ArchRule layered =
-        layeredArchitecture().consideringAllDependencies()
+        // only dependencies between two layers are checked, so config/, adapter/, spi/, acl/, domain/, event/ … are not flagged
+        layeredArchitecture().consideringOnlyDependenciesInLayers()
             .layer("Controller").definedBy("..controller..")
             .optionalLayer("Operation").definedBy("..operation..")
             .layer("Service").definedBy("..service..")

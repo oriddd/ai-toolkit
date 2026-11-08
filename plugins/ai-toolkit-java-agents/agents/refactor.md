@@ -18,31 +18,31 @@ time, tests green after every step.
 
 ## Skills to apply (in this order)
 
-1. `refactoring-playbook` —
+1. `ai-toolkit-java-quality:refactoring-playbook` —
    identify which anti-patterns are present and the migration path for each.
-2. `quality-review` — SOLID audit
+2. `ai-toolkit-java-quality:quality-review` — SOLID audit
    before and after each refactoring step.
 3. Then, for each anti-pattern found, apply the target skill:
 
 | Anti-pattern | Target skill |
 | --- | --- |
-| `@Value` for grouped props | `spring-boot-conventions` |
-| Same infra property read via `@Value` in ≥ 2 classes | `spring-boot-conventions` + `external-client` §11b |
-| `@EnableScheduling` / `@EnableAsync` / `@EnableCaching` on `@SpringBootApplication` | `spring-boot-conventions` §7b |
-| Business logic in controller | `code-structure` |
-| Raw `WebClient`/`RestClient` in service | `external-client` |
-| Scheduler doing its own SDK calls / query building | `code-structure` §1 + `refactoring-playbook` §14 |
-| Bloated `client/<dep>/` (fetchers + analyzers + schedulers all inside) | `external-client` §11b + `refactoring-playbook` §13 |
-| Duplicated fetch / analyze logic across packages | `refactoring-playbook` §15 |
-| Stream over a nullable-fetch method with no `Objects::nonNull` filter | `quality-review` checklist C, item 9a |
-| Inline `if (principal.isAdmin)` auth | `permissions` |
-| Custom exception without hierarchy | `exception-handling` |
-| `e.printStackTrace()` / plain-text logs | `observability` |
-| Non-idempotent consumer | `messaging` |
-| Vendor SDK used directly in domain | `pluggable-architecture` |
-| Inline validation logic | `input-validation` |
-| Missing/wrong test doubles | `unit-tests` |
-| Missing migration scripts | `persistence` |
+| `@Value` for grouped props | `ai-toolkit-java-design:spring-boot-conventions` |
+| Same infra property read via `@Value` in ≥ 2 classes | `ai-toolkit-java-design:spring-boot-conventions` + `ai-toolkit-java-build:external-client` §11b |
+| `@EnableScheduling` / `@EnableAsync` / `@EnableCaching` on `@SpringBootApplication` | `ai-toolkit-java-design:spring-boot-conventions` §7b |
+| Business logic in controller | `ai-toolkit-java-design:code-structure` |
+| Raw `WebClient`/`RestClient` in service | `ai-toolkit-java-build:external-client` |
+| Scheduler doing its own SDK calls / query building | `ai-toolkit-java-design:code-structure` §1 + `ai-toolkit-java-quality:refactoring-playbook` §14 |
+| Bloated `client/<dep>/` (fetchers + analyzers + schedulers all inside) | `ai-toolkit-java-build:external-client` §11b + `ai-toolkit-java-quality:refactoring-playbook` §13 |
+| Duplicated fetch / analyze logic across packages | `ai-toolkit-java-quality:refactoring-playbook` §15 |
+| Stream over a nullable-fetch method with no `Objects::nonNull` filter | `ai-toolkit-java-quality:quality-review` checklist C, item 9a |
+| Inline `if (principal.isAdmin)` auth | `ai-toolkit-java-build:permissions` |
+| Custom exception without hierarchy | `ai-toolkit-java-build:exception-handling` |
+| `e.printStackTrace()` / plain-text logs | `ai-toolkit-java-ops:observability` |
+| Non-idempotent consumer | `ai-toolkit-java-build:messaging` |
+| Vendor SDK used directly in domain | `ai-toolkit-java-design:pluggable-architecture` |
+| Inline validation logic | `ai-toolkit-java-build:input-validation` |
+| Missing/wrong test doubles | `ai-toolkit-java-quality:unit-tests` |
+| Missing migration scripts | `ai-toolkit-java-build:persistence` |
 
 ## Step-by-step procedure
 
@@ -62,7 +62,7 @@ time, tests green after every step.
    c. Run tests — green before moving to the next step.
    d. Record the skill + section applied in your final report (not as a code comment, and do not open a PR).
 
-4. VALIDATE against all 24 non-negotiables (`golden-path`) after all steps complete.
+4. VALIDATE against all 24 non-negotiables (`ai-toolkit-java-quality:golden-path`) after all steps complete.
 
 5. CONTEXT:
    - Update context/architecture.md if structural patterns changed.
@@ -96,8 +96,10 @@ Verify every result (read the diff, run the tests) before reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

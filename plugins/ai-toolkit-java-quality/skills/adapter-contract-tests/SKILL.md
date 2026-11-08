@@ -39,7 +39,7 @@ src/test/java/<basePackage>/
 └── spi/x/
     ├── CachePortContract.java          # abstract TCK — all behavioural assertions
     └── adapters/
-        ├── RedisCacheAdapterContractTest.java        # extends CachePortContract
+        ├── RedisCacheAdapterContractIT.java          # extends CachePortContract (Testcontainers → *IT, Failsafe)
         ├── InfinispanCacheAdapterContractTest.java   # extends CachePortContract
         └── NoOpCacheAdapterContractTest.java         # extends CachePortContract (documents no-op semantics)
 ```
@@ -110,7 +110,8 @@ for real I/O adapters (see `integration-tests`).
 
 ```java
 @Testcontainers
-class RedisCacheAdapterContractTest extends CachePortContract {
+@Tag("integration")
+class RedisCacheAdapterContractIT extends CachePortContract {   // *IT: Failsafe runs it, Surefire skips it
 
     @Container
     static final GenericContainer<?> REDIS =
@@ -134,7 +135,9 @@ class NoOpCacheAdapterContractTest extends CachePortContract {
 
 - In-memory adapters run in the unit-test phase (Surefire); adapters needing a
   real backend run in the integration phase (Failsafe) via Testcontainers — see
-  `integration-tests` for the Surefire/Failsafe split.
+  `integration-tests` for the Surefire/Failsafe split. Name the real-backend
+  subclasses `*ContractIT` (a `*ContractTest` suffix would make Surefire run
+  them in `mvn test`); in-memory ones keep `*ContractTest`.
 - A subclass may legitimately `@Override` a TCK test **only** when the adapter's
   documented semantics differ (e.g. a `NoOp` cache). Any such override must
   carry a comment explaining the divergence; everything else stays inherited.
@@ -172,12 +175,12 @@ many delegates are active.
 - Real-backend adapter contracts run on `mvn verify` (Failsafe + Testcontainers).
 - Treat a missing adapter contract as a **build gap**: an ArchUnit / custom
   check can assert that every class ending in `Adapter` has a matching
-  `*ContractTest`.
+  `*ContractTest` (or `*ContractIT` for real-backend adapters).
 
 ```java
 @ArchTest static final ArchRule everyAdapterHasAContractTest =
     classes().that().haveSimpleNameEndingWith("Adapter")
-        .should(haveAMatchingContractTest());   // custom condition: <Name>ContractTest exists
+        .should(haveAMatchingContractTest());   // custom condition: <Name>ContractTest or <Name>ContractIT exists
 ```
 
 ## Do / Don't
@@ -186,7 +189,7 @@ many delegates are active.
 ✅ Make each adapter a thin subclass that only supplies an instance.
 ✅ Back real-I/O adapters with Testcontainers in the integration phase.
 ✅ Give the composite adapter its own contract + failure-isolation tests.
-✅ Fail the build when an `Adapter` has no matching `ContractTest`.
+✅ Fail the build when an `Adapter` has no matching `ContractTest` / `ContractIT`.
 ❌ Never copy-paste assertions into each adapter's test — they will drift.
 ❌ Never import a vendor SDK into the abstract TCK.
 ❌ Never silently `@Override` a contract test without documenting the divergence.

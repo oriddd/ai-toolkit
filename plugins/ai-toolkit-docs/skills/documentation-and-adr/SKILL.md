@@ -91,7 +91,7 @@ When to write an ADR:
 - Introducing a new cross-cutting pattern.
 - Choosing a wire format.
 - Disabling a security default.
-- Deviating from a `public/` skill.
+- Deviating from a toolkit skill.
 
 ADRs are **append-only**. Superseding an old ADR creates a new one.
 

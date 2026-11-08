@@ -227,7 +227,7 @@ Add a commit-msg hook to enforce prefix:
 #!/bin/sh
 # .git/hooks/commit-msg
 
-commit_msg=$(cat "$1")
+commit_msg=$(head -n 1 "$1")   # check the subject line only, not the body
 pattern="^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: |Revert \")"
 
 if ! echo "$commit_msg" | grep -qE "$pattern"; then
@@ -239,7 +239,8 @@ fi
 ```
 
 ### Interactive Rebase
-Clean up commits before pushing:
+Clean up commits before pushing. **Developer-run** — it needs an interactive editor and rewrites history, so an
+agent does not run it; an agent may suggest the plan (which commits to squash / reword) and the developer runs it:
 ```bash
 git rebase -i HEAD~5
 

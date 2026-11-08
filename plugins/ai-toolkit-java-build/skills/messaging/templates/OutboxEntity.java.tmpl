@@ -19,7 +19,11 @@ public class OutboxEntity {
         this.eventType = eventType;
         this.payload = payload;
     }
-    public UUID getId()             { return id; }
-    public Instant getPublishedAt() { return publishedAt; }
-    public void markPublished()     { this.publishedAt = Instant.now(); }
+    public UUID getId()              { return id; }
+    public String getAggregateType() { return aggregateType; }
+    public String getAggregateId()   { return aggregateId; }   // the Kafka record key (partition key = aggregate id)
+    public String getEventType()     { return eventType; }
+    public String getPayload()       { return payload; }
+    public Instant getPublishedAt()  { return publishedAt; }
+    public void markPublished()      { this.publishedAt = Instant.now(); }
 }

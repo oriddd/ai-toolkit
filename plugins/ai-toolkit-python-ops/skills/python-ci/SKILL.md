@@ -56,9 +56,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@<commit-sha>   # vN.N.N: third-party, so SHA-pinned to the latest stable release
         with:
-          version: "0.4.30"      # same uv as the Dockerfile image tag
+          version: "<uv-version>"  # latest stable uv, same as the Dockerfile image tag
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --locked
@@ -71,8 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-        with: { version: "0.4.30", enable-cache: true, cache-dependency-glob: uv.lock }
+      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+        with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m "not integration" --cov   # fail_under lives in [tool.coverage.report]
 
@@ -80,8 +80,8 @@ jobs:
     runs-on: ubuntu-latest          # Docker available for testcontainers
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-        with: { version: "0.4.30", enable-cache: true, cache-dependency-glob: uv.lock }
+      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+        with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m integration || [ $? -eq 5 ]   # exit 5 = no integration test collected yet
 
@@ -90,8 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@<commit-sha>   # third-party: SHA of the latest stable release
+      - uses: docker/build-push-action@<commit-sha>     # third-party: SHA of the latest stable release
         with:
           context: .
           push: false
@@ -117,7 +117,7 @@ separate step with registry credentials scoped to that job.
 ## 3. Dockerfile: multi-stage, non-root
 ```dockerfile
 FROM python:3.12-slim AS build
-COPY --from=ghcr.io/astral-sh/uv:0.4.30 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
@@ -146,6 +146,7 @@ compiler, no uv, no dev dependencies, and runs as an unprivileged user. `.docker
 ## 4. Reproducibility and supply chain
 - Commit `uv.lock`; `uv sync --locked` (or `uv lock --check`) fails CI on drift.
 - Pin uv to one exact version in both places (`setup-uv` `version:` and the `ghcr.io/astral-sh/uv:<tag>` image) and bump them together.
+  `<uv-version>` and `<commit-sha>` above are placeholders: pin the latest stable release when you generate the file (never copy an old example pin), and let Renovate/Dependabot bump them.
 - Pin the base image by major.minor (digest for release builds).
 - Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` (or Dependabot/Renovate) as a scheduled job for vulnerable dependencies.
 - No secrets in images or build args; they arrive at runtime from the environment.

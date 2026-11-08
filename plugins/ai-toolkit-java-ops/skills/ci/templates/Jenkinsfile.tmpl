@@ -1,18 +1,41 @@
 pipeline {
-    agent any
-
-    options {
-        timestamps()
-        buildDiscarder(logRotator(numToKeepStr: '20'))
+  agent { label 'maven-21' }
+  options {
+    timeout(time: 30, unit: 'MINUTES')
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+  }
+  triggers { pollSCM('H/5 * * * *') }
+  environment {
+    IMAGE_NAME = '{{imageRegistry}}/{{artifactId}}'
+  }
+  stages {
+    stage('Build & test') {
+      steps { sh 'mvn -B -ntp -U clean verify' }
+      post {
+        always {
+          junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+          recordCoverage tools: [[parser: 'JACOCO']]
+          archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
+        }
+      }
     }
-
-    stages {
-        stage('Build')    { steps { sh 'mvn -B -q -DskipTests package' } }
-        stage('Test')     { steps { sh 'mvn -B -q test' }
-                            post  { always { junit '**/target/surefire-reports/*.xml' } } }
-        stage('Coverage') { steps { sh 'mvn -B -q jacoco:report' }
-                            post  { always { archiveArtifacts 'target/site/jacoco/**' } } }
-        stage('Image')    { steps { sh 'docker build --build-arg APP_USER_NAME=app --build-arg APP_USER_ID=1000 -t {{artifactId}}:${BUILD_NUMBER} .' } }
+    stage('Container image') {
+      when { anyOf { branch 'main'; tag 'v*' } }
+      steps {
+        script {
+          // release-versioning §6: git tag v1.4.0 → image tag 1.4.0; main → build number
+          env.IMAGE_TAG = env.TAG_NAME ? env.TAG_NAME.replaceFirst(/^v/, '') : env.BUILD_NUMBER
+        }
+        sh '''
+          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+        '''
+      }
     }
+  }
+  post {
+    failure { mail to: "${env.CHANGE_AUTHOR_EMAIL}", subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}" }
+  }
 }
-

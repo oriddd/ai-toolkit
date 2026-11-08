@@ -42,11 +42,11 @@ public interface ExportRenderer {
 }
 
 @Component
-public class PdfExporter implements ExportRenderer { }
+public class InvoicePdfRenderer implements ExportRenderer { }
 
 @Component  
-public class HtmlExporter implements ExportRenderer { }
-// Add DocxExporter without touching existing code/tests
+public class InvoiceHtmlRenderer implements ExportRenderer { }
+// Add InvoiceDocxRenderer without touching existing code/tests
 
 // ❌ Bad: New format = modify switch + update all existing tests
 public byte[] render(byte[] input, String format) {

@@ -23,12 +23,12 @@ public class FooService {
         }
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).build();
-        final FooResponseDto response = fooCoreService.fetchSingleInvoice(
+        final FooProductDto product = fooCoreService.fetchSingleProduct(
                 filters, callerContext, FooConstants.FIELDS_TYPE_ONLY);
-        return fooResponseParser.parseProductType(response);
+        return fooResponseParser.parseProductType(product);
     }
 
-    /** Returns true iff at least one invoice matches the given id + type. */
+    /** Returns true iff at least one product matches the given id + type. */
     public boolean existsByIdAndType(final String productId, final String productType,
                                      final CallerContext callerContext) {
         if (StringUtils.isBlank(productId) || StringUtils.isBlank(productType)) {
@@ -37,7 +37,7 @@ public class FooService {
         }
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).withProductType(productType).build();
-        return fooCoreService.doInvoicesExist(filters, callerContext);
+        return fooCoreService.doProductsExist(filters, callerContext);
     }
 }
 ```
@@ -101,16 +101,16 @@ public class FooCoreService {
     private final FooResponseVerifier fooResponseVerifier;
     private final FooResponseParser fooResponseParser;
 
-    public FooInvoiceDto fetchSingleInvoice(final Map<String, Object> filters,
+    public FooProductDto fetchSingleProduct(final Map<String, Object> filters,
                                               final CallerContext callerContext,
                                               final List<String> fields) {
         final FooSearchRequestDto request = fooRequestBuilder
                 .buildSearchRequest(filters, callerContext, 1, fields);
         final FooSearchResponseDto response = fooClient.search(request);
-        return fooResponseParser.getSingleInvoice(response);
+        return fooResponseParser.getSingleProduct(response);
     }
 
-    public boolean doInvoicesExist(final Map<String, Object> filters,
+    public boolean doProductsExist(final Map<String, Object> filters,
                                     final CallerContext callerContext) {
         final FooSearchRequestDto request = fooRequestBuilder
                 .buildSearchRequest(filters, callerContext, 0);

@@ -43,6 +43,16 @@ Use **Logback with `logstash-logback-encoder`** or `logback-spring.xml` with
 the `LogstashEncoder` so logs are one JSON object per line — directly
 indexable by Elastic / Loki / Datadog without a parser.
 
+On **Spring Boot 3.4+** prefer the native structured logging instead — no extra
+dependency, MDC keys are included automatically:
+
+```yaml
+logging.structured.format.console: logstash   # or ecs / gelf
+```
+
+Use `logstash-logback-encoder` (below) on older Boot versions or when you need
+its extra encoder options.
+
 ```xml
 <dependency>
     <groupId>net.logstash.logback</groupId>
@@ -64,11 +74,14 @@ indexable by Elastic / Loki / Datadog without a parser.
 ```
 
 **MDC propagation rules.**
-- Put `traceId` / `spanId` / `callerId` into MDC at the request boundary
-  (`OncePerRequestFilter`), clear them in `finally`.
+- Put `callerId` (and other request-scoped keys) into MDC at the request boundary
+  (`OncePerRequestFilter`), clear them in `finally`. `traceId` / `spanId` are put
+  into MDC by Micrometer Tracing (§3) — do not set them by hand.
 - For `@Async` / `CompletableFuture`, decorate the executor with
   `MdcTaskDecorator` so MDC survives the thread hop.
-- For `Mono`/`Flux`, use Reactor Context + the `MdcContextLifter` pattern.
+- For `Mono`/`Flux`, enable automatic context propagation
+  (`spring.reactor.context-propagation: auto`, Boot 3.2+) so MDC follows the
+  Reactor Context — the hand-written `MdcContextLifter` hook is no longer needed.
 
 **Log-level governance.**
 - `ERROR` — unexpected, requires alert.
@@ -161,7 +174,7 @@ Rules:
 - Register the Gauge only once (usually in the constructor).
 
 
-## 8. Do / Don't
+## 7. Do / Don't
 
 ✅ MDC is the only place correlation lives; never pass `traceId` as a method
 parameter.

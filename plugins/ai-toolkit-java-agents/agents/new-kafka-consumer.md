@@ -17,19 +17,19 @@ file change needed, satisfying all messaging non-negotiables.
 
 ## Skills to apply (in this order)
 
-1. `messaging` — idempotent consumer,
+1. `ai-toolkit-java-build:messaging` — idempotent consumer,
    DLQ wiring, transactional outbox pattern, Kafka config.
-2. `pluggable-architecture` —
+2. `ai-toolkit-java-design:pluggable-architecture` —
    broker dependency behind a port; vendor SDK only inside the adapter.
-3. `observability` — MDC correlation ID
+3. `ai-toolkit-java-ops:observability` — MDC correlation ID
    from message header, consumer lag metric, structured logging.
-4. `graceful-shutdown` — consumer
+4. `ai-toolkit-java-ops:graceful-shutdown` — consumer
    group paused before pod termination; in-flight message drained.
-5. `exception-handling` — domain
+5. `ai-toolkit-java-build:exception-handling` — domain
    exception subclass for consumer failures + `ExceptionMessages` entry.
-6. `unit-tests` — consumer + idempotency
+6. `ai-toolkit-java-quality:unit-tests` — consumer + idempotency
    guard + any outbox service.
-7. `integration-tests` — Testcontainers
+7. `ai-toolkit-java-quality:integration-tests` — Testcontainers
    Kafka; publish a message, assert side effects.
 
 ## Step-by-step procedure
@@ -84,7 +84,7 @@ once the code it depends on exists.
    - `ai-toolkit-java-agents:test-writer` — unit tests (consumer with mocked service, idempotency guard on duplicate
      input, error and DLQ routing);
    - `ai-toolkit-java-agents:test-writer` — integration test `*IT` against Testcontainers Kafka (applies
-     `integration-tests`; Failsafe runs it — the writer writes it but does not run it);
+     `ai-toolkit-java-quality:integration-tests`; Failsafe runs it — the writer writes it but does not run it);
    - `ai-toolkit-docs:update-context` — architecture, dependencies, CHANGELOG.
 3. **Sequential (you):** `mvn verify` (unit + `*IT`), then `ai-toolkit-java-agents:code-review`.
 
@@ -96,8 +96,10 @@ Verify every result (read the diff, run the tests) before reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

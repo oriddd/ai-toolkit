@@ -13,7 +13,7 @@ version: 1.0
 last_reviewed: 2026-06-28
 ---
 
-# Refactoring Playbook Skill (public — meta)
+# Refactoring Playbook Skill (meta)
 
 For each anti-pattern, this skill prescribes a **safe, mechanical** migration
 to the canonical pattern. Each migration is "green-bar-only" — never break
@@ -109,7 +109,9 @@ Steps:
 2. Make the fake branch on inputs so it can drive forbidden / not-found /
    success from the same instance.
 3. Replace `@MockBean` lines in test classes with `@Import(ComponentTestConfiguration.class)`.
-4. Add `Mockito.reset(...)` in `@AfterEach` where needed.
+4. Add `Mockito.clearInvocations(...)` in `@AfterEach` where needed — not
+   `Mockito.reset(...)`, which wipes the deterministic stubbing from step 2
+   (see `component-tests` "Resetting state between tests").
 
 ## 7. Hibernate auto-DDL → Flyway
 
@@ -117,7 +119,8 @@ Symptom: `spring.jpa.hibernate.ddl-auto=update` in `application.yaml`.
 
 Steps:
 1. Set `ddl-auto=validate` in prod, `none` elsewhere.
-2. Add `flyway-core`.
+2. Add `flyway-core`, plus the database module on Flyway 10+ (e.g.
+   `flyway-database-postgresql`) — without it Flyway rejects the database as unsupported.
 3. Dump the current schema as DDL (e.g. `pg_dump --schema-only`) and commit it as `V1__baseline.sql` — `flyway baseline` only writes a history row, it
    does not produce a SQL file. Existing databases must skip that script: set `spring.flyway.baseline-on-migrate=true` and `baseline-version=1`,
    or a `V1` applied to a populated schema fails.

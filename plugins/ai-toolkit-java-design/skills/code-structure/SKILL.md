@@ -33,6 +33,7 @@ com.example.<domain>.<subdomain>/
 ├── renderer/      # domain "renderer strategies" (format export / rendering)
 ├── exception/     # custom exceptions + exception/constants/ExceptionMessages
 ├── health/        # Spring Boot HealthIndicator implementations
+├── mapper/        # MapStruct mappers AND/OR response-mapper strategies (see Pattern A)
 ├── model/         # DTOs (request/response) and internal domain models
 ├── monitor/       # metrics filter, recorders, parsers (see Pattern B)
 ├── operation/     # use-case orchestrators (one class per public use case)
@@ -68,7 +69,7 @@ controller ──► operation ──► service ──► repository ──► 
 
 This principle is foundational to the entire code structure and directly
 supports both **SOLID principles** and **testability**. See
-[`testable-code-principles`](../testable-code-principles/SKILL.md) for the
+`testable-code-principles` for the
 complete rationale.
 
 ### What makes a good LEGO brick?
@@ -147,7 +148,7 @@ Now each brick:
 | **Interface-based** | Dependency Inversion, Interface Segregation | Mock bricks easily in tests; clear contracts |
 | **Self-explanatory** | Single Responsibility | Code reads like documentation; minimal comments |
 
-See [`testable-code-principles`](../testable-code-principles/SKILL.md) for
+See `testable-code-principles` for
 detailed examples of testable vs. non-testable code.
 
 ## 1c. Layer Responsibilities
@@ -210,7 +211,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
   for DI; avoid field injection. Pick one style per class.
 - **Configuration:** All env-driven config is read from `application.yaml`
   with `${ENV_VAR:default}` placeholders matching the Helm chart env names.
-  Keys are centralised in `ConfigurationConstants` (see §4d).
+  Keys are centralised in `constant/ConfigurationConstants`.
 - **Exceptions:** Define a base `<Domain>Exception` and subclasses
   (`*BadRequestException`, `*ForbiddenException`, `*NotFoundException`).
   Static messages live in `exception/constants/ExceptionMessages` and are

@@ -200,15 +200,18 @@ public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
 public class ClientIdParser {
     private static final String AZP = "azp";
 
-    public String parseClientId() {
+    // Reads the principal from the request, never SecurityContextHolder (that stays in permission/,
+    // ArchUnit rule securityHolderLivesInPermissionOnly). Spring Security's request wrapper returns
+    // the current Authentication from getUserPrincipal().
+    public String parseClientId(final HttpServletRequest request) {
         try {
-            final Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth instanceof JwtToken jwt
+            final Principal principal = request == null ? null : request.getUserPrincipal();
+            if (principal instanceof JwtAuthenticationToken jwt
                     && jwt.getTokenAttributes() != null
                     && jwt.getTokenAttributes().get(AZP) != null) {
                 return String.valueOf(jwt.getTokenAttributes().get(AZP));
             }
-            if (auth instanceof BasicAuthenticationToken) {
+            if (principal instanceof UsernamePasswordAuthenticationToken) {   // HTTP Basic
                 return MonitoringConstants.BASIC;
             }
         } catch (final Exception e) {
@@ -241,7 +244,7 @@ public class MetricsTagsHelper {
         return Set.of(
             Tag.of("requestMethod", requestMethodParser.parseRequestMethod(request)),
             Tag.of("responseStatus", responseStatusParser.parseResponseStatus(response)),
-            Tag.of("clientId", clientIdParser.parseClientId())
+            Tag.of("clientId", clientIdParser.parseClientId(request))
         );
     }
 }

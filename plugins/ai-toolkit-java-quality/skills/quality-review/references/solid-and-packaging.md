@@ -1,4 +1,4 @@
-# this Quality Review Skill — Checklist A–B: SOLID and lego-brick packaging
+# Quality Review Skill — Checklist A–B: SOLID and lego-brick packaging
 
 Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 

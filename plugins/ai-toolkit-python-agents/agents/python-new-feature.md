@@ -24,12 +24,12 @@ IF new metric / trace span:  → python-observability
 
 ## Always apply
 
-- `python-code-structure` — layout, layering, naming, constructor injection
-- `python-error-handling` — new error cases
-- `python-observability` — correlation ID, logging discipline
-- `python-unit-tests` — every new module
-- `python-integration-tests` — every new database or broker boundary
-- `python-static-analysis` — ruff, `mypy --strict`, import-linter stay green
+- `ai-toolkit-python-design:python-code-structure` — layout, layering, naming, constructor injection
+- `ai-toolkit-python-build:python-error-handling` — new error cases
+- `ai-toolkit-python-ops:python-observability` — correlation ID, logging discipline
+- `ai-toolkit-python-quality:python-unit-tests` — every new module
+- `ai-toolkit-python-quality:python-integration-tests` — every new database or broker boundary
+- `ai-toolkit-python-quality:python-static-analysis` — ruff, `mypy --strict`, import-linter stay green
 - `ai-toolkit-quality:code-hygiene` — no needless comments, dead code or speculative abstraction
 
 ## Step-by-step procedure
@@ -62,7 +62,7 @@ IF new metric / trace span:  → python-observability
    i. Tests (unit → API → integration)
    j. Metrics / logging (if needed)
 
-5. VALIDATE: the verify sequence (see `python-ci`) is green.
+5. VALIDATE: the verify sequence (see `ai-toolkit-python-ops:python-ci`) is green.
 
 6. UPDATE the architecture/context notes and CHANGELOG.
 ```
@@ -84,7 +84,7 @@ do the same steps inline, in order.
 3. **Sequential (you):** wire services/operations/routers that tie the layers together,
    run the verify sequence, then `ai-toolkit-python-agents:python-code-review` on the combined diff.
 
-Keep shared files (`pyproject.toml`, `settings.py`, the error-code catalogue, Alembic revision chain, `app.py` router
+Keep shared files (`pyproject.toml`, the `config/` settings package, the error-code catalogue, Alembic revision chain, `main.py` router
 registration) and the test/lint runs to yourself. Verify every result (read the diff, run the tests) before
 reporting done.
 
@@ -92,11 +92,13 @@ reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill and finish with its evidence table.
-For Python its verify sequence is the one defined in `python-ci`: `uv run ruff check . && uv run ruff
+For Python its verify sequence is the one defined in `ai-toolkit-python-ops:python-ci`: `uv run ruff check . && uv run ruff
 format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"` (plus
 `uv run pytest -m integration` when Docker is available), followed by coverage of the changed code via
 diff-cover, `ai-toolkit-quality:code-hygiene` and Sonar where configured. Fix failures at the cause; never suppress or weaken a check to get green (no blanket
 `# noqa` / `# type: ignore`, no lowered coverage threshold, no skipped or deleted tests).
+Gate check 5 (Standards) is the `ai-toolkit-python-agents:python-code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

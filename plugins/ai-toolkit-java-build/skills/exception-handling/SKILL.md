@@ -203,7 +203,7 @@ that defeats the typed advice mapping.
 ❌ Never put HTTP types (`HttpStatus`, `ResponseEntity`) anywhere except the
 controller and the advice.
 
-## 6. Templates
+## 5. Templates
 
 - [`BaseDomainException.java.tmpl`](./templates/BaseDomainException.java.tmpl) — Common base class.
 - [`NotFoundException.java.tmpl`](./templates/NotFoundException.java.tmpl) — Maps to 404.

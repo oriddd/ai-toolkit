@@ -17,6 +17,8 @@ last_reviewed: 2026-06-28
 This skill creates a `helm-chart/` directory at the repo root containing the
 standard deployment manifests. **No environment-specific defaults are baked
 in** — registries, shared ConfigMaps, runtime UID/GID conventions, etc. are
+added as local overrides (your own `values.yaml` / values files per
+environment), never in this shared skill.
 
 
 ```
@@ -25,7 +27,6 @@ helm-chart/
 ├── values.yaml
 ├── README.md
 └── templates/
-    ├── _helpers.tpl
     ├── deployment.yaml
     ├── hpa.yaml
     ├── secret.yaml
@@ -52,7 +53,9 @@ helm-chart/
 ## Steps
 
 1. **`Chart.yaml`** – `apiVersion: v2`, `type: application`, `version: 0.1.0`,
-   `name` and `description` set to `chartName`.
+   `name` and `description` set to `chartName`, `appVersion` set to the release
+   version (`1.4.0`, no `v` — `release-versioning` §6). The image tag defaults to
+   `.Chart.AppVersion`.
 2. **`values.yaml`** – Start from [`templates/values.yaml.tmpl`](./templates/values.yaml.tmpl)
    and prune sections that are not needed.
 3. **`templates/deployment.yaml`** – Use [`templates/deployment.yaml.tmpl`](./templates/deployment.yaml.tmpl).
@@ -64,11 +67,12 @@ helm-chart/
    - `terminationGracePeriodSeconds: 60` and a `preStop` sleep, so the pod drains before `SIGKILL` (`graceful-shutdown` skill).
    - A `/tmp` `emptyDir` — the template mounts it because the root filesystem is read-only.
    - `serviceAccountName: {{ .Chart.Name }}`.
-   *(Add AppArmor annotations or shared ConfigMaps as needed for your platform.)*
-4. **`templates/_helpers.tpl`** – Resolve the image registry with
+   - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation).
+   *(Add shared ConfigMaps as needed for your platform.)*
+4. **Image registry** – `deployment.yaml` resolves the registry inline with
    `{{ (.Values.global).imageRegistry | default .Values.image.registry }}` so a parent
    (umbrella) chart can set it once for every service, and a standalone install
-   falls back to the chart's own value.
+   falls back to the chart's own value. No `_helpers.tpl` is needed.
 5. **`templates/service.yaml`** – ClusterIP service exposing port `http` → `appPort`.
 6. **`templates/hpa.yaml`** – HorizontalPodAutoscaler tied to
    `.Values.autoscaling.{min,max}Replicas` and `targetCPUUtilizationPercentage`.

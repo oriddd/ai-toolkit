@@ -4,7 +4,7 @@ Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings 
 
 ## 2. Pattern A — Strategy + Handler (used in `permission/`, `renderer/`, `layout/`, `mapper/`)
 
-> **Foundational Pattern:** This is an application of the [strategy-registry-pattern](../../strategy-registry-pattern/SKILL.md) skill.
+> **Foundational Pattern:** This is an application of the `strategy-registry-pattern` skill.
 > Read that skill for the complete pattern definition and all component responsibilities.
 
 When the same operation has **multiple interchangeable implementations** chosen
@@ -51,7 +51,7 @@ indicating you should introduce a strategy.
 
 ## 3. Pattern B — Metrics Filter + Recorder Registry (used in `monitor/`)
 
-> **Foundational Pattern:** This is a **Filter-based variation** of the [strategy-registry-pattern](../../strategy-registry-pattern/SKILL.md) skill.
+> **Foundational Pattern:** This is a **Filter-based variation** of the `strategy-registry-pattern` skill.
 > Read that skill for the complete pattern definition. This section covers the filter-specific aspects.
 
 For request-level observability use a single `OncePerRequestFilter` that
@@ -89,11 +89,11 @@ Each public REST endpoint maps to exactly one class in `operation/`:
 ```java
 @Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
-public class FooOperation {
+public class ExportInvoiceOperation {
     private final PermissionsHandler permissionsHandler;
-    private final FooService exportInvoiceService;
+    private final ExportInvoiceService exportInvoiceService;
 
-    public FooResponse execute(FooRequest req) {
+    public ExportInvoiceResponse execute(ExportInvoiceRequest req) {
         permissionsHandler.handle(req.invoiceId(), req.attachmentId());
         return exportInvoiceService.export(req);
     }

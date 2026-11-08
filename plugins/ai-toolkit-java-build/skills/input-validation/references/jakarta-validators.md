@@ -68,7 +68,7 @@ public class EditableProductIdValidator
             return rejectWith(ctx, "Product ID must not be blank");
         }
 
-        // a local / cached rule bean — never a database or remote call in the request path (input-validation SKILL: domain rule beans)
+        // delegate to an injected lookup / rule bean — never a database or remote call written directly in the validator (input-validation SKILL: domain rule beans)
         final String productType = productLookupService.getProductType(productId);
         if (StringUtils.isBlank(productType)) {
             return rejectWith(ctx, String.format("Type for product '%s' could not be determined", escape(productId)));

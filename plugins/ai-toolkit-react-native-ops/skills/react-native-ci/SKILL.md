@@ -36,8 +36,10 @@ fastlane/Fastfile     # lanes (Fastlane path)
 ## Dependencies
 
 ```json
-{ "devDependencies": { "eas-cli": "13.2.0" } }
+{ "devDependencies": { "eas-cli": "<current>" } }
 ```
+
+`<current>`: pin the latest stable `eas-cli` as an exact version (no `^`), and use the same value for `eas-version` below.
 
 ## 1. PR gates (required checks)
 
@@ -109,7 +111,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - uses: expo/expo-github-action@v8
-        with: { eas-version: 13.2.0, token: '${{ secrets.EXPO_TOKEN }}' }   # equals the eas-cli pin in package.json
+        with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }   # equals the eas-cli pin in package.json
       - run: npm ci
       - run: eas build --profile preview --platform all --non-interactive --no-wait
 ```
@@ -145,7 +147,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - uses: expo/expo-github-action@v8
-        with: { eas-version: 13.2.0, token: '${{ secrets.EXPO_TOKEN }}' }
+        with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }
       - run: npm ci && npm run verify
       - run: eas build --profile production --platform all --non-interactive --auto-submit
 ```

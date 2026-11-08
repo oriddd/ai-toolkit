@@ -1,6 +1,7 @@
 ---
 name: react-native-test-writer
 description: Write Jest + React Native Testing Library (and MSW) tests for a given list of already-existing components, hooks or modules, following react-native-unit-tests. Use when production code is done and tests for independent units can be written in parallel. Only creates or edits test files.
+tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ---
 
 # Agent: React Native Test Writer
@@ -15,10 +16,10 @@ production code.
 
 ## Skills to apply
 
-1. `react-native-unit-tests` — behaviour-focused queries, MSW for network, fakes over mocks,
+1. `ai-toolkit-react-native-quality:react-native-unit-tests` — behaviour-focused queries, MSW for network, fakes over mocks,
    positive, negative and edge cases.
-2. `react-native-e2e-tests` — only when the brief lists Maestro flows; use stable test IDs, deterministic data.
-3. `react-native-code-structure` — if a unit is hard to test because of its structure, report it instead of working around it.
+2. `ai-toolkit-react-native-quality:react-native-e2e-tests` — only when the brief lists Maestro flows; use stable test IDs, deterministic data.
+3. `ai-toolkit-react-native-design:react-native-code-structure` — if a unit is hard to test because of its structure, report it instead of working around it.
 
 ## Rules
 

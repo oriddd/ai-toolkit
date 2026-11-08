@@ -16,13 +16,13 @@ annotation, the validator, the domain rule bean, and the tests.
 
 ## Skills to apply (in this order)
 
-1. `input-validation` — the full
+1. `ai-toolkit-java-build:input-validation` — the full
    pattern: annotation → validator → rule bean.
-2. `exception-handling` — the
+2. `ai-toolkit-java-build:exception-handling` — the
    400 ProblemDetail mapping must be in place.
-3. `unit-tests` — rule bean (plain
+3. `ai-toolkit-java-quality:unit-tests` — rule bean (plain
    POJO), validator (mock ConstraintValidatorContext), component test.
-4. `component-tests` — end-to-end
+4. `ai-toolkit-java-quality:component-tests` — end-to-end
    400 HTTP response assertion.
 
 ## Decision: which style to use?
@@ -60,7 +60,7 @@ Add a field + `@InitBinder("lowerCamelDtoName")` to `ValidationConfig`.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
 
 ## Checklist before returning
@@ -74,6 +74,6 @@ table. Fix failures at the cause; never suppress or weaken a check to get green.
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.
-- [ ] The validator / rule bean is provided to affected tests through the shared `ComponentTestConfiguration` (`component-tests`) — not an inline `@MockBean`, which would also mock away the rule under test.
+- [ ] The validator / rule bean is provided to affected tests through the shared `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`) — not an inline `@MockBean`, which would also mock away the rule under test.
 - [ ] CHANGELOG updated.
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

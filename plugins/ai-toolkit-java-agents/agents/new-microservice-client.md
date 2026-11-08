@@ -1,12 +1,13 @@
 ---
 name: new-microservice-client
-description: Integrate a new downstream microservice or external API using the canonical five-layer `client/<dep>/` package.
+description: Integrate a new downstream microservice or external API using the canonical `client/<dep>/` package (Simple Wrapper, Lite or five-layer — the simplest that fits its scale).
 ---
 
 # Agent: New Microservice Client
 
 > **Purpose:** Integrate a new downstream microservice or external API
-> using the canonical five-layer `client/<dep>/` package.
+> using the canonical `client/<dep>/` package (Simple Wrapper, Lite or
+> five-layer — the simplest that fits, `ai-toolkit-java-build:external-client` §0).
 
 ---
 
@@ -16,23 +17,23 @@ the full integration package.
 
 ## Skills to apply (in this order)
 
-1. `external-client` — first ask the scale questions in its §0 (how many endpoints now / in 6 months, query and response complexity) and choose
+1. `ai-toolkit-java-build:external-client` — first ask the scale questions in its §0 (how many endpoints now / in 6 months, query and response complexity) and choose
    Simple Wrapper, Lite or the full five-layer structure (Service, CoreService, Client, handler/, constant/). Default to the simplest that fits.
-2. `pluggable-architecture`
+2. `ai-toolkit-java-design:pluggable-architecture`
    — if multiple backends could serve the same capability, expose
    `*Service` as a port interface and put adapters under `adapter/`.
-3. `exception-handling` —
+3. `ai-toolkit-java-build:exception-handling` —
    domain exception for non-2xx from the Client.
-4. `health-indicator` — readiness
+4. `ai-toolkit-java-ops:health-indicator` — readiness
    probe for the new dependency.
-5. `resilience-patterns` —
+5. `ai-toolkit-java-build:resilience-patterns` —
    circuit breaker + retry on the `*Client`.
-6. `observability` — MDC correlation
+6. `ai-toolkit-java-ops:observability` — MDC correlation
    ID propagated in outbound headers.
-7. `unit-tests` — every layer.
-8. `integration-tests` —
+7. `ai-toolkit-java-quality:unit-tests` — every layer.
+8. `ai-toolkit-java-quality:integration-tests` —
    WireMock for the HTTP boundary.
-9. `adapter-contract-tests`
+9. `ai-toolkit-java-quality:adapter-contract-tests`
    — if multiple adapters exist, a TCK per port.
 
 ## Information to gather before generating
@@ -41,11 +42,13 @@ the full integration package.
 1. Service display name (e.g. "Product Catalogue Service")
 2. Sub-package name: lower-case, no hyphens — hyphens are illegal in Java package names (e.g. `productcatalogue`)
 3. Base URL config key — kebab-case is fine here (e.g. product-catalogue.base-url)
-4. Operations to expose: HTTP method + path + purpose (list each) — and how many you expect within 6 months (decides the pattern, `external-client` §0)
+4. Operations to expose: HTTP method + path + purpose (list each) — and how many you expect within 6 months (decides the pattern, `ai-toolkit-java-build:external-client` §0)
 5. Auth mechanism (none / bearer passthrough / OAuth2 client credentials / basic)
 6. Connect timeout / read timeout in ms
 7. Is idempotent (safe to retry)?
-8. Does this need a domain metric? (→ also invoke the `ai-toolkit-java-agents:new-metric` agent)
+8. Does this need a domain metric? (→ also apply the `ai-toolkit-java-ops:request-metrics` skill yourself, as the
+   `ai-toolkit-java-agents:new-metric` agent would — a subagent cannot start another agent — or tell the developer to run
+   that agent afterwards)
 ```
 
 ## Generated file list
@@ -81,11 +84,14 @@ once the code it depends on exists.
    `*ClientConfig`, `*Client`, the `*Service` facade — and the domain exception for non-2xx.
 2. **Parallel leaves (optional, disjoint files, after step 1):** `general-purpose` for the request builders
    (`*RequestBuilder`, `*FilterMapBuilder`), `general-purpose` for the response parser + verifier,
-   `general-purpose` for the readiness `HealthIndicator` and the resilience / observability wiring.
-3. **Sequential (you):** wire the leaves into `*CoreService` and add the `application.yaml` keys.
+   `general-purpose` for the resilience / observability wiring.
+3. **Sequential (you):** wire the leaves into `*CoreService` and add the `application.yaml` keys; apply
+   `ai-toolkit-java-ops:health-indicator` yourself — it is HITL (asks the developer for the readiness endpoint, status
+   and interval, which a subagent cannot do) and edits shared files (`application.yaml`, Helm chart); if item 8 is yes,
+   add the domain metric with `ai-toolkit-java-ops:request-metrics` (the `ai-toolkit-java-agents:new-metric` procedure).
 4. **Parallel fan-out, one message — after the code exists:** `ai-toolkit-java-agents:test-writer` for unit tests
-   per layer; `ai-toolkit-java-agents:test-writer` for the WireMock integration test `*IT` (`integration-tests`) and,
-   if several adapters exist, one TCK per port (`adapter-contract-tests`) — written, not run;
+   per layer; `ai-toolkit-java-agents:test-writer` for the WireMock integration test `*IT` (`ai-toolkit-java-quality:integration-tests`) and,
+   if several adapters exist, one TCK per port (`ai-toolkit-java-quality:adapter-contract-tests`) — written, not run;
    `ai-toolkit-docs:update-context` — dependencies doc + CHANGELOG.
 5. **Sequential (you):** run the build and tests, then `ai-toolkit-java-agents:code-review`.
 
@@ -97,8 +103,10 @@ Verify every result (read the diff, run the tests) before reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

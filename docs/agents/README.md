@@ -9,7 +9,7 @@ building.
 
 | Agent | Use when… |
 | --- | --- |
-| [`test-writer.md`](../../plugins/ai-toolkit-java-agents/agents/test-writer.md) | Worker: unit/component tests for existing classes — run in parallel by the other agents |
+| [`test-writer.md`](../../plugins/ai-toolkit-java-agents/agents/test-writer.md) | Worker: unit, component and integration (`*IT`) tests for existing classes — run in parallel by the other agents |
 | [`scaffold-repo.md`](../../plugins/ai-toolkit-java-agents/agents/scaffold-repo.md) | Creating a brand-new Spring Boot service repository from scratch |
 | [`new-endpoint.md`](../../plugins/ai-toolkit-java-agents/agents/new-endpoint.md) | Adding a REST endpoint to an existing service |
 | [`new-feature.md`](../../plugins/ai-toolkit-java-agents/agents/new-feature.md) | Implementing a multi-layer feature end-to-end |

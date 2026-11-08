@@ -121,7 +121,7 @@ repos:
         entry: mvn -q -DskipTests=false test -Dtest='*Test' -DfailIfNoTests=false
         language: system
         pass_filenames: false
-        stages: [push]
+        stages: [pre-push]
 ```
 
 Install once: `pre-commit install && pre-commit install --hook-type pre-push`.
@@ -139,8 +139,8 @@ For one-off automation that doesn't fit a Make target:
 - `bin/reset-broker.sh` — purge Kafka topics.
 - `bin/bump-bom.sh` — bump a shared BOM and run tests.
 
-Each script starts with `#!/usr/bin/env bash; set -euo pipefail` and has a
-help banner.
+Each script starts with `#!/usr/bin/env bash` followed by `set -euo pipefail` on the
+next line, and has a help banner.
 
 ## Do / Don't
 

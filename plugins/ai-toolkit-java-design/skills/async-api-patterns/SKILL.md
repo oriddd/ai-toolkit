@@ -20,18 +20,18 @@ Standard REST calls should return within 1-2 seconds. For operations that take l
 ## 1. Pattern: Submit → Poll → Result
 
 ### Step 1: Submit
-`POST /exports`
+`POST /api/v1/invoices/{id}/exports`
 - Returns **`202 Accepted`**.
 - Body includes a `jobId`; the `Operation-Location` header points at the status endpoint (same contract as `api-design` §2).
 
 ### Step 2: Poll
-`GET /exports/{jobId}`
+`GET /api/v1/operations/{jobId}` (the operation resource from `api-design` §8)
 - Returns the current state: `RUNNING`, `SUCCEEDED`, `FAILED` (the same states `api-design` uses; add `PENDING` only if you queue before starting).
 
 **Optimization**: long polling — let the client send `Prefer: wait=<seconds>` (RFC 7240) and hold the request until the state changes or the wait expires. (`Prefer: respond-async` is the opposite: it asks the server to answer `202` instead of waiting. There is no standard `Wait-For` header.)
 
 ### Step 3: Result
-- Once status is `SUCCEEDED`, the body contains a URL to retrieve the artifact (e.g., `GET /exports/{jobId}/download`).
+- Once status is `SUCCEEDED`, the body contains a URL to retrieve the artifact (e.g., `GET /api/v1/operations/{jobId}/download`).
 
 ## 2. Notification: Webhooks
 

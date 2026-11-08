@@ -14,23 +14,23 @@ incrementally: one anti-pattern at a time, behaviour unchanged unless the develo
 
 ## Skills to apply (in this order)
 
-1. `react-native-code-structure` — identify layout, layering and navigation-typing violations.
-2. `react-native-static-analysis` — see which rules the repo already enforces or is missing.
+1. `ai-toolkit-react-native-design:react-native-code-structure` — identify layout, layering and navigation-typing violations.
+2. `ai-toolkit-react-native-quality:react-native-static-analysis` — see which rules the repo already enforces or is missing.
 3. For each anti-pattern found, apply the target skill:
 
 | Anti-pattern | Target skill |
 | --- | --- |
-| Fat screen mixing fetching, logic and rendering | `react-native-code-structure` |
-| Cross-feature imports, circular dependencies | `react-native-code-structure` |
-| Untyped navigation, `any` route params | `react-native-code-structure` |
-| `fetch`/axios in components, `useEffect` data loading | `react-native-state-and-data` |
-| Server data copied into Redux/Context/Zustand | `react-native-state-and-data` |
-| Ad-hoc query keys | `react-native-state-and-data` |
-| Inline `if` validation, hand-rolled form state | `react-native-input-validation` |
-| `try/catch` with string messages, swallowed errors | `react-native-error-handling` |
-| Tokens in AsyncStorage, secrets in the bundle | `react-native-security` |
-| `console.log`, vendor analytics called directly | `react-native-observability` |
-| Brittle or missing tests (snapshots, implementation details) | `react-native-unit-tests` |
+| Fat screen mixing fetching, logic and rendering | `ai-toolkit-react-native-design:react-native-code-structure` |
+| Cross-feature imports, circular dependencies | `ai-toolkit-react-native-design:react-native-code-structure` |
+| Untyped navigation, `any` route params | `ai-toolkit-react-native-design:react-native-code-structure` |
+| `fetch`/axios in components, `useEffect` data loading | `ai-toolkit-react-native-design:react-native-state-and-data` |
+| Server data copied into Redux/Context/Zustand | `ai-toolkit-react-native-design:react-native-state-and-data` |
+| Ad-hoc query keys | `ai-toolkit-react-native-design:react-native-state-and-data` |
+| Inline `if` validation, hand-rolled form state | `ai-toolkit-react-native-build:react-native-input-validation` |
+| `try/catch` with string messages, swallowed errors | `ai-toolkit-react-native-build:react-native-error-handling` |
+| Tokens in AsyncStorage, secrets in the bundle | `ai-toolkit-react-native-build:react-native-security` |
+| `console.log`, vendor analytics called directly | `ai-toolkit-react-native-ops:react-native-observability` |
+| Brittle or missing tests (snapshots, implementation details) | `ai-toolkit-react-native-quality:react-native-unit-tests` |
 
 ## Step-by-step procedure
 
@@ -78,9 +78,11 @@ to yourself. Verify every result (read the diff, run the tests) before reporting
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (the verify script `npm run verify` = `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`, see
-`react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
+`ai-toolkit-react-native-quality:react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check (`eslint-disable`, `@ts-ignore`,
 `it.skip`, lowered thresholds) to get green.
+Gate check 5 (Standards) is the `ai-toolkit-react-native-agents:react-native-code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

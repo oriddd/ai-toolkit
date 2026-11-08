@@ -37,11 +37,11 @@ jest.config.js  jest.setup.ts
 ## Dependencies
 
 ```json
-{ "devDependencies": { "jest": "^29.7.0", "jest-expo": "~52.0.0", "@testing-library/react-native": "^13.3.0",
+{ "devDependencies": { "jest": "^29.7.0", "jest-expo": "~<expo-sdk>.0.0", "@testing-library/react-native": "^13.3.0",
   "msw": "~2.6.0", "@types/jest": "^29.5.0" } }
 ```
 
-- `jest-expo` is pinned to one Expo SDK (`~52.0.0` is an example for SDK 52); use the `jest-expo` line that matches your `expo` version.
+- `jest-expo` is pinned to one Expo SDK: replace `<expo-sdk>` with the app's `expo` major (e.g. `~52.0.0` for SDK 52); use the latest stable SDK for a new app. Bare React Native apps drop `jest-expo` and use the `react-native` preset.
 - RNTL 12.4+ ships the jest matchers (`toBeOnTheScreen`, `toHaveTextContent`, ...) and registers them when you import from
   `@testing-library/react-native`. Do not install `@testing-library/jest-native` (deprecated); v12 is no longer maintained, so use v13.
 - `msw` is held on `~2.6.0`: newer 2.x releases pull ESM-only dependencies that Jest fails to parse

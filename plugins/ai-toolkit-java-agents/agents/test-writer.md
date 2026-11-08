@@ -1,6 +1,7 @@
 ---
 name: test-writer
 description: Write unit, component and integration (`*IT`) tests for a given list of already-existing classes, endpoints or boundaries, following the unit-tests, component-tests and integration-tests skills. Use when the production code is done and tests for independent classes can be written in parallel. Only creates or edits test files and never runs builds or tests unless the brief says so.
+tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ---
 
 # Agent: Test Writer
@@ -15,10 +16,10 @@ only; you never change production code.
 
 ## Skills to apply
 
-1. `unit-tests` — positive, negative and edge cases; `methodName_Condition_ExpectedResult` naming.
-2. `component-tests` — only when the brief lists endpoints.
-3. `integration-tests` — only when the brief lists a DB, broker or downstream boundary: `*IT.java` classes, Testcontainers / WireMock; they run under Failsafe, not Surefire. With several adapters per port also `adapter-contract-tests` (one TCK per port).
-4. `testable-code-principles` — if the class is hard to test, report it instead of working around it.
+1. `ai-toolkit-java-quality:unit-tests` — positive, negative and edge cases; `methodName_Condition_ExpectedResult` naming.
+2. `ai-toolkit-java-quality:component-tests` — only when the brief lists endpoints.
+3. `ai-toolkit-java-quality:integration-tests` — only when the brief lists a DB, broker or downstream boundary: `*IT.java` classes, Testcontainers / WireMock; they run under Failsafe, not Surefire. With several adapters per port also `ai-toolkit-java-quality:adapter-contract-tests` (one TCK per port).
+4. `ai-toolkit-java-design:testable-code-principles` — if the class is hard to test, report it instead of working around it.
 
 ## Rules
 

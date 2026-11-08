@@ -192,7 +192,7 @@ do not load them all.
   conventions the `client/` sub-package follows.
 - `exception-handling` — domain exception
   hierarchy; `*Client` throws subclasses.
-- [`resilience-patterns`](../resilience-patterns/SKILL.md) — bulkheads,
+- `resilience-patterns` — bulkheads,
   timeouts, circuit breakers beyond simple retries.
 - `health-indicator` — add a readiness
   probe for the new dependency.

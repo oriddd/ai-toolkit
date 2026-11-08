@@ -8,14 +8,14 @@ spec:
       run: {{ "{{" }} .Chart.Name {{ "}}" }}
   template:
     metadata:
-      annotations:
-        container.apparmor.security.beta.kubernetes.io/{{ "{{" }} .Chart.Name {{ "}}" }}: runtime/default
       labels:
         run: {{ "{{" }} .Chart.Name {{ "}}" }}
         app: {{ "{{" }} .Chart.Name {{ "}}" }}
     spec:
       enableServiceLinks: false
       securityContext:
+        appArmorProfile:
+          type: RuntimeDefault
         fsGroup: {{fsGroup}}
         fsGroupChangePolicy: OnRootMismatch
         runAsGroup: {{runAsGroup}}
@@ -26,7 +26,7 @@ spec:
       serviceAccountName: {{ "{{" }} .Chart.Name {{ "}}" }}
       terminationGracePeriodSeconds: 60   # > spring.lifecycle.timeout-per-shutdown-phase + preStop (graceful-shutdown skill)
       containers:
-        - image: {{ "{{" }} (.Values.global).imageRegistry | default .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.Version {{ "}}" }}
+        - image: {{ "{{" }} (.Values.global).imageRegistry | default .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.AppVersion {{ "}}" }}
           imagePullPolicy: {{ "{{" }} .Values.image.pullPolicy {{ "}}" }}
           name: {{ "{{" }} .Chart.Name {{ "}}" }}
           resources: {{ "{{" }}- toYaml .Values.resources | nindent 12 {{ "}}" }}
@@ -35,7 +35,7 @@ spec:
             capabilities:
               add: []
               drop:
-                - All
+                - ALL
             privileged: false
             procMount: Default
             readOnlyRootFilesystem: true

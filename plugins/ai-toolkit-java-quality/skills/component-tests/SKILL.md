@@ -13,7 +13,7 @@ version: 1.0
 last_reviewed: 2026-06-28
 ---
 
-# this Component Tests Skill
+# Component Tests Skill
 
 A **component test** boots the real Spring context for the service under
 `webEnvironment = RANDOM_PORT`, activates the `component-test` profile, swaps
@@ -53,6 +53,10 @@ A `@TestConfiguration` annotated with `@Profile("component-test")` that:
 
 - Disables real security: provides a `SecurityFilterChain` bean that calls
   `httpSecurity.csrf(disable).authorizeHttpRequests(auth -> auth.anyRequest().permitAll())`.
+  It must be the **only** `SecurityFilterChain` in the context: annotate the
+  production security config with `@Profile("!component-test")`. Two
+  any-request chains make Spring Security 6 fail at startup, or let the
+  production chain win.
 - Provides a `@Primary TestRestTemplate` with extended connect/read timeouts
   when the operation under test is slow (file conversion, ML inference, …).
 - Provides `@Primary` mocks for every collaborator that touches the network
@@ -66,7 +70,7 @@ A `@TestConfiguration` annotated with `@Profile("component-test")` that:
 Any production bean that performs expensive `@PostConstruct` work (license
 loading, cache priming, schema migration, large thread pools) must have a
 paired `@TestConfiguration` that replaces it with a no-op — otherwise every
-component test pays the cost. Example from this repo:
+component test pays the cost. Example:
 
 ```java
 @TestConfiguration
@@ -155,18 +159,25 @@ the canonical template.
 | The override is a Mockito-only mock | The override is a custom test bean (e.g. fake clock, fake clock-controlled scheduler) |
 
 Avoid mixing both in the same module — pick one canonical place per
-override. `@MockBean` forces the Spring context to refresh between test
+override. In `*ComponentTest` classes the right-hand column always applies
+(see Do / Don't); the left-hand column is for slice tests (`@WebMvcTest`,
+`@DataJpaTest`) that build their own small context. `@MockBean` forces the Spring context to refresh between test
 classes (slow); `@TestConfiguration` reuses the cached context.
 
 ## Authenticated paths
 
 If your service requires authentication and you want to **test the secured
 controller pipeline** (not bypass it via a permissive filter chain), use
-Spring Security's request post-processors instead of disabling security:
+Spring Security's request post-processors instead of disabling security.
+This is a **separate security test, not a component test**: it runs
+**without** the `component-test` profile (so the production filter chain is
+active) and drives the app through `MockMvc`. The component-test rules
+(permissive chain, `TestRestTemplate` only) still apply to every
+`*ComponentTest` class.
 
 ```java
 @SpringBootTest @AutoConfigureMockMvc
-class FooSecureComponentTest {
+class FooSecurityTest {
     @Autowired MockMvc mvc;
 
     @Test
@@ -233,19 +244,31 @@ crawl):
 ```java
 @AfterEach
 void resetMocks(@Autowired PermissionsHandler ph) {
-    Mockito.reset(ph);     // for @MockBean / @Primary mocks
+    Mockito.clearInvocations(ph);   // for @MockBean / @Primary mocks
 }
+```
+
+Use `clearInvocations`, **not** `Mockito.reset(...)`: `reset` also wipes the
+deterministic `doAnswer(...)` stubbing that `ComponentTestConfiguration`
+installs once at bean creation, so every later test would see a do-nothing
+mock.
+
+```java
+// ❌ wipes the shared deterministic stubbing
+Mockito.reset(ph);
 ```
 
 For real-bean state (caches, in-memory queues), expose a `void clear()`
 method on the bean and call it in `@AfterEach` — never depend on the next
 test cleaning up after the previous one.
 
-
+## Maven / CI
 
 - Component tests run under Surefire alongside unit tests by default.
   If they are slow, isolate them with the `*ComponentTest` Failsafe pattern
-  and a `it` Maven profile.
+  and a `it` Maven profile: add `**/*ComponentTest.java` to the Failsafe
+  `<includes>` (and to the Surefire `<excludes>`) — Failsafe's default
+  includes only match `*IT` / `IT*` / `*ITCase`, so without it they never run.
 - Tag any expensive test with `@Tag("component")` so CI can shard.
 
 ## Do / Don't
@@ -257,11 +280,14 @@ to keep a single config across many parameterised cases.
 ✅ Use `@LocalServerPort` + `MessageFormat` to build URLs – never hard-code
 the port.
 ❌ Never enable real authentication in component tests – use the permissive
-filter chain shown above.
+filter chain shown above (prove the security wiring in a separate
+`*SecurityTest`, see "Authenticated paths").
 ❌ Never mock the controller, the operation, or the service – mock at the
 **boundary** (clients, file store, permission handler).
-❌ Never reach into the database / message broker without a Testcontainer
-fake – component tests must run on a laptop with no infra.
+❌ Never reach into a real database / message broker from a component test –
+replace it with an in-process fake so component tests run on a laptop with
+no infra. Anything that needs a real Testcontainer is an `*IT` integration
+test (`integration-tests`), never part of `mvn test`.
 
 ## 4. Templates
 

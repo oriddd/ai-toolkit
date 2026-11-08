@@ -74,14 +74,14 @@ class EditableProductIdValidatorTest {
 
 ### 5c. Component test — end-to-end validation
 
-Use a `@WebMvcTest` slice with `@MockBean` on any rule beans; fire the request
+Use a `@WebMvcTest` slice with `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`) on any rule beans; fire the request
 and assert the 400 ProblemDetail response (see `component-tests`):
 
 ```java
 @WebMvcTest(ProductController.class)
 class ProductControllerValidationTest {
     @Autowired MockMvc mockMvc;
-    @MockBean  ProductEditabilityRule editabilityRule;  // MockBean so context loads
+    @MockitoBean ProductEditabilityRule editabilityRule;  // MockitoBean so context loads
 
     @Test
     void patch_withUneditableProductType_returns400() throws Exception {
@@ -93,9 +93,9 @@ class ProductControllerValidationTest {
 }
 ```
 
-- Add `@MockBean` in the component test for **every** Spring `@Component` that
+- Add `@MockitoBean` in the component test for **every** Spring `@Component` that
   is a `ConstraintValidator` or `Validator` and is registered in
   `ValidationConfig` — Spring will fail to load the context otherwise.
-- For Spring Validators registered via `@InitBinder`, `@MockBean` the validator
+- For Spring Validators registered via `@InitBinder`, `@MockitoBean` the validator
   class itself (not the rule bean) to avoid it executing real logic in the
   web-layer test.

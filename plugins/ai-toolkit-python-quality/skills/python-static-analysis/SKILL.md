@@ -51,7 +51,7 @@ select = [
 ignore = ["PLR0913"]    # decide per project; keep the ignore list short and commented
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ANN", "PLR2004", "N802"]
+"tests/**" = ["S101", "PLR2004", "N802"]   # no ANN ignore: mypy --strict checks tests too, so tests are annotated (`-> None`)
 ```
 
 `ruff format` is the only formatter; no black/isort alongside it.
@@ -90,7 +90,7 @@ create only the packages you need).
 ```yaml
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v<ruff-version>     # latest stable ruff-pre-commit tag; keep it equal to the ruff in uv.lock
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]

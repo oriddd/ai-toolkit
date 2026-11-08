@@ -50,11 +50,20 @@ public class FooClient {
                 .uri(searchEndpoint)
                 .body(BodyInserters.fromValue(request))
                 .exchangeToMono(response -> handleResponse(response, FooSearchResponseDto.class))
+                // connect / response timeouts surface as WebClientRequestException — translate them too
+                .onErrorMap(WebClientRequestException.class,
+                        e -> new FooUnavailableException("Foo service unreachable", e))
                 .block();
     }
 
     private <T> Mono<T> handleResponse(final ClientResponse response,
                                         final Class<T> type) {
+        if (response.statusCode().is5xxServerError()) {   // transient — the exception Retry is configured for (§10)
+            return response.toEntity(String.class).flatMap(err ->
+                    Mono.error(new FooUnavailableException(
+                            MessageFormat.format("Foo service unavailable. Status: {0}", err.getStatusCode()),
+                            err)));
+        }
         if (response.statusCode().isError()) {
             return response.toEntity(String.class).flatMap(err ->
                     Mono.error(new FooWebClientException(
@@ -73,7 +82,8 @@ Rules:
   read the error body **and** the status before throwing the domain exception.
 - **Every call has a timeout**: set the connect and response timeouts on the `HttpClient` (see `FooClientConfig`), never an unbounded `.block()`.
 - **Always translate non-2xx to a domain exception** before it escapes the
-  `client/` package.
+  `client/` package. 5xx and timeouts become `FooUnavailableException` (retryable), any other error
+  `FooWebClientException`. Both are unchecked — `.block()` wraps a checked exception in a `ReactiveException`.
 - Call `.block()` at the `Client` boundary — callers see a synchronous API.
   If callers are reactive, expose `Mono<T>` consistently instead.
 - Endpoint URLs come from `@Value` injected into the constructor (never
@@ -96,8 +106,8 @@ public class FooResponseVerifier {
         return response != null && response.getTotalHits() > 0;
     }
 
-    public boolean hasInvoices(final FooSearchResponseDto response) {
-        return response != null && !CollectionUtils.isEmpty(response.getInvoices());
+    public boolean hasProducts(final FooSearchResponseDto response) {
+        return response != null && !CollectionUtils.isEmpty(response.getProducts());
     }
 }
 ```
@@ -109,19 +119,19 @@ public class FooResponseVerifier {
 public class FooResponseParser {
     private final FooResponseVerifier verifier;
 
-    /** Returns the first invoice, or null + log.error if none. */
-    public FooInvoiceDto getSingleInvoice(final FooSearchResponseDto response) {
-        if (verifier.hasInvoices(response)) {
-            return response.getInvoices().getFirst();
+    /** Returns the first product, or null + log.error if none. */
+    public FooProductDto getSingleProduct(final FooSearchResponseDto response) {
+        if (verifier.hasProducts(response)) {
+            return response.getProducts().getFirst();
         }
-        log.error("No invoices in response (totalHits={})", response == null ? null : response.getTotalHits());
+        log.error("No products in response (totalHits={})", response == null ? null : response.getTotalHits());
         return null;
     }
 
-    /** Extracts a field value from nested invoices; returns null if absent. */
-    public String parseFieldFromNested(final FooInvoiceDto doc, final String fieldName) {
+    /** Extracts a field value from nested products; returns null if absent. */
+    public String parseFieldFromNested(final FooProductDto doc, final String fieldName) {
         if (doc == null || StringUtils.isBlank(fieldName)) {
-            log.warn("Cannot parse field '{}' from null invoice", fieldName);
+            log.warn("Cannot parse field '{}' from null product", fieldName);
             return null;
         }
         return Optional.ofNullable(doc.getNested())

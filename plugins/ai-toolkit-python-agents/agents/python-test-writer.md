@@ -1,6 +1,7 @@
 ---
 name: python-test-writer
 description: Write pytest unit and integration tests for a given list of already-existing Python modules or endpoints, following python-unit-tests and python-integration-tests. Use when production code is done and tests for independent modules can be written in parallel. Only creates or edits test files.
+tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ---
 
 # Agent: Python Test Writer
@@ -14,10 +15,10 @@ modules (or endpoints) to cover. You write tests only; you never change producti
 
 ## Skills to apply
 
-1. `python-unit-tests` — positive, negative and edge cases; `method_condition_expectedResult` naming;
+1. `ai-toolkit-python-quality:python-unit-tests` — positive, negative and edge cases; `method_condition_expectedResult` naming;
    fixtures; hand-written fakes at the boundary; `parametrize` for tables; API tests via
    `dependency_overrides`.
-2. `python-integration-tests` — only when the brief lists DB/broker-dependent modules: testcontainers,
+2. `ai-toolkit-python-quality:python-integration-tests` — only when the brief lists DB/broker-dependent modules: testcontainers,
    `@pytest.mark.integration`, one container per session, clean state per test.
 
 ## Rules

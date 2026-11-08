@@ -94,7 +94,7 @@ public class EditableProductIdValidator
 **Apply in controller:**
 ```java
 @RestController
-@Validated  // REQUIRED for parameter validation
+@Validated  // REQUIRED — Boot < 3.2 silently ignores param constraints without it; 3.2+ it selects the ConstraintViolationException path
 public class ProductController {
     @PatchMapping("/{id}")
     public ResponseEntity update(
@@ -217,7 +217,7 @@ class ValidatorTest {
 ```java
 @WebMvcTest(Controller.class)
 class ValidationComponentTest {
-    @MockBean ProductEditabilityRule rule;
+    @MockitoBean ProductEditabilityRule rule;   // Spring Boot 3.4+; replaces the deprecated @MockBean
 
     @Test
     void invalidRequest_returns400() {
@@ -240,7 +240,7 @@ class ValidationComponentTest {
 - Write `if/throw` in controllers/operations — use validators
 - Put business logic in validators — use `rule/` beans
 - Omit `@InitBinder` value — runs on every request
-- Skip `@MockBean` in component tests
+- Skip `@MockitoBean` in component tests
 
 ## Implementation Checklist
 
@@ -252,7 +252,7 @@ class ValidationComponentTest {
 - [ ] Add `@Validated` or `@Valid` to controller
 - [ ] Unit-test validator
 - [ ] Component-test HTTP→400 path
-- [ ] Add `@MockBean` for affected tests
+- [ ] Add `@MockitoBean` for affected tests
 
 ## Related Skills
 

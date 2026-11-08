@@ -44,7 +44,7 @@ Breaking changes, follow-up tickets, known limitations, deployment steps, config
 ```
 
 **Rules:**
-- Write in present tense ("adds", "removes", "replaces") matching commit-message style
+- Write in present tense ("adds", "removes", "replaces") — the description says what the PR does; commit subjects stay in the imperative (`git-commit-conventions`)
 - Describe *why*, not just *what* — the diff already shows what
 - Keep each bullet to one line; expand in "Notes" only if truly necessary
 - Avoid internal jargon or ticket IDs as the sole explanation; always include a human summary
@@ -93,7 +93,7 @@ rm -f "$body"
 **Important:**
 - `version` must match the current version or the server returns `409 Conflict`
 - `title` must always be included in the PUT body (it resets to empty if omitted)
-- Escape the description as a JSON string: newlines → `\n`, quotes → `\"`
+- The description must be a valid JSON string — let `jq --rawfile` (Step 2) escape newlines and quotes; never hand-escape
 - On `409`, re-fetch the PR to get the latest `version` and retry
 
 ### Parsing a PR URL

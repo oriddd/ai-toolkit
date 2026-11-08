@@ -34,7 +34,7 @@ Every commit message:
 | `feat`    | Minor bump |
 | `fix`     | Patch bump |
 | `refactor` / `style` / `docs` / `chore` / `test` / `build` / `ci` | No bump |
-| `perf` | No bump with release-please; a patch bump with semantic-release's default rules — keep the rules of the one tool you chose |
+| `perf` | Patch bump (the default rules of both release-please and semantic-release) |
 | `feat!` or `BREAKING CHANGE:` footer | **Major** bump |
 
 Enforced by `commitlint` (npm) in pre-commit / CI:
@@ -69,6 +69,7 @@ git tag on merge.
 ```yaml
 # .github/workflows/release-please.yml
 on: { push: { branches: [main] } }
+permissions: { contents: write, pull-requests: write }
 jobs:
   rp:
     runs-on: ubuntu-latest

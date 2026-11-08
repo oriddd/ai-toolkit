@@ -18,30 +18,30 @@ the plan, then generate.
 
 ## Skills to apply (in this order)
 
-1. `project-types` — classify the
+1. `ai-toolkit-java-scaffold:project-types` — classify the
    service shape (sync REST / event-driven / scheduler / library / monolith).
-2. `create-repo` — full scaffolding
+2. `ai-toolkit-java-scaffold:create-repo` — full scaffolding
    questionnaire and file generation.
-3. `code-structure` — canonical package
+3. `ai-toolkit-java-design:code-structure` — canonical package
    hierarchy, naming conventions, base patterns.
-4. `spring-boot-conventions` —
+4. `ai-toolkit-java-design:spring-boot-conventions` —
    `@ConfigurationProperties`, profiles, conditional beans.
-5. `local-dev-experience` —
+5. `ai-toolkit-java-ops:local-dev-experience` —
    `docker-compose`, `Makefile`/`Justfile`, hot-reload.
-6. `static-analysis` — Spotless,
+6. `ai-toolkit-java-quality:static-analysis` — Spotless,
    SpotBugs, Error-Prone, NullAway, ArchUnit wired into Maven.
-7. `ci` or `github-actions-ci`
+7. `ai-toolkit-java-ops:ci` or `ai-toolkit-java-ops:github-actions-ci`
    — `Jenkinsfile` / GitHub Actions workflow, multi-stage `Dockerfile`.
-8. `cd` — Helm chart with hardened security context.
-9. `exception-handling` — base
+8. `ai-toolkit-java-ops:cd` — Helm chart with hardened security context.
+9. `ai-toolkit-java-build:exception-handling` — base
    exception hierarchy + `GlobalExceptionHandler`.
-10. `observability` — Micrometer,
+10. `ai-toolkit-java-ops:observability` — Micrometer,
     structured JSON logs, MDC, distributed tracing.
-11. `graceful-shutdown` — wired from
+11. `ai-toolkit-java-ops:graceful-shutdown` — wired from
     the start.
 12. `ai-toolkit-workflow:release-versioning` — Conventional
     Commits, semantic versioning, CHANGELOG automation.
-13. `context-maintenance` — populate
+13. `ai-toolkit-docs:context-maintenance` — populate
     all `context/` templates before returning.
 
 ## Step-by-step procedure
@@ -77,7 +77,7 @@ the plan, then generate.
    m. README.md, CONTRIBUTING.md, .editorconfig, .gitignore
    n. CHANGELOG.md (first [Unreleased] entry)
 
-4. VALIDATE — confirm all 24 non-negotiables (`golden-path`) apply from the first scaffold.
+4. VALIDATE — confirm all 24 non-negotiables (`ai-toolkit-java-quality:golden-path`) apply from the first scaffold.
 ```
 
 ## Delegation (use subagents when you can)
@@ -85,31 +85,40 @@ the plan, then generate.
 Follow the `ai-toolkit-workflow:parallel-delegation` skill. Subagents cannot spawn subagents: if the Agent tool is
 available you are the main-session agent (`claude --agent`) — delegate as below; if it is not,
 do the same steps inline, in order. Call subagents by their **qualified name** —
-`ai-toolkit-java-agents:test-writer`, `ai-toolkit-java-agents:code-review`, `ai-toolkit-docs:update-context`,
-`general-purpose`. The original step order above is binding: fan out only work that is independent, and only
-once the code it depends on exists.
+`ai-toolkit-java-agents:code-review`, `general-purpose`. The original step order above is binding: fan out only work
+that is independent, and only once the code it depends on exists. Subagents cannot ask the developer anything, so every
+question (step 1, `ai-toolkit-java-scaffold:project-types`, `ai-toolkit-java-scaffold:create-repo`, and the
+`ai-toolkit-java-ops:cd` inputs) stays with you.
 
-1. **Sequential (you):** collect project metadata, then the `code-structure` skeleton and `pom.xml`.
-2. **Parallel fan-out, one message** — each subagent writes only its own files:
-   - `general-purpose` — CI (`ci` or `github-actions-ci`);
-   - `general-purpose` — Helm chart (`cd`);
-   - `general-purpose` — local dev experience + README/docs.
-3. **Sequential (you):** skills 9–13 (`exception-handling`, `observability`, `graceful-shutdown`, `ai-toolkit-workflow:release-versioning`, `context-maintenance`) touch shared files, so apply them yourself; then run the build and `ai-toolkit-java-agents:code-review` on the result.
+1. **Sequential (you):** step 1 ASK — the project metadata plus the `ai-toolkit-java-ops:cd` inputs (chart name, context
+   path, image registry, run-as UID/GID, resources, extra env) — and step 2 CONFIRM; then skills 1–4 and 6 for steps
+   3a–3d: `pom.xml`, the `ai-toolkit-java-design:code-structure` skeleton, `application.yaml` /
+   `application-local.yaml` (`ai-toolkit-java-design:spring-boot-conventions`) and the static-analysis config
+   (`ai-toolkit-java-quality:static-analysis`, wired into `pom.xml`).
+2. **Parallel fan-out, one message** — each subagent writes only its own files, and its brief carries every answer it
+   needs (it cannot ask):
+   - `general-purpose` — steps 3e–3f: Dockerfile + CI (`ai-toolkit-java-ops:ci` or `ai-toolkit-java-ops:github-actions-ci`);
+   - `general-purpose` — step 3g: Helm chart (`ai-toolkit-java-ops:cd`), with the `cd` inputs collected in step 1;
+   - `general-purpose` — steps 3h and 3m: local dev experience (`ai-toolkit-java-ops:local-dev-experience`) + README,
+     CONTRIBUTING, `.editorconfig`, `.gitignore`.
+3. **Sequential (you):** skills 9–13 (`ai-toolkit-java-build:exception-handling`, `ai-toolkit-java-ops:observability`, `ai-toolkit-java-ops:graceful-shutdown`, `ai-toolkit-workflow:release-versioning`, `ai-toolkit-docs:context-maintenance`) — steps 3i–3l and 3n — touch shared files, so apply them yourself; then step 4 VALIDATE, run the build and `ai-toolkit-java-agents:code-review` on the result.
 
 Keep shared files (`pom.xml`, `application.yaml`, `ExceptionMessages`, `api.yaml`) and **every build and test run**
-to yourself — tell each test-writer in its brief: "do not run builds or tests; the main thread owns builds".
+to yourself — tell each subagent in its brief: "do not run builds or tests; the main thread owns builds".
 Verify every result (read the diff, run the tests) before reporting done.
 
 ## Commit policy and completion gate
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 
-- [ ] Package layout matches `code-structure` exactly.
+- [ ] Package layout matches `ai-toolkit-java-design:code-structure` exactly.
 - [ ] `@ConfigurationProperties` records used everywhere (no bare `@Value`).
 - [ ] Static analysis non-skippable in Maven build.
 - [ ] CI pipeline builds, tests, and publishes image.

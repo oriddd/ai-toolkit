@@ -415,7 +415,8 @@ stage('Documentation Check') {
     steps {
         sh 'npx markdown-link-check@<pinned-version> context/*.md'
         // Validate mermaid diagrams
-        sh 'npm install -g @mermaid-js/mermaid-cli@<pinned-version>   # developer-run / CI, pinned — an agent does not install tools && for f in context/*.md; do mmdc -i "$f" -o /dev/null; done'
+        // developer-run / CI, pinned — an agent does not install tools
+        sh 'npm install -g @mermaid-js/mermaid-cli@<pinned-version> && for f in context/*.md; do mmdc -i "$f" -o /dev/null; done'
     }
 }
 ```

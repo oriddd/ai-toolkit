@@ -74,8 +74,8 @@ These come from `BACKEND_GUILD.md §4`. They are not advisory:
 21. Every adapter passes the shared port TCK (`adapter-contract-tests`).
 22. Input validation lives in the validation layer, never inline
     (`input-validation`).
-23. Every downstream is wrapped in a five-layer `client/<dep>/`
-    sub-package (`external-client`).
+23. Every downstream is wrapped in a `client/<dep>/` sub-package — Simple
+    Wrapper, Lite or Full 5-Layer by scale (`external-client` §0).
 24. Domain endpoint metrics use the Filter → Recorder → Parser pattern
     (`request-metrics`).
 ## 4. HITL (human-in-the-loop) skills — when to ask

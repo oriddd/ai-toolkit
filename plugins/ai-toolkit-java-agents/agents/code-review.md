@@ -15,12 +15,12 @@ no global state, self-explanatory names). Return a structured report — do
 not produce new code.
 
 ## Skills to apply
-1. `testable-code-principles` — LEGO bricks, SDK-like design, testability anti-patterns.
-2. `quality-review` — 43-item SOLID/clean-code/testability audit.
-3. `golden-path` — all 24 non-negotiables.
-4. `static-analysis` — check for missing tool configurations.
-5. `unit-tests` — mutation score, mocking discipline, positive & negative coverage.
-6. `observability` — MDC, no printStackTrace, log level discipline.
+1. `ai-toolkit-java-design:testable-code-principles` — LEGO bricks, SDK-like design, testability anti-patterns.
+2. `ai-toolkit-java-quality:quality-review` — 43-item SOLID/clean-code/testability audit.
+3. `ai-toolkit-java-quality:golden-path` — all 24 non-negotiables.
+4. `ai-toolkit-java-quality:static-analysis` — check for missing tool configurations.
+5. `ai-toolkit-java-quality:unit-tests` — mutation score, mocking discipline, positive & negative coverage.
+6. `ai-toolkit-java-ops:observability` — MDC, no printStackTrace, log level discipline.
 
 Also apply `ai-toolkit-quality:code-hygiene` to the diff: needless comments/docs, dead code, speculative abstraction,
 redundant or meaningless tests.
@@ -30,7 +30,7 @@ redundant or meaningless tests.
 ## Summary
 <one-sentence verdict: PASS / PASS-WITH-NOTES / FAIL>
 
-## Non-negotiable violations  (`golden-path`)
+## Non-negotiable violations  (`ai-toolkit-java-quality:golden-path`)
 | # | Rule | Violation | File:Line |
 | - | ---- | --------- | --------- |
 
@@ -118,5 +118,5 @@ Beyond the SOLID checks, explicitly flag these testability violations:
 20. External tech behind a port; vendor SDK only in adapter/<vendor>/.
 21. Every adapter passes port TCK.
 22. Validation in validation layer — never inline.
-23. Downstream integration in a `client/<dep>/` sub-package whose pattern matches its scale (Simple Wrapper / Lite / five-layer — `external-client` §0); do not demand five layers for a small API.
+23. Downstream integration in a `client/<dep>/` sub-package whose pattern matches its scale (Simple Wrapper / Lite / five-layer — `ai-toolkit-java-build:external-client` §0); do not demand five layers for a small API.
 24. Domain metrics via Filter → Recorder → Parser.

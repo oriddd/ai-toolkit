@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-java-quality",
   "description": "Java 21 / Spring Boot quality phase — unit/component/integration/contract tests, static analysis, quality review and refactoring playbook.",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "author": {
     "name": "oriddd"
   },

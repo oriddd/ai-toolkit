@@ -1,4 +1,4 @@
-# this Unit Tests Skill — Test every LEGO brick — positive and negative paths
+# Unit Tests Skill — Test every LEGO brick — positive and negative paths
 
 Part of the [`unit-tests`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 

@@ -64,13 +64,19 @@ client/dep/
 ```java
 // 3 files, 250 LOC total
 @Component
+@RequiredArgsConstructor
 public class HealthCheckClient {
     private final RestClient restClient;
     private final HealthCheckProperties properties;
     
     public boolean isHealthy() {
-        return restClient.get().uri(properties.healthEndpoint())
-            .retrieve().body(String.class).contains("UP");
+        try {
+            String body = restClient.get().uri(properties.healthEndpoint())
+                .retrieve().body(String.class);
+            return body != null && body.contains("UP");
+        } catch (RestClientException e) {   // retrieve() throws on 4xx/5xx and I/O errors
+            return false;
+        }
     }
 }
 ```

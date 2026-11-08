@@ -26,7 +26,7 @@ Feature flags allow you to merge code to `main` and deploy to production without
 
 ## 2. Toggle-in-Logic Pattern
 
-Implement flags using a dedicated `FeatureStore` or a client library:
+Implement flags behind a dedicated `FeatureTogglePort` (the port named in `pluggable-architecture`; its adapter wraps local config or a remote client library):
 
 ```java
 if (features.isEnabled("new-algorithm")) {
@@ -37,15 +37,16 @@ if (features.isEnabled("new-algorithm")) {
 ```
 
 ### 2b. Structural Toggles (@ConditionalOnProperty)
-For larger changes, switch entire bean implementations:
+For larger changes, switch entire bean implementations. Select by a provider key (an enum in the typed
+properties, see `pluggable-architecture` §5), not a boolean such as `use-s3`:
 
 ```java
 @Bean
-@ConditionalOnProperty(name = "features.storage.use-s3", havingValue = "true")
+@ConditionalOnProperty(name = "features.storage.provider", havingValue = "s3")
 public StorageClient s3Client() { return new S3StorageClient(); }
 
 @Bean
-@ConditionalOnProperty(name = "features.storage.use-s3", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "features.storage.provider", havingValue = "local", matchIfMissing = true)
 public StorageClient localClient() { return new LocalStorageClient(); }
 ```
 
@@ -64,7 +65,7 @@ While `application.yaml` works for static toggles, use a remote provider for dyn
 ## 5. Testing with Flags
 
 Test both states of the flag:
-- Unit tests: Mock the `FeatureToggleProvider` to return `true` and `false`.
+- Unit tests: Mock the `FeatureTogglePort` to return `true` and `false`.
 - Component tests: Run the test suite with the flag in the expected state for that environment (see component-tests).
 
 ## Do / Don't

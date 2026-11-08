@@ -38,8 +38,10 @@ test/fakes/FakeAnalytics.ts
 ## Dependencies
 
 ```json
-{ "dependencies": { "@sentry/react-native": "^6.0.0" } }
+{ "dependencies": { "@sentry/react-native": "<current>" } }
 ```
+
+`<current>`: pin the latest stable `@sentry/react-native` release (same version as `react-native-error-handling`).
 
 ## 1. Sentry init, once, early
 

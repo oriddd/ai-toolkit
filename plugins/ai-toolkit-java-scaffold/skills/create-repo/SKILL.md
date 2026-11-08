@@ -13,7 +13,7 @@ version: 1.0
 last_reviewed: 2026-06-28
 ---
 
-# this Create-Repo Skill (HITL)
+# Create-Repo Skill (HITL)
 
 This is the **entry-point** skill for bootstrapping a new microservice.
 It is intentionally **Human-in-the-Loop**: the agent must collect answers from
@@ -36,7 +36,7 @@ single round if your tool supports it.
 | 5 | Container port (default `8800`)? | `appPort` |
 | 6 | Codeowner email for CI notifications? | `codeowner` |
 | 7 | Latest `org.springframework.boot:spring-boot-starter-parent` BOM version? | `springBootVersion` |
-| 8 | Target Kubernetes image registry (default `your-registry.example.com/<org> | `imageRegistry` |
+| 8 | Target Kubernetes image registry (default `your-registry.example.com/<org>`)? | `imageRegistry` |
 
 ### Optional (offer with sensible defaults)
 
@@ -44,14 +44,14 @@ single round if your tool supports it.
 | - | -------- | ------- |
 | 9 | Does the service require **authentication / JWT**? | yes → include `permission/` package |
 | 10 | Does it require **per-request metrics**? | yes → include `monitor/` skeleton |
-| 11 | Does it call other this services via HTTP? | yes → include `client/` package |
+| 11 | Does it call other internal services via HTTP? | yes → include `client/` package |
 | 12 | Resource requests / limits (CPU + memory)? | `1/2 CPU`, `4Gi/8Gi` mem |
 | 13 | Max replicas for HPA? | `5` |
 | 14 | One-sentence service description for the README? | `{{serviceDisplayName}} service` → `oneLineDescription` |
-| 15 | Non-root UID / GID the pod runs as (must be able to read the image's files)? | `1000` → `runAsUser`, `runAsGroup`, `fsGroup` |
-| 14 | External dependencies (MinIO, Kafka, Redis, Postgres, Elasticsearch…)? | none |
-| 15 | Additional system packages required in the Docker image? | none |
-| 16 | Initial Git remote URL (to `git remote add origin`)? | skip |
+| 15 | Non-root UID / GID the pod runs as (must be able to read the image's files)? | `1000` → `runAsUser`, `runAsGroup`, `fsGroup` (also the image user in the Dockerfile) |
+| 16 | External dependencies (MinIO, Kafka, Redis, Postgres, Elasticsearch…)? | none |
+| 17 | Additional system packages required in the Docker image? | none |
+| 18 | Initial Git remote URL (to `git remote add origin`)? | skip |
 
 After collecting answers, **summarize them back to the user** and ask for
 explicit confirmation before generating files.
@@ -89,19 +89,20 @@ Execute the following skills in order. Each one is documented in its own
    package with `PermissionsHandler`, `PermissionsCheckStrategy` and the
    concrete strategies for the selected `CallerContext` values.
 6. **`external-client`** *(once per external HTTP/gRPC dependency the
-   developer named in Phase 1 #11 / #14)* → produces the SDK-style
-   `client/<dep>/` sub-package (`*Config + *Client + *RequestBuilder +
-   *ResponseHandler + *Constants + Adapter + Decorator stack +
-   Resilience4j config`).
+   developer named in Phase 1 #11 / #16)* → produces the SDK-style
+   `client/<dep>/` sub-package. This sub-skill is itself HITL — let it ask
+   its §0 pattern-selection questions per dependency and generate the
+   pattern the developer picks (Simple Wrapper / Lite Client / Full 5-Layer),
+   plus its Resilience4j retry / circuit-breaker config (external-client §10).
 7. **`health-indicator`** *(once per downstream dependency)* → adds an
    `AbstractReadinessIndicator` subclass per dependency, the `WebClient`
    config, env vars in Helm and the `readiness` health group entry in
    `application.yaml`. This sub-skill is itself HITL — let it ask its own
    questions per dependency.
 8. **`cd`** → produces `helm-chart/` with `Chart.yaml`, `values.yaml`,
-   `templates/_helpers.tpl`, `deployment.yaml`, `service.yaml`, `hpa.yaml`,
+   `templates/deployment.yaml`, `service.yaml`, `hpa.yaml`,
    `serviceAccount.yaml`, `servicemonitor.yaml`, and `secret.yaml` (only when
-   external dependencies require credentials – Phase 1 #14).
+   external dependencies require credentials – Phase 1 #16).
 9. **`unit-tests`** → for every class produced in the previous steps,
    generate a meaningful `*Test.java` next to it; add the ArchUnit
    `ArchitectureTest` and the PIT mutation-testing plugin to `pom.xml`.
@@ -117,7 +118,7 @@ Execute the following skills in order. Each one is documented in its own
     reusable library")* → adds the `META-INF/spring/...AutoConfiguration.imports`
     file, the `additional-spring-configuration-metadata.json`, and the
     `ApplicationContextRunner`-based slice tests.
-13. **`quality-review`** → run the SOLID / conventions audit (33 items
+13. **`quality-review`** → run the SOLID / conventions audit (48 items
     including quantitative thresholds) on the whole generated repo; surface
     the report to the developer. Block the hand-off (Phase 6) if there are
     unresolved `FAIL`s.

@@ -96,6 +96,7 @@ public class LayoutResolver {
 public interface LayoutStrategy<E, D> {
     D map(E entity);
     LayoutType getSupportedLayoutType();
+    Class<E> getEntityType();   // the registry is shared by every entity — this keeps Product and other entities apart
 
     default boolean canHandle(final LayoutType layoutType) {
         return getSupportedLayoutType() != null 
@@ -110,10 +111,13 @@ public interface LayoutStrategy<E, D> {
 @Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class LayoutRegistry<E, D> {
+    // One singleton for ALL entities: Spring injects every LayoutStrategy (Product, Order, …),
+    // so the lookup must match the entity type as well as the layout.
     private final List<LayoutStrategy<E, D>> strategies;
 
-    public LayoutStrategy<E, D> getStrategy(final LayoutType layoutType) {
+    public LayoutStrategy<E, D> getStrategy(final Class<?> entityType, final LayoutType layoutType) {
         return strategies.stream()
+                .filter(s -> s.getEntityType().isAssignableFrom(entityType))
                 .filter(s -> s.canHandle(layoutType))
                 .findFirst()
                 .orElse(null);
@@ -132,12 +136,15 @@ public class LayoutHandler<E, D> {
     private final LayoutRegistry<E, D> layoutRegistry;
 
     public D handle(final E entity, final HttpServletRequest request) {
+        if (entity == null) {
+            return null;
+        }
         final LayoutType layoutType = layoutResolver.resolve(request);
-        final LayoutStrategy<E, D> strategy = layoutRegistry.getStrategy(layoutType);
+        final LayoutStrategy<E, D> strategy = layoutRegistry.getStrategy(entity.getClass(), layoutType);
 
         if (strategy == null) {
             log.warn("No layout strategy found for type: {}, using DETAILED", layoutType);
-            final LayoutStrategy<E, D> fallback = layoutRegistry.getStrategy(LayoutType.DETAILED);
+            final LayoutStrategy<E, D> fallback = layoutRegistry.getStrategy(entity.getClass(), LayoutType.DETAILED);
             if (fallback == null) {
                 throw new IllegalStateException("No DETAILED layout strategy found (mandatory)");
             }
@@ -161,6 +168,11 @@ public class ProductSummaryLayoutStrategy implements LayoutStrategy<Product, Pro
     }
 
     @Override
+    public Class<Product> getEntityType() {
+        return Product.class;
+    }
+
+    @Override
     public ProductSummaryDTO map(final Product product) {
         if (product == null) return null;
         return ProductSummaryDTO.builder()
@@ -179,6 +191,11 @@ public class ProductDetailedLayoutStrategy implements LayoutStrategy<Product, Pr
     @Override
     public LayoutType getSupportedLayoutType() {
         return LayoutType.DETAILED;
+    }
+
+    @Override
+    public Class<Product> getEntityType() {
+        return Product.class;
     }
 
     @Override
@@ -206,6 +223,11 @@ public class ProductFullLayoutStrategy implements LayoutStrategy<Product, Produc
     @Override
     public LayoutType getSupportedLayoutType() {
         return LayoutType.FULL;
+    }
+
+    @Override
+    public Class<Product> getEntityType() {
+        return Product.class;
     }
 
     @Override
@@ -259,7 +281,7 @@ public class ProductController {
 2. ✅ Create new DTO class (e.g., `ProductCompactDTO`)
 3. ✅ Create new `<Layout>LayoutStrategy implements LayoutStrategy`
 4. ✅ Make it a `@Component`
-5. ✅ Implement `getSupportedLayoutType()` and `map(entity)`
+5. ✅ Implement `getSupportedLayoutType()`, `getEntityType()` and `map(entity)`
 6. ✅ Write unit tests
 
 **Zero changes needed:**
@@ -281,12 +303,23 @@ public class ProductController {
 ## 7. Variations
 
 ### Layout + Permissions
-Filter fields based on caller permissions:
+Filter fields based on caller permissions. This **replaces** `ProductFullLayoutStrategy` — keep exactly
+one strategy per (entity, layout), otherwise `findFirst` picks one at random:
 ```java
 @Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class SecureFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final PermissionsHandler permissionsHandler;
+
+    @Override
+    public LayoutType getSupportedLayoutType() {
+        return LayoutType.FULL;
+    }
+
+    @Override
+    public Class<Product> getEntityType() {
+        return Product.class;
+    }
 
     @Override
     public ProductFullDTO map(final Product product) {

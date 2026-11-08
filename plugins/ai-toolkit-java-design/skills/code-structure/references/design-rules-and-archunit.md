@@ -61,7 +61,7 @@ Then assert layering, naming and the absence of cycles:
 class ArchitectureTest {
 
     @ArchTest static final ArchRule layered = layeredArchitecture()
-        .consideringAllDependencies()
+        .consideringOnlyDependenciesInLayers()   // config/, adapter/, spi/, acl/, domain/, event/ … are not layers, so they are not flagged
         .layer("Controller").definedBy("..controller..")
         .optionalLayer("Operation").definedBy("..operation..")
         .layer("Service").definedBy("..service..")
@@ -74,8 +74,8 @@ class ArchitectureTest {
         .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller", "Operation", "Scheduler")
         .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler")
         .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health");
-        // layer names, not package patterns, go in mayOnlyBeAccessedByLayers; code outside every layer that touches a layer is a violation,
-        // so give each real top-level package (scheduler, health, …) a layer or an ignoreDependency;
+        // layer names, not package patterns, go in mayOnlyBeAccessedByLayers; only dependencies between two layers are checked,
+        // so give every top-level package whose access you want enforced (scheduler, health, …) its own layer;
 
     @ArchTest static final ArchRule noCycles =
         slices().matching("{{basePackage}}.(*)..").should().beFreeOfCycles();
@@ -87,7 +87,8 @@ class ArchitectureTest {
 
     @ArchTest static final ArchRule webClientLivesInClientOnly =
         noClasses().that().resideOutsideOfPackage("..client..")
-            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.web.reactive.function.client.WebClient");
+            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.web.reactive.function.client.WebClient")
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.web.client.RestClient");
 
     @ArchTest static final ArchRule securityHolderLivesInPermissionOnly =
         noClasses().that().resideOutsideOfPackages("..permission..")

@@ -60,15 +60,18 @@ jobs:
         with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }
       - id: meta
         uses: docker/metadata-action@v5
-        with: { images: ghcr.io/${{ github.repository }} }
-      - uses: docker/build-push-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=semver,pattern={{version}}   # v1.4.0 → 1.4.0 (release-versioning §6)
+      - id: build                                  # build-push-action exposes the pushed digest
+        uses: docker/build-push-action@v6
         with: { context: ., push: true, tags: ${{ steps.meta.outputs.tags }} }
       - uses: aquasecurity/trivy-action@0.24.0
-        with: { image-ref: ghcr.io/${{ github.repository }}:${{ github.ref_name }}, severity: HIGH,CRITICAL, exit-code: '1' }
+        with: { image-ref: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}, severity: 'HIGH,CRITICAL', exit-code: '1' }
       - uses: sigstore/cosign-installer@v3
-      - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.meta.outputs.digest }}
+      - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
       - uses: anchore/sbom-action@v0
-        with: { image: ghcr.io/${{ github.repository }}:${{ github.ref_name }}, format: spdx-json }
+        with: { image: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}, format: spdx-json }
 ```
 
 ## 3. `release.yml` — release-please
@@ -82,7 +85,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
-        with: { release-type: maven }
+        # A tag pushed with the default GITHUB_TOKEN does not trigger other
+        # workflows, so image.yml would never run. Use a PAT or GitHub App token.
+        with: { release-type: maven, token: ${{ secrets.RELEASE_PLEASE_TOKEN }} }
 ```
 
 ## 4. Cross-cutting

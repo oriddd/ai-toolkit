@@ -219,7 +219,6 @@ graph LR
   react_native_error_handling --> react_native_input_validation
   react_native_code_structure --> react_native_security
   react_native_input_validation --> react_native_security
-  react_native_state_and_data --> react_native_code_structure
   react_native_code_structure --> react_native_state_and_data
   react_native_static_analysis --> react_native_ci
   react_native_unit_tests --> react_native_ci
@@ -244,7 +243,7 @@ graph LR
 project-types                            ← pick the shape
         │
         ▼
-create-repo (HITL)                       ← generates skeleton, asks 16 questions
+create-repo (HITL)                       ← generates skeleton, asks 18 questions
         │
         ├─► code-structure               ← packages, base classes
         ├─► spring-boot-conventions      ← config, profiles, async, scheduled
@@ -424,7 +423,7 @@ producing code must validate the diff against this list before returning.
 21. **Every adapter passes the shared port TCK.** Each port has one
     abstract contract test; every adapter (including the composite)
     subclasses it and passes identical assertions, and a build check fails
-    when an `*Adapter` has no matching `*ContractTest`
+    when an `*Adapter` has no matching `*ContractTest` or `*ContractIT`
     (`adapter-contract-tests`).
 22. **Input validation lives in the validation layer — never inline.**
     Parameter/field rules use Jakarta `@Constraint` + `ConstraintValidator`;
@@ -440,10 +439,11 @@ producing code must validate the diff against this list before returning.
     - 10+ endpoints OR complex DSL → Full 5-Layer (7-9 files)
     See `external-client` §0 decision tree. Default: start simple, add layers when needed.
     Callers depend only on `*Service`; `WebClient`, `Mono`, `Flux`, and remote
-    DTOs never escape the package. `exchangeToMono` + `handleResponse` handles
-    all non-2xx. Filter map, request building, response parsing, and boolean
-    response checks each live in their own dedicated class
-    (`external-client`).
+    DTOs never escape the package, and every non-2xx is mapped to a domain
+    exception inside it. In the Full 5-Layer pattern, `exchangeToMono` +
+    `handleResponse` handles all non-2xx, and filter map, request building,
+    response parsing, and boolean response checks each live in their own
+    dedicated class (`external-client`).
 24. **Domain endpoint metrics use the Filter → Recorder → Parser pattern.**
     `MetricsFilter` measures every request in `try/finally`; `MonitoringConfig`
     maps URI regexes to metric names; `MetricsRecorderRegistry` routes to a

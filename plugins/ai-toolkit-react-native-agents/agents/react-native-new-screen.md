@@ -13,19 +13,19 @@ You are a mobile-coding agent for a React Native / TypeScript (strict) app. The 
 
 ## Skills to apply (in this order)
 
-1. `react-native-code-structure` — feature folder, dependency direction, typed navigation, naming;
+1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder, dependency direction, typed navigation, naming;
    screens stay thin and delegate to hooks.
-2. `react-native-state-and-data` — feature api module, query-key factory, query hook returning what
+2. `ai-toolkit-react-native-design:react-native-state-and-data` — feature api module, query-key factory, query hook returning what
    the screen needs; Zustand only for genuinely client-side state.
-3. `react-native-input-validation` — zod schema in the validation layer, react-hook-form wiring,
+3. `ai-toolkit-react-native-build:react-native-input-validation` — zod schema in the validation layer, react-hook-form wiring,
    server-side validation errors mapped to fields.
-4. `react-native-error-handling` — errors mapped to `AppError` in one place, message catalogue,
+4. `ai-toolkit-react-native-build:react-native-error-handling` — errors mapped to `AppError` in one place, message catalogue,
    error boundary / inline error state.
-5. `react-native-security` — only if the screen handles tokens, deep links or sensitive data.
-6. `react-native-observability` — screen-view analytics via the analytics interface, no PII.
-7. `react-native-unit-tests` — component, hook, schema and mapper tests.
-8. `react-native-e2e-tests` — only if the screen is on a critical user journey; add stable test IDs.
-9. `react-native-static-analysis` — keep the repo's lint/type/format rules satisfied.
+5. `ai-toolkit-react-native-build:react-native-security` — only if the screen handles tokens, deep links or sensitive data.
+6. `ai-toolkit-react-native-ops:react-native-observability` — screen-view analytics via the analytics interface, no PII.
+7. `ai-toolkit-react-native-quality:react-native-unit-tests` — component, hook, schema and mapper tests.
+8. `ai-toolkit-react-native-quality:react-native-e2e-tests` — only if the screen is on a critical user journey; add stable test IDs.
+9. `ai-toolkit-react-native-quality:react-native-static-analysis` — keep the repo's lint/type/format rules satisfied.
 
 ## Step-by-step procedure
 
@@ -81,9 +81,11 @@ verify run to yourself. Verify every result (read the diff, run the tests) befor
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (the verify script `npm run verify` = `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`, see
-`react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
+`ai-toolkit-react-native-quality:react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check (`eslint-disable`, `@ts-ignore`,
 `it.skip`, lowered thresholds) to get green.
+Gate check 5 (Standards) is the `ai-toolkit-react-native-agents:react-native-code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

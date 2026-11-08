@@ -61,6 +61,11 @@ my-foo-spring-boot-starter/
         <artifactId>spring-boot-configuration-processor</artifactId>
         <optional>true</optional>        <!-- generates IDE metadata -->
     </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-actuator</artifactId>
+        <optional>true</optional>        <!-- compiles FooHealthIndicator; active only when the consumer has actuator -->
+    </dependency>
 </dependencies>
 ```
 
@@ -176,10 +181,12 @@ The library ships with its own tests:
 - **`@SpringBootTest` slice** with `ApplicationContextRunner`:
 
 ```java
+// WebClientAutoConfiguration supplies the WebClient.Builder bean fooClient needs; actuator (optional dependency above)
+// must be on the test classpath for the HealthConfiguration branch.
 @Test
 void registersBeansWhenWebClientPresent() {
     new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(FooAutoConfiguration.class))
+        .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withPropertyValues("foo.dependency.base-url=http://x")
         .run(ctx -> {
             assertThat(ctx).hasSingleBean(FooClient.class);
@@ -190,7 +197,7 @@ void registersBeansWhenWebClientPresent() {
 @Test
 void backsOffWhenConsumerProvidesItsOwn() {
     new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(FooAutoConfiguration.class))
+        .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withUserConfiguration(CustomConfig.class)
         .withPropertyValues("foo.dependency.base-url=http://x")
         .run(ctx -> assertThat(ctx).hasBean("customFooClient"));

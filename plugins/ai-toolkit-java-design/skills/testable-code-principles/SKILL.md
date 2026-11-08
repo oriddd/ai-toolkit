@@ -185,7 +185,7 @@ Before submitting code for review, verify:
 This skill is foundational and referenced by:
 - `unit-tests` — Applies these principles when generating tests
 - `quality-review` — Audits code against these principles
-- [`code-structure`](../code-structure/SKILL.md) — Package layout and SOLID implementation
+- `code-structure` — Package layout and SOLID implementation
 - `refactoring-playbook` — Migrations to testable patterns
 - `external-client` — SDK-style design example
 

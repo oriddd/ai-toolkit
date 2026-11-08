@@ -106,7 +106,7 @@ RUN java -Djarmode=layertools -jar app.jar extract
 
 # ---- stage 2: runtime ----
 FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -S app && adduser -S -G app -u 10001 app
+RUN addgroup -S app && adduser -S -G app -u {{runAsUser}} app
 WORKDIR /app
 USER app
 
@@ -121,7 +121,7 @@ ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
 
 Rules:
 
-- **Non-root** (`USER app`, UID 10001). Required for the Helm chart's
+- **Non-root** (`USER app`, UID `{{runAsUser}}`, default 1000). Required for the Helm chart's
   hardened `securityContext` (see [`cd`](../cd/SKILL.md)).
 - **Layered jar** — dependency changes don't invalidate the application
   layer, keeping image pushes small.
@@ -142,6 +142,9 @@ pipeline {
     disableConcurrentBuilds()
   }
   triggers { pollSCM('H/5 * * * *') }
+  environment {
+    IMAGE_NAME = '<imageRegistry>/<artifactId>'   // e.g. ghcr.io/<org>/my-service
+  }
   stages {
     stage('Build & test') {
       steps { sh 'mvn -B -ntp -U clean verify' }
@@ -155,8 +158,11 @@ pipeline {
     stage('Container image') {
       when { anyOf { branch 'main'; tag 'v*' } }
       steps {
+        script {
+          // release-versioning §6: git tag v1.4.0 → image tag 1.4.0; main → build number
+          env.IMAGE_TAG = env.TAG_NAME ? env.TAG_NAME.replaceFirst(/^v/, '') : env.BUILD_NUMBER
+        }
         sh '''
-          IMAGE_TAG="${BRANCH_NAME == 'main' ? 'latest' : env.TAG_NAME}"
           docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
           docker push "${IMAGE_NAME}:${IMAGE_TAG}"
         '''
@@ -164,7 +170,7 @@ pipeline {
     }
   }
   post {
-    failure { mail to: '${CHANGE_AUTHOR_EMAIL}', subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}" }
+    failure { mail to: "${env.CHANGE_AUTHOR_EMAIL}", subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}" }
   }
 }
 ```

@@ -13,7 +13,7 @@ version: 1.0
 last_reviewed: 2026-06-28
 ---
 
-# Project Types Skill (public — meta)
+# Project Types Skill (meta)
 
 The skills are atomic; this skill tells you **which subset** to
 apply for which kind of project. Run me first; I will pick the right
@@ -24,7 +24,7 @@ combination of skills and call `create-repo` with the right answers.
 | Project type | What it does | Required skills | Optional skills |
 | --- | --- | --- | --- |
 | **A. Synchronous REST microservice** | HTTP API in front of business logic | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `permissions`, `external-client`, `health-indicator`, `api-design`, `security-hardening`, `observability`, `unit-tests`, `component-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown` | `persistence`, `messaging`, `integration-tests`, `domain-modeling` |
-| **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` | `api-design` (only if a tiny status/admin HTTP API exists) |
+| **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A minus the HTTP-API skills (`api-design`, `permissions`) + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` | `api-design`, `permissions` (only if a tiny status/admin HTTP API exists) |
 | **C. Scheduler / batch job** | `@Scheduled` or one-shot CLI, no HTTP | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client`, `observability`, `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown` | `persistence`, `health-indicator` (k8s readiness only) |
 | **D. Library / SDK** | Reusable JAR consumed by other services | `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client` (if it wraps a remote service), `sdk-publishing` (mandatory), `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `static-analysis` | `permissions` if the library brings auth bits |
 | **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + `messaging` (intra-process events via `ApplicationEventPublisher`, future-proof for broker) | n/a |
@@ -52,8 +52,12 @@ service. Currently shipped:
 
 - **Layered** (controller → operation → service → client) — default; see
   `code-structure`.
-- **Hexagonal / Ports & Adapters** — optional variant (forthcoming
-  `hexagonal-architecture` skill).
+- **Hexagonal / Ports & Adapters** for the whole service — optional variant
+  (no dedicated skill yet; build on `pluggable-architecture`).
+
+Whichever style you pick, every external technology still sits behind a
+project-owned port — that part is mandatory (golden-path #20,
+`pluggable-architecture`).
 
 Document the choice in an ADR (see `documentation-and-adr`).
 

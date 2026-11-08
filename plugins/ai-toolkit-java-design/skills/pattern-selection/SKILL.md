@@ -55,11 +55,14 @@ The documentation said "use external-client pattern for external services" witho
 
 ### Operation Layer Decision
 
+The controller **always** delegates to exactly one `Operation` and holds no logic
+(`code-structure`). Scale decides only how much structure lives **behind** that Operation.
+
 | Complexity | Pattern | LOC Threshold | Use When |
 |------------|---------|---------------|----------|
-| **Simple** | Controller → Services | Controller <100 LOC | 2-4 service calls, straightforward sequence |
-| **Medium** | Optional Operation | Controller ~150 LOC | 5-7 service calls, some conditionals |
-| **Complex** | Required Operation | Controller >150 LOC | 8+ calls, transactions, multi-step business logic |
+| **Simple** | Controller → Operation → Services (Operation calls the services directly) | Operation <100 LOC | 2-4 service calls, straightforward sequence |
+| **Medium** | Operation + extracted helper services | Operation ~150 LOC | 5-7 service calls, some conditionals |
+| **Complex** | Operation + dedicated domain services / transaction boundary | Operation >150 LOC | 8+ calls, transactions, multi-step business logic |
 
 **HITL Questions**:
 1. How many service calls? (2-4, 5-7, 8+)
@@ -68,22 +71,30 @@ The documentation said "use external-client pattern for external services" witho
 4. Reused from multiple controllers?
 5. Permission checking + business logic + audit?
 
-**Anti-Pattern**: Operation that just chains 3 service calls with no logic
+**Anti-Pattern**: Extra orchestration layer behind an Operation that just chains 3 service calls with no logic
 ```java
-// ❌ Unnecessary operation
+// ❌ Unnecessary layer — the Operation only forwards to another orchestrator
 public class GetDataOperation {
     public Data execute() {
-        data = fetchService.fetch();
+        return dataOrchestrationService.getData();
+    }
+}
+
+public class DataOrchestrationService {
+    public Data getData() {
+        Data data = fetchService.fetch();
         enrichService.enrich(data);
         return mapperService.map(data);
     }
 }
 
-// ✅ Just do it in controller
-public Data getData() {
-    Data data = fetchService.fetch();
-    enrichService.enrich(data);
-    return mapperService.map(data);
+// ✅ Just do it in the one Operation the controller delegates to
+public class GetDataOperation {
+    public Data execute() {
+        Data data = fetchService.fetch();
+        enrichService.enrich(data);
+        return mapperService.map(data);
+    }
 }
 ```
 
@@ -104,9 +115,12 @@ public record SearchQuery(String term, boolean caseSensitive) {}
 
 public List<Result> search(SearchQuery query) { ... }
 
-// ✅ Use parameters directly
+// ✅ Use parameters directly (default from a constant via an overload)
+public List<Result> search(String term) {
+    return search(term, DEFAULT_CASE_SENSITIVE);
+}
+
 public List<Result> search(String term, boolean caseSensitive) {
-    caseSensitive = caseSensitive || DEFAULT_CASE_SENSITIVE;
     // ...
 }
 ```
@@ -144,15 +158,15 @@ public List<Result> search(String term, boolean caseSensitive) {
                └─ NO → Start with Simple Wrapper, refactor when needed
 ```
 
-#### Before Operation Layer
+#### Before Adding Layers Behind the Operation
 **STOP and ASK**:
-1. How many service calls does this controller method orchestrate?
+1. How many service calls does this use case (its one Operation) orchestrate?
 2. Is there complex permission checking + business logic + audit logging?
 3. Are there multi-step transactions spanning multiple repositories?
 
-**Decision**:
-- 2-4 simple service calls → Controller calls services directly
-- 5+ steps OR complex orchestration → Operation layer
+**Decision** (the controller still delegates to exactly one Operation in every case):
+- 2-4 simple service calls → the Operation calls the services directly (no extra orchestration layer)
+- 5+ steps OR complex orchestration → split the Operation's work into focused helper / domain services
 
 #### Before Parameter Objects
 **STOP and ASK**:
@@ -226,7 +240,5 @@ These sections live in `references/` so this file stays small. Read only the fil
 - Logging format (JSON vs plaintext)
 
 **Rule**: Ask about **scale and growth**, not about **prescribed choices**.
-
----
 
 ---

@@ -14,7 +14,7 @@ last_reviewed: 2026-07-13
 ---
 
 # Input Validation Skill
-> **Pattern Foundation:** This skill is a concrete application of the [validation-pattern](../validation-pattern/SKILL.md) skill. 
+> **Pattern Foundation:** This skill is a concrete application of the `validation-pattern` skill. 
 > Read that skill first to understand the foundational pattern, then return here for detailed implementation examples and edge cases.
 
 Validation is a **first-class concern** in every Spring Boot service. This skill
@@ -87,7 +87,7 @@ public @interface ValidOrderLayout { ... }
 @Component
 public class OrderLayoutValidator implements ConstraintValidator<ValidOrderLayout, String> {
     public boolean isValid(String value, ConstraintValidatorContext context) {
-        return value.equals("summary") || value.equals("full");  // ← Duplicates OpenAPI
+        return value.equals("all") || value.equals("metadata");  // ← Duplicates OpenAPI
     }
 }
 ```
@@ -160,8 +160,9 @@ When adding a new validation rule:
       `@RestControllerAdvice` if not already covered (see `exception-handling`).
 - [ ] Unit-test the rule bean, unit-test the validator, add a component test
       asserting the 400 response.
-- [ ] Add a `@MockBean` for the validator (Spring style) or for the rule bean
-      (Jakarta style) in affected controller component tests.
+- [ ] Add a `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`)
+      for the validator (Spring style) or for the rule bean (Jakarta style) in
+      affected controller component tests.
 
 ## Do / Don't
 
@@ -172,7 +173,9 @@ When adding a new validation rule:
    `buildConstraintViolationWithTemplate(message)` when overriding the message
    at runtime.
 ✅ Add `@Validated` to the controller class when using parameter-level Jakarta
-   constraints — without it the annotation is silently ignored.
+   constraints — on Spring Boot < 3.2 the annotation is silently ignored without
+   it; on 3.2+ it selects the AOP path that raises `ConstraintViolationException`
+   (mapped to 400 by `exception-handling`) — see `references/jakarta-validators.md` §2c.
 ✅ Bind Spring Validators with a scoped `@InitBinder("lowerCamelDtoName")`
    value — omitting the value runs the validator on every request.
 ✅ Unit-test rule beans as plain POJOs; unit-test validators by driving
@@ -184,20 +187,21 @@ When adding a new validation rule:
 ❌ Never share a thread-unsafe field (mutable instance state other than values
    captured in `initialize()`) inside a `ConstraintValidator` — Spring
    validators are singletons.
-❌ Never skip `@MockBean` for registered validators in controller component
+❌ Never skip `@MockitoBean` for registered validators in controller component
    tests — the context will fail to load.
 
 ## Cross-references
 
-- [`exception-handling`](../exception-handling/SKILL.md) — maps
+- `exception-handling` — maps
   `ConstraintViolationException` and `MethodArgumentNotValidException` to 400
   `ProblemDetail`; must be set up for validation errors to appear correctly.
 - `spring-boot-conventions` §4 — JSR-380
   `@Valid` / `@Validated` wiring on controllers.
 - `code-structure` — package layout and layering
   rules the `validation/` package plugs into.
-- `component-tests` — `@WebMvcTest` slice for
-  end-to-end validation path testing.
+- `component-tests` — full-context `TestRestTemplate` tests for
+  end-to-end validation path testing (the `@WebMvcTest` slice in §5c is the
+  lighter web-layer check).
 - `unit-tests` — testing rule beans and validators in
   isolation.
 

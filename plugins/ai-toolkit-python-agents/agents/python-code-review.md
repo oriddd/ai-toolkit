@@ -15,16 +15,16 @@ do not produce new code and never modify files.
 
 ## Skills to apply
 
-1. `python-code-structure` — layout, one-way layering, constructor injection, settings, LEGO bricks.
-2. `python-fastapi-conventions` — thin routers, `response_model`, pagination, URL conventions.
-3. `python-error-handling` — typed hierarchy, catalogue, single handler, problem+json, narrow catches.
-4. `python-input-validation` — validation only in the validation layer, no ad-hoc guards.
-5. `python-persistence` — repository behind a Protocol, one unit of work, no ORM leakage, migrations.
-6. `python-observability` — structured logs, correlation ID, no `print`, low-cardinality labels.
-7. `python-unit-tests` / `python-integration-tests` — positive + negative + edge cases, fakes not mocks
+1. `ai-toolkit-python-design:python-code-structure` — layout, one-way layering, constructor injection, settings, LEGO bricks.
+2. `ai-toolkit-python-design:python-fastapi-conventions` — thin routers, `response_model`, pagination, URL conventions.
+3. `ai-toolkit-python-build:python-error-handling` — typed hierarchy, catalogue, single handler, problem+json, narrow catches.
+4. `ai-toolkit-python-build:python-input-validation` — validation only in the validation layer, no ad-hoc guards.
+5. `ai-toolkit-python-build:python-persistence` — repository behind a Protocol, one unit of work, no ORM leakage, migrations.
+6. `ai-toolkit-python-ops:python-observability` — structured logs, correlation ID, no `print`, low-cardinality labels.
+7. `ai-toolkit-python-quality:python-unit-tests` / `ai-toolkit-python-quality:python-integration-tests` — positive + negative + edge cases, fakes not mocks
    of the unit, marker segregation, naming.
-8. `python-static-analysis` — ruff / `mypy --strict` / import-linter configured and not suppressed.
-9. `python-ci` — only if the diff touches the pipeline or Dockerfile.
+8. `ai-toolkit-python-quality:python-static-analysis` — ruff / `mypy --strict` / import-linter configured and not suppressed.
+9. `ai-toolkit-python-ops:python-ci` — only if the diff touches the pipeline or Dockerfile.
 
 Also apply `ai-toolkit-quality:code-hygiene` to the diff: needless comments/docstrings, dead code, speculative abstraction,
 redundant or meaningless tests.
@@ -76,7 +76,7 @@ redundant or meaningless tests.
 4. Broad `except Exception` that swallows the cause or drops the chain (`raise ... from`) — MAJOR.
 5. `Any` leaking through public signatures; missing return annotations — MAJOR.
 6. Public functions without both a positive and a negative test — MAJOR.
-7. Classes > ~100 lines or functions > ~30 lines (the `python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
+7. Classes > ~100 lines or functions > ~30 lines (the `ai-toolkit-python-design:python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
 
 ## Rules
 

@@ -101,7 +101,9 @@ public class FooController {
   `ResponseEntityExceptionHandler`. **`ConstraintViolationException`** (parameter constraints under class-level `@Validated`) is *not* handled by it —
   add an explicit `@ExceptionHandler` returning `400` (the `exception-handling` template has one), or it becomes a `500`.
 - Use **Jakarta Bean Validation annotations** on the DTO record itself, not
-  on the controller signature.
+  on the controller signature — except for single `@PathVariable` /
+  `@RequestParam` values, which have no DTO and are constrained in the
+  signature (the reason for `@Validated` on the controller class).
 
 ## 5. OpenAPI documentation
 
@@ -130,8 +132,11 @@ public Page<FooResponse> list(@ParameterObject Pageable pageable) { … }
 ```
 
 - Default page size: 20, max: 100 (set via `spring.data.web.pageable.*`).
-- Response shape is standardised by a page DTO (or Spring Data's `PagedModel`, `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)`) —
-  do not serialize `PageImpl` directly (Spring Data 3.3+ warns). Clients can rely on `content`, `totalElements`, `totalPages`, `number`, `size`.
+- Response shape is standardised — do not let `PageImpl` be serialized as-is (Spring Data 3.3+ warns). Either:
+  - enable `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` and keep returning `Page<T>`: it is written as
+    Spring Data's `PagedModel`, so clients rely on `content` plus a nested `page` object (`size`, `number`, `totalElements`, `totalPages`); or
+  - map the `Page<T>` to your own page DTO record and return that, when clients need `content`, `totalElements`, `totalPages`,
+    `number`, `size` at the top level.
 - For cursor-based pagination (when offset is too expensive), expose a
   `pageToken` query param and an opaque next-token in the body; document
   both in the OpenAPI spec.

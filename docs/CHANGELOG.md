@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd`: generated charts read the image registry from `global.imageRegistry` when an umbrella chart sets it, falling back to `image.registry`.
 - Skill descriptions shortened to at most 300 characters (validator limit lowered from 600) so a full language install fits the skill-listing budget better — Java install from ~23k to ~14k characters.
 - `ai-toolkit-python` and `ai-toolkit-react-native` now depend on `ai-toolkit-docs`, which `completion-gate` uses for its docs step.
+- Review pass across all plugins:
+  - **Build breakers:** Lombok in `annotationProcessorPaths`, `BaseEntity` `@Version` ambiguity, Jenkins image-tag and GitHub Actions cosign digest.
+  - **Contradictions between skills:** pattern-selection vs code-structure, component vs integration tests, config and assertion conventions.
+  - **Skill text vs templates:** permissions, messaging outbox/idempotent consumer, ci Dockerfile/Jenkinsfile.
+  - **Outdated APIs:** `@MockitoBean`, `httpexchanges`, Pact JUnit 5, Flyway 10.
+  - **Agents:** use qualified skill names and keep developer-question (HITL) steps out of subagents.
+  - **Python / React Native drafts:** broken examples.
+- Guild #23: Simple Wrapper / Lite / Full 5-Layer by scale is kept; the dedicated-class and `exchangeToMono` requirements apply to Full 5-Layer only.
+
+### Changed
+- Image tags: release `vX.Y.Z` → image `X.Y.Z`, `main` builds → `BUILD_NUMBER` (no `latest`); Helm tag defaults to `.Chart.AppVersion`.
+- Unit tests default to AssertJ and one naming convention (`methodName_condition_expectedResult`).
 
 ## [2.1.1] - 2026-11-04
 

@@ -6,7 +6,7 @@ description: >
   fetching live in `react-native-state-and-data`.
 tier: must
 applies_to: [mobile]
-depends_on: [react-native-state-and-data]
+depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
@@ -59,7 +59,7 @@ src/
 ```json
 // tsconfig.json
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base",   // Expo apps; a bare React Native CLI app extends "@react-native/typescript-config/tsconfig.json"
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -90,8 +90,10 @@ app  ->  features  ->  shared
 
 ```tsx
 // features/orders/screens/OrdersListScreen.tsx: thin wiring, no logic
+const OPEN_ORDERS: OrderFilter = { status: 'open' };    // module constant: OrderFilter, see react-native-state-and-data
+
 export function OrdersListScreen({ navigation }: OrdersListProps) {
-  const { orders, isLoading, error, refetch } = useOrders();
+  const { orders, isLoading, error, refetch } = useOrders(OPEN_ORDERS);
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   return (
@@ -183,7 +185,7 @@ only for things you need to fake or swap.
 
 - ✅ Group by feature; keep each file under ~150 lines and single-purpose.
 - ✅ Export a feature's public surface from `index.ts` only.
-- ✅ Props typed explicitly; no `any`, no non-null `!` without a comment.
+- ✅ Props typed explicitly; no `any`, no non-null `!`: narrow instead (`strictTypeChecked` makes `no-non-null-assertion` an error outside tests; an unavoidable one needs an `eslint-disable-next-line` naming the rule and the reason, see `react-native-static-analysis`).
 - ❌ `fetch`/`axios` or `useQuery` inside a component body.
 - ❌ Importing `features/a/hooks/x` from feature `b`.
 - ❌ Shared `utils/` or `types/` folders that every feature depends on.

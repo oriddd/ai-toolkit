@@ -1,10 +1,12 @@
 package {{basePackage}}.permission;
 
 import {{basePackage}}.exception.{{Domain}}ForbiddenException;
-import {{basePackage}}.exception.ExceptionMessages;
+import {{basePackage}}.exception.constants.ExceptionMessages;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
 
 /**
  * Dispatcher: resolves the caller context, routes to the matching strategy and lets it verify access.
@@ -28,11 +30,12 @@ public class PermissionsHandler {
     public void handle(final String resourceId) throws {{Domain}}ForbiddenException {
         final CallerContext ctx = callerContextResolver.resolve();
         if (ctx == null) {
-            throw ExceptionMessages.callerContextNotFound();
+            throw new {{Domain}}ForbiddenException(ExceptionMessages.CALLER_CONTEXT_NOT_FOUND);
         }
         final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
         if (strategy == null) {
-            throw ExceptionMessages.unrecognizedCallerContext(ctx);
+            throw new {{Domain}}ForbiddenException(
+                    MessageFormat.format(ExceptionMessages.UNRECOGNIZED_CALLER_CONTEXT, ctx));
         }
         strategy.verifyPermissions(resourceId);
     }

@@ -13,18 +13,18 @@ wants a **new feature** that spans several layers. Work in the order below.
 
 ## Skills to apply (in this order)
 
-1. `react-native-code-structure` — feature folder layout, dependency direction, typed navigation,
+1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder layout, dependency direction, typed navigation,
    path aliases, providers for dependency injection.
-2. `react-native-state-and-data` — api-client layer, feature api module, query keys, query and
+2. `ai-toolkit-react-native-design:react-native-state-and-data` — api-client layer, feature api module, query keys, query and
    mutation hooks, optimistic updates, Zustand for client state, offline/retry stance.
-3. `react-native-input-validation` — zod schemas, cross-field rules, react-hook-form, shared types.
-4. `react-native-error-handling` — typed `AppError`, catalogue, single mapping point, boundaries.
-5. `react-native-security` — secure storage behind an interface, deep links, no secrets in bundle.
-6. `react-native-observability` — Sentry breadcrumbs/errors, structured logging, analytics behind
+3. `ai-toolkit-react-native-build:react-native-input-validation` — zod schemas, cross-field rules, react-hook-form, shared types.
+4. `ai-toolkit-react-native-build:react-native-error-handling` — typed `AppError`, catalogue, single mapping point, boundaries.
+5. `ai-toolkit-react-native-build:react-native-security` — secure storage behind an interface, deep links, no secrets in bundle.
+6. `ai-toolkit-react-native-ops:react-native-observability` — Sentry breadcrumbs/errors, structured logging, analytics behind
    an interface, PII scrubbing.
-7. `react-native-unit-tests` — every hook, schema, mapper, store and component.
-8. `react-native-e2e-tests` — Maestro flows for the critical journeys only.
-9. `react-native-static-analysis` and `react-native-ci` — keep gates green; update CI only if the
+7. `ai-toolkit-react-native-quality:react-native-unit-tests` — every hook, schema, mapper, store and component.
+8. `ai-toolkit-react-native-quality:react-native-e2e-tests` — Maestro flows for the critical journeys only.
+9. `ai-toolkit-react-native-quality:react-native-static-analysis` and `ai-toolkit-react-native-ops:react-native-ci` — keep gates green; update CI only if the
    feature adds build or env requirements.
 
 ## Step-by-step procedure
@@ -76,9 +76,11 @@ and the verify run to yourself. Verify every result (read the diff, run the test
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (the verify script `npm run verify` = `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`, see
-`react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
+`ai-toolkit-react-native-quality:react-native-static-analysis`; coverage of the changed files; `ai-toolkit-quality:code-hygiene`; Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check (`eslint-disable`, `@ts-ignore`,
 `it.skip`, lowered thresholds) to get green.
+Gate check 5 (Standards) is the `ai-toolkit-react-native-agents:react-native-code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

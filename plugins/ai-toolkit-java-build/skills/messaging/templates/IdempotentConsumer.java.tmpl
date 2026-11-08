@@ -2,6 +2,7 @@ package {{basePackage}}.messaging;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Idempotent consumer skeleton — replace `processEvent` and the
  * dedup-store calls with project specifics. Retry / DLQ topology lives
@@ -9,20 +10,22 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class IdempotentConsumer {
+    private final TransactionTemplate tx;
+    public IdempotentConsumer(TransactionTemplate tx) { this.tx = tx; }
     @KafkaListener(topics = "${kafka.topics.example.name}",
                    groupId = "${kafka.topics.example.group-id}")
     public void onMessage(String payload, Acknowledgment ack) {
         String eventId = extractEventId(payload);
-        if (alreadyProcessed(eventId)) {
-            ack.acknowledge();
-            return;
-        }
-        processEvent(payload);
-        markProcessed(eventId);
-        ack.acknowledge();
+        // dedupe insert + business effect commit in ONE transaction (SKILL.md §4)
+        tx.executeWithoutResult(status -> {
+            if (tryRecord(eventId)) {               // false = already processed — skip the effect
+                processEvent(payload);
+            }
+        });
+        ack.acknowledge();                          // only after the transaction committed
     }
     private String extractEventId(String payload) { /* TODO */ return payload; }
-    private boolean alreadyProcessed(String eventId) { /* TODO */ return false; }
+    /** INSERT ... ON CONFLICT DO NOTHING into the processed-events table; true if the row was inserted. */
+    private boolean tryRecord(String eventId) { /* TODO */ return true; }
     private void processEvent(String payload) { /* TODO */ }
-    private void markProcessed(String eventId) { /* TODO */ }
 }

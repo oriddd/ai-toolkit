@@ -13,7 +13,7 @@ version: 1.1
 last_reviewed: 2026-07-12
 ---
 
-# this Quality Review Skill
+# Quality Review Skill
 
 This skill performs a structured, evidence-based review of Java code against
 the project conventions. The output is a **report**, not a refactor — the

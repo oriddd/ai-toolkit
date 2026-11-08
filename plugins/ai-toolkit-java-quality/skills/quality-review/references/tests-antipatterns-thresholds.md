@@ -1,4 +1,4 @@
-# this Quality Review Skill — Checklist D–F: test quality, anti-patterns, thresholds
+# Quality Review Skill — Checklist D–F: test quality, anti-patterns, thresholds
 
 Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 
@@ -36,8 +36,7 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
     See `unit-tests` §"Test Every LEGO Brick".
 
 22. **Test naming convention** — test methods follow
-    `methodName_condition_expectedResult()` or `when<Condition>_<Then>()`
-    naming. Flag vague names like `test1()`, `testMethod()`, `happyPath()`.
+    `methodName_condition_expectedResult()` naming (`unit-tests`). Flag vague names like `test1()`, `testMethod()`, `happyPath()`.
 
 ### E. Testability Anti-Patterns (see `testable-code-principles`)
 
@@ -98,25 +97,26 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 ### F. Quantitative thresholds
 
 For each finding below, cite the value in the report and apply the listed
-threshold. These are deliberately strict; treat each violation as a `WARN`
+threshold. F-items carry an `F` prefix (F21–F33) so they never collide with
+items 21–30 in D/E. These are deliberately strict; treat each violation as a `WARN`
 that triggers a refactor conversation (not an automatic `FAIL`, since a
 junit-named edge case may justify breaking one).
 
 | Metric | Threshold | Tool |
 | --- | --- | --- |
-| 21. Cyclomatic complexity per method | **≤ 10** | SpotBugs / PMD |
-| 22. Method length (effective LOC, ignoring blank/`}`) | **≤ 30** | manual / Checkstyle |
-| 23. Class length | **≤ 200** (hard ceiling 300) | Checkstyle |
-| 24. Number of method parameters | **≤ 4** (use a record / parameter object beyond) | Checkstyle |
-| 25. Number of fields | **≤ 7** (sign of class doing too much) | manual |
-| 26. NCSS (non-commenting source statements) per file | **≤ 500** | PMD |
-| 27. Class fan-out (number of other types referenced) | **≤ 25** | ArchUnit slice metric |
-| 28. Cognitive complexity per method | **≤ 15** | SonarQube |
-| 29. Public API surface of a `client/<dep>/` sub-package | **≤ 1 facade type** that callers depend on (others may be public if returned from the facade) | manual |
-| 30. Magic literals in business code | **0** — every literal lives in a `*Constants` class or `*Properties` record | grep |
-| 31. Line coverage by Jacoco | **≥ 85 % line, ≥ 75 % branch** (per class) | Jacoco |
-| 32. Mutation score by PIT | **≥ 75 %** (per package) | PIT |
-| 33. Architecture rules in `ArchitectureTest` | **PASS** | ArchUnit |
+| F21. Cyclomatic complexity per method | **≤ 10** | SpotBugs / PMD |
+| F22. Method length (effective LOC, ignoring blank/`}`) | **≤ 30** | manual / Checkstyle |
+| F23. Class length | **≤ 200** (hard ceiling 300) | Checkstyle |
+| F24. Number of method parameters | **≤ 4** (use a record / parameter object beyond) | Checkstyle |
+| F25. Number of fields | **≤ 7** (sign of class doing too much) | manual |
+| F26. NCSS (non-commenting source statements) per file | **≤ 500** | PMD |
+| F27. Class fan-out (number of other types referenced) | **≤ 25** | ArchUnit slice metric |
+| F28. Cognitive complexity per method | **≤ 15** | SonarQube |
+| F29. Public API surface of a `client/<dep>/` sub-package | **≤ 1 facade type** that callers depend on (others may be public if returned from the facade) | manual |
+| F30. Magic literals in business code | **0** — every literal lives in a `*Constants` class or `*Properties` record | grep |
+| F31. Line coverage by Jacoco | **≥ 85 % line, ≥ 75 % branch** (per class) | Jacoco |
+| F32. Mutation score by PIT | **≥ 75 %** (per package) | PIT |
+| F33. Architecture rules in `ArchitectureTest` | **PASS** | ArchUnit |
 
 Surface every violation as:
 

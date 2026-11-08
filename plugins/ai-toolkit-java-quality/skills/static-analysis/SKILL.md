@@ -22,9 +22,10 @@ on objective violations.
 | Tool | What it catches | Configured how |
 | --- | --- | --- |
 | **Spotless** | Formatting drift (indent, imports, blank lines) | `pom.xml` plugin with an `<importOrder>` block |
-| **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, fail on HIGH |
+| **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, threshold Medium; fail on any HIGH and any MEDIUM not in the baseline |
 | **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepDisableWarningsInGeneratedCode` to silence noise |
 | **NullAway** | Null-safety: every reference is annotated `@Nullable` or assumed non-null | Annotated packages only |
+| **Checkstyle** | Organization-specific rules: method length, file length, parameter count (`quality-review` F22–F24) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
 | **PMD** (optional) | Method/class size, complexity (overlaps with `quality-review`) | Often dropped in favour of SpotBugs + Sonar |
 | **Sonar** (optional) | Aggregated quality dashboard, hotspots | CI step that uploads to SonarCloud / SonarQube |
 
@@ -83,6 +84,12 @@ on objective violations.
             <artifactId>nullaway</artifactId>
             <version>0.11.0</version>
           </path>
+          <!-- Listing processors here disables classpath discovery: every processor the build uses must be listed -->
+          <path>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>   <!-- managed by the Spring Boot parent -->
+          </path>
         </annotationProcessorPaths>
         <compilerArgs>
           <!-- Error Prone on JDK 17+/21 also needs the --add-exports / --add-opens flags from the note below -->
@@ -92,8 +99,54 @@ on objective violations.
         </compilerArgs>
       </configuration>
     </plugin>
+
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-checkstyle-plugin</artifactId>
+      <version>3.4.0</version>
+      <dependencies>
+        <dependency>
+          <groupId>com.puppycrawl.tools</groupId>
+          <artifactId>checkstyle</artifactId>
+          <version>10.17.0</version>
+        </dependency>
+      </dependencies>
+      <configuration>
+        <configLocation>checkstyle.xml</configLocation>
+        <consoleOutput>true</consoleOutput>
+        <failOnViolation>true</failOnViolation>
+        <violationSeverity>warning</violationSeverity>
+      </configuration>
+      <executions><execution><phase>validate</phase><goals><goal>check</goal></goals></execution></executions>
+    </plugin>
   </plugins>
 </build>
+```
+
+Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F22–F24
+thresholds (add organization-specific modules below these):
+
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<module name="Checker">
+  <property name="severity" value="warning"/>
+  <!-- F23 class length: hard ceiling 300 (the 200 target is checked in quality-review) -->
+  <module name="FileLength"><property name="max" value="300"/></module>
+  <module name="TreeWalker">
+    <!-- F22 method length -->
+    <module name="MethodLength">
+      <property name="max" value="30"/>
+      <property name="countEmpty" value="false"/>
+    </module>
+    <!-- F24 method parameters -->
+    <module name="ParameterNumber">
+      <property name="max" value="4"/>
+      <property name="ignoreOverriddenMethods" value="true"/>
+    </module>
+  </module>
+</module>
 ```
 
 ## Spotless first, opinion second
@@ -128,14 +181,15 @@ build fails with `IllegalAccessError`:
 | Tool | Fail build on |
 | --- | --- |
 | Spotless | Any difference |
-| SpotBugs | Any MEDIUM or HIGH finding not in the `spotbugs-exclude.xml` baseline |
+| SpotBugs | Any HIGH; any MEDIUM not in the `spotbugs-exclude.xml` baseline (HIGH findings are never baselined) |
+| Checkstyle | Any violation |
 | Error-Prone / NullAway | Any new violation |
 | Sonar | Quality Gate failure (default: > 5 % new code smells, < 80 % new-code coverage) |
 
 ## Do / Don't
 
 ✅ One canonical formatter (Spotless + google-java-format AOSP).
-✅ Bug-finding tools run on every build; HIGH severity breaks the build.
+✅ Bug-finding tools run on every build; HIGH severity (and any MEDIUM not in the baseline) breaks the build.
 ✅ Every suppression has a comment + reviewer sign-off.
 ❌ Never disable a check globally to fix a single false-positive — narrow the
 suppression to the smallest scope.

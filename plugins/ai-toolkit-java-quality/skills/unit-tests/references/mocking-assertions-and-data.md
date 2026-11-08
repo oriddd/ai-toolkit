@@ -1,4 +1,4 @@
-# this Unit Tests Skill — Mocking, assertions and test data
+# Unit Tests Skill — Mocking, assertions and test data
 
 Part of the [`unit-tests`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 
@@ -31,7 +31,7 @@ Rules:
 - **`try-with-resources` inside the test method** — never a class field, or
   the static stub leaks between tests and breaks parallel execution.
 - One `MockedStatic` per class being statically stubbed.
-- Reference: `PermissionsHandlerTest`.
+- Reference: a `PermissionsHandlerTest` (illustrative name — see the `permissions` skill).
 
 ## Testing `@PostConstruct` / heavy startup logic
 

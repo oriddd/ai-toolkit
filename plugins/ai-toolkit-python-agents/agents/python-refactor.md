@@ -15,25 +15,25 @@ time, tests green after every step, no behaviour change unless explicitly reques
 
 ## Skills to apply (in this order)
 
-1. `python-code-structure` — target layout and layering; use it to audit what is out of place.
-2. `python-static-analysis` — baseline ruff / `mypy --strict` / import-linter before and after each step.
-3. `python-unit-tests` — characterization tests before touching anything.
+1. `ai-toolkit-python-design:python-code-structure` — target layout and layering; use it to audit what is out of place.
+2. `ai-toolkit-python-quality:python-static-analysis` — baseline ruff / `mypy --strict` / import-linter before and after each step.
+3. `ai-toolkit-python-quality:python-unit-tests` — characterization tests before touching anything.
 4. For each anti-pattern found, apply the target skill:
 
 | Anti-pattern | Target skill |
 | --- | --- |
-| Business logic in a route function | `python-code-structure` + `python-fastapi-conventions` |
-| `os.environ` / `os.getenv` scattered through modules | `python-code-structure` §5 (pydantic-settings) |
-| Module-level singletons, global clients, hidden imports of collaborators | `python-code-structure` §4 (constructor injection) |
-| Missing or partial type hints, `Any` everywhere | `python-static-analysis` |
-| Bare `Exception` / `ValueError` / `HTTPException` from business code | `python-error-handling` |
-| Ad-hoc `if/raise` validation in routers or services | `python-input-validation` |
-| Raw SQL strings / ORM models leaking into services or responses | `python-persistence` |
-| Sessions or commits scattered across functions | `python-persistence` §3 (unit of work) |
-| `print` / `logging.basicConfig` / unstructured logs | `python-observability` |
-| Router returning raw dicts or ORM objects | `python-fastapi-conventions` §3 |
-| Mocks of the class under test, no fakes | `python-unit-tests` §3 |
-| Tests that need a real DB but use mocks | `python-integration-tests` |
+| Business logic in a route function | `ai-toolkit-python-design:python-code-structure` + `ai-toolkit-python-design:python-fastapi-conventions` |
+| `os.environ` / `os.getenv` scattered through modules | `ai-toolkit-python-design:python-code-structure` §5 (pydantic-settings) |
+| Module-level singletons, global clients, hidden imports of collaborators | `ai-toolkit-python-design:python-code-structure` §4 (constructor injection) |
+| Missing or partial type hints, `Any` everywhere | `ai-toolkit-python-quality:python-static-analysis` |
+| Bare `Exception` / `ValueError` / `HTTPException` from business code | `ai-toolkit-python-build:python-error-handling` |
+| Ad-hoc `if/raise` validation in routers or services | `ai-toolkit-python-build:python-input-validation` |
+| Raw SQL strings / ORM models leaking into services or responses | `ai-toolkit-python-build:python-persistence` |
+| Sessions or commits scattered across functions | `ai-toolkit-python-build:python-persistence` §3 (unit of work) |
+| `print` / `logging.basicConfig` / unstructured logs | `ai-toolkit-python-ops:python-observability` |
+| Router returning raw dicts or ORM objects | `ai-toolkit-python-design:python-fastapi-conventions` §3 |
+| Mocks of the class under test, no fakes | `ai-toolkit-python-quality:python-unit-tests` §3 |
+| Tests that need a real DB but use mocks | `ai-toolkit-python-quality:python-integration-tests` |
 
 ## Step-by-step procedure
 
@@ -76,7 +76,7 @@ do the same steps inline, in order.
    the targets do not share files and none depends on another's new API.
 3. **Sequential (you):** run the verify sequence, then `ai-toolkit-python-agents:python-code-review` on the combined diff.
 
-Keep shared files (`pyproject.toml`, `settings.py`, the error-code catalogue, Alembic revision chain, `app.py` router
+Keep shared files (`pyproject.toml`, the `config/` settings package, the error-code catalogue, Alembic revision chain, `main.py` router
 registration) and the test/lint runs to yourself. Verify every result (read the diff, run the tests) before
 reporting done.
 
@@ -84,11 +84,13 @@ reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill and finish with its evidence table.
-For Python its verify sequence is the one defined in `python-ci`: `uv run ruff check . && uv run ruff
+For Python its verify sequence is the one defined in `ai-toolkit-python-ops:python-ci`: `uv run ruff check . && uv run ruff
 format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"` (plus
 `uv run pytest -m integration` when Docker is available), followed by coverage of the changed code via
 diff-cover, `ai-toolkit-quality:code-hygiene` and Sonar where configured. Fix failures at the cause; never suppress or weaken a check to get green (no blanket
 `# noqa` / `# type: ignore`, no lowered coverage threshold, no skipped or deleted tests).
+Gate check 5 (Standards) is the `ai-toolkit-python-agents:python-code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 

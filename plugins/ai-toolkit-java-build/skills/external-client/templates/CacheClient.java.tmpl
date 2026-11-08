@@ -2,6 +2,7 @@ package {{basePackage}}.client.cache;
 import org.springframework.stereotype.Component;
 import java.time.Duration;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
 @Component
 public class CacheClient {
     private final WebClient webClient;
@@ -13,6 +14,13 @@ public class CacheClient {
     /** Returns null when the cache has no body for the key — the caller must handle that. */
     public CacheEntryResponse fetch(String key) {
         return webClient.get().uri("/cache/{key}", key)
-                .retrieve().bodyToMono(CacheEntryResponse.class).block(timeout);
+                .retrieve().bodyToMono(CacheEntryResponse.class)
+                // WebClientResponseException / WebClientRequestException never escape client/cache
+                .onErrorMap(WebClientException.class, e -> new CacheClientException("Cache call failed", e))
+                .block(timeout);
+    }
+    /** Domain exception for cache transport failures — the only failure type callers see. */
+    public static class CacheClientException extends RuntimeException {
+        public CacheClientException(String message, Throwable cause) { super(message, cause); }
     }
 }

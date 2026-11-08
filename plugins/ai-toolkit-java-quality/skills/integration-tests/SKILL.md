@@ -110,7 +110,10 @@ Rules:
 - **One container per `@Testcontainers` class** when possible.
 - **Reuse** containers across the JVM with
   `.withReuse(true)` + `~/.testcontainers.properties: testcontainers.reuse.enable=true`
-  to speed up local dev.
+  to speed up local dev. Reuse only works for a container you start yourself
+  (singleton `static { DB.start(); }`, no `@Container`): the `@Container`
+  extension stops the container after the class, so `.withReuse(true)` has
+  no effect there.
 - **Never** rely on a fixed host port — always read the mapped port from the
   container.
 - **Always name them `*IT.java`** — that is what makes Failsafe run them and Surefire skip them. `@Tag("integration")` only adds a way to
@@ -192,10 +195,14 @@ Consumer writes the expectation; pact file goes to a Pact Broker; producer
 verifies on every build.
 
 Pick **one** of the two per organization. Whichever is chosen:
-- **Producer**: contract verification is a required CI step
-  (`@PactVerification` / `@AutoConfigureStubRunner(stubsMode = LOCAL)`).
+- **Producer**: contract verification is a required CI step (Pact JUnit 5:
+  `@Provider` + `@PactBroker` on a `@TestTemplate` extended with
+  `PactVerificationInvocationContextProvider`; Spring Cloud Contract: the
+  tests that `spring-cloud-contract-maven-plugin` generates from the contracts).
 - **Consumer**: stub-based integration tests use the same contract artifact
-  so the consumer cannot drift.
+  so the consumer cannot drift (Spring Cloud Contract:
+  `@AutoConfigureStubRunner(stubsMode = LOCAL)`; Pact: consumer tests with
+  `PactConsumerTestExt`).
 
 ## Test data lifecycle
 

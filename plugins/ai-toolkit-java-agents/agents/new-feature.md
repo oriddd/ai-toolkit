@@ -23,14 +23,14 @@ IF API versioning:          → response-mapper (supports multiple API versions 
 IF pluggable behavior:      → strategy-registry-pattern (multiple implementations selected at runtime)
 ```
 ## Always apply
-- `code-structure` — package layout, layering, naming
-- `exception-handling` — new error cases
-- `permissions` — authorization in every operation
-- `observability` — MDC propagation, logging discipline
-- `unit-tests` — every new class
-- `component-tests` — every new controller endpoint
-- `quality-review` — SOLID audit before submitting
-- `context-maintenance` + CHANGELOG — documentation
+- `ai-toolkit-java-design:code-structure` — package layout, layering, naming
+- `ai-toolkit-java-build:exception-handling` — new error cases
+- `ai-toolkit-java-build:permissions` — authorization in every operation
+- `ai-toolkit-java-ops:observability` — MDC propagation, logging discipline
+- `ai-toolkit-java-quality:unit-tests` — every new class
+- `ai-toolkit-java-quality:component-tests` — every new controller endpoint
+- `ai-toolkit-java-quality:quality-review` — SOLID audit before submitting
+- `ai-toolkit-docs:context-maintenance` + CHANGELOG — documentation
 ## Step-by-step procedure
 ```
 1. DECOMPOSE the feature into layers:
@@ -39,7 +39,7 @@ IF pluggable behavior:      → strategy-registry-pattern (multiple implementati
    - Which downstreams? (→ external-client)
    - Which validation rules? (→ input-validation)
    - Which metrics? (→ request-metrics)
-2. READ the relevant skills in apply-order (`golden-path`).
+2. READ the relevant skills in apply-order (`ai-toolkit-java-quality:golden-path`).
 3. DESIGN first:
    - URL(s) and response shape
    - Entity model and migration
@@ -55,7 +55,7 @@ IF pluggable behavior:      → strategy-registry-pattern (multiple implementati
    g. Controller(s) with @Validated
    h. Tests (unit → component → integration)
    i. Metrics recorder (if needed)
-5. VALIDATE against all 24 non-negotiables (`golden-path`).
+5. VALIDATE against all 24 non-negotiables (`ai-toolkit-java-quality:golden-path`).
 6. UPDATE context/ and CHANGELOG (the changelog only when no release bot owns it).
 ```
 ## Delegation (use subagents when you can)
@@ -71,12 +71,14 @@ once the code it depends on exists.
    a–c in layer order: migration, entity + repository, service(s).
 2. **Parallel leaves (optional, disjoint files, after step 1):** `general-purpose` for each independent leaf layer —
    d. downstream client(s), e. validation rules, i. metrics recorder — each briefed with its skill, the service
-   signatures it must call and its file list.
+   signatures it must call and its file list. A subagent cannot ask the developer, so answer the questions of the
+   HITL skills (`ai-toolkit-java-build:external-client` §0, `ai-toolkit-java-build:input-validation`) with the
+   developer in step 1 and put the answers in the brief.
 3. **Sequential (you):** f. operation(s) and g. controller(s) — they wire the layers together, so they need the
    leaves' output.
 4. **Parallel fan-out, one message — after step 3:** h. tests — `ai-toolkit-java-agents:test-writer` per independent
    group of classes (unit, component, and `*IT` integration tests for every new DB or downstream boundary, per
-   `integration-tests`); `ai-toolkit-docs:update-context` — docs + CHANGELOG.
+   `ai-toolkit-java-quality:integration-tests`); `ai-toolkit-docs:update-context` — docs + CHANGELOG.
 5. **Sequential (you):** run the build and tests (`mvn verify` runs the `*IT` classes too), then
    `ai-toolkit-java-agents:code-review` on the combined diff.
 
@@ -88,8 +90,10 @@ Verify every result (read the diff, run the tests) before reporting done.
 
 Never `git commit`, `git push` or tag — leave the changes in the working tree until the developer asks.
 Before reporting the task done, run the `ai-toolkit-quality:completion-gate` skill (build, full tests, static analysis,
-`quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
+`ai-toolkit-java-quality:quality-review`, coverage of the changed code, `ai-toolkit-quality:code-hygiene`, Sonar) and finish with its evidence
 table. Fix failures at the cause; never suppress or weaken a check to get green.
+Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
+evidence instead of reviewing a second time; re-run it only if you changed code after it.
 
 ## Checklist before returning
 - [ ] All 24 non-negotiables satisfied.

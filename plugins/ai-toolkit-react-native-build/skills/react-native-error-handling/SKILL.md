@@ -34,8 +34,10 @@ shared/errors/
 ## Dependencies
 
 ```json
-{ "dependencies": { "react-error-boundary": "^4.1.0", "@sentry/react-native": "^6.0.0" } }
+{ "dependencies": { "react-error-boundary": "^4.1.0", "@sentry/react-native": "<current>" } }
 ```
+
+`<current>`: pin the latest stable `@sentry/react-native` release (same version as `react-native-observability`).
 
 ## 1. Typed hierarchy
 
@@ -55,6 +57,8 @@ export class NetworkError extends AppError { constructor(cause?: unknown) { supe
 export class UnauthorizedError extends AppError { constructor() { super('UNAUTHORIZED', false); } }
 export class NotFoundError extends AppError { constructor() { super('NOT_FOUND', false); } }
 export class ServerError extends AppError { constructor(readonly status: number) { super('SERVER', true); } }
+export type FieldErrors = Record<string, string>;        // form field path -> server error code
+export class ValidationError extends AppError { constructor(readonly fieldErrors: FieldErrors) { super('VALIDATION_FAILED', false); } }
 export const isAppError = (e: unknown): e is AppError => e instanceof AppError;
 ```
 
@@ -86,20 +90,33 @@ server text, stack traces or ids. When localising, key this by `ErrorCode` into 
 
 ```ts
 // shared/errors/mapHttpError.ts
-export function mapHttpError(res: Response): AppError {
+export async function mapHttpError(res: Response): Promise<AppError> {
   switch (res.status) {
     case 400: return new AppError('BAD_REQUEST', false);
     case 401: return new UnauthorizedError();
     case 403: return new AppError('FORBIDDEN', false);
     case 404: return new NotFoundError();
     case 409: return new AppError('CONFLICT', false);
-    case 422: return new AppError('VALIDATION_FAILED', false);
+    case 422: return new ValidationError(await readFieldErrors(res));
     case 429: return new AppError('RATE_LIMITED', false);
     default:  return res.status >= 500 ? new ServerError(res.status) : new AppError('UNKNOWN', false);
   }
 }
 export const toNetworkError = (cause: unknown) => new NetworkError(cause);
+// a response that breaks the zod contract is our bug: UNKNOWN is reported and not retried
+export const toContractError = (cause: unknown) => new AppError('UNKNOWN', false, { cause });
+
+// 422 bodies are problem+json with `errors: [{ field, code, message }]` (see python-error-handling / exception-handling)
+const problemSchema = z.object({ errors: z.array(z.object({ field: z.string(), code: z.string() })).default([]) });
+async function readFieldErrors(res: Response): Promise<FieldErrors> {
+  const parsed = problemSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) return {};
+  return Object.fromEntries(parsed.data.errors.map((e) => [e.field.replace(/^body\./, ''), e.code]));  // `body.email` -> `email`
+}
 ```
+
+Only the codes are kept, never the server's message text: the form maps each code to the validation catalogue
+(see `react-native-input-validation`).
 
 Only the api-client (see `react-native-state-and-data`) calls this. No `if (status === 401)` in
 screens, hooks or feature api modules.

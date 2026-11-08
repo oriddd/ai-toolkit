@@ -1,4 +1,4 @@
-# this Quality Review Skill — Checklist C: cross-cutting conventions
+# Quality Review Skill — Checklist C: cross-cutting conventions
 
 Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings are stable; other skills cite them.
 
@@ -41,16 +41,19 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
    `exception-handling`.) Flag any `throw new RuntimeException("…")`
    in business code or inline error string.
 
-10. **Logging** — `@Slf4j`; no `System.out`; no logging of secrets
+10. **Logging** — `@Slf4j` / `@Log4j2`; no `System.out`; no logging of secrets
     or full URLs with credentials; `log.debug` for happy-path detail,
     `log.warn` for recoverable, `log.error` for unexpected with exception as
     last arg (not concatenated).
 
 11. **Constants** — Utility classes are `final` with
     `@NoArgsConstructor(access = PRIVATE)`; magic strings live in a `*Constants`
-    class; config keys live in `ConfigurationConstants` as
-    `${prop.name}` / SpEL `#{'${prop.list}'.split(',')}`. Flag inline
-    `@Value("${…}")` literals that occur more than once.
+    class; configuration is bound through `@ConfigurationProperties` records
+    (golden-path #2, `spring-boot-conventions` §1). Where a lone `@Value`
+    remains for a single ungrouped key, the key lives in
+    `ConfigurationConstants` as `${prop.name}` / SpEL
+    `#{'${prop.list}'.split(',')}`. Flag inline `@Value("${…}")` literals
+    that occur more than once, and any `@Value` used for grouped properties.
 
 12. **Concurrency** — Any `ExecutorService` field has:
     - a `@PreDestroy` that calls `shutdown()` → `awaitTermination(…)` →

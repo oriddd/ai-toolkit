@@ -132,7 +132,7 @@ Rules:
 - Add a **Testcontainer-based migration test** that runs all migrations
   against an empty database on every commit (see `integration-tests`).
 
-## 3c. Multi-tenancy
+## 3a. Multi-tenancy
 
 When a service must manage data for multiple tenants (e.g., different organizations or customers), choose one of the following patterns:
 
