@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Input Validation Skill
 ## When to use
 Whenever a rule decides whether input is acceptable: a format, a range, a relation between fields, or a

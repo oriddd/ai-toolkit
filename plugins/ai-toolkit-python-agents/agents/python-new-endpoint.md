@@ -3,6 +3,8 @@ name: python-new-endpoint
 description: Add a fully standards-compliant FastAPI endpoint to an existing Python service — from router to tests. Use when the developer wants one new REST endpoint (method + path) in a FastAPI service following the python-* skills.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: New FastAPI Endpoint
 
 > **Purpose:** Add a fully standards-compliant FastAPI endpoint to an
@@ -116,7 +118,7 @@ run check 5 inline: apply the Do/Don't lists of the loaded `python-*` skills to 
 - [ ] URL is a plural noun, kebab-case, versioned (`/v1/…`, per `ai-toolkit-python-design:python-fastapi-conventions`).
 - [ ] Router is thin: no business logic, no ORM or HTTP-client calls.
 - [ ] If the project has an authorization layer, the check runs before any service logic (in the operation when there is one).
-- [ ] Declared `response_model`; every 4xx returns RFC 7807 problem+json.
+- [ ] Declared `response_model`; every 4xx returns RFC 9457 problem+json.
 - [ ] Request models are validated by pydantic; custom rules live in the validation layer.
 - [ ] No bare `Exception`/`ValueError`/`HTTPException` raised from business code.
 - [ ] Unit tests cover happy path + every exception branch.

@@ -3,6 +3,8 @@ name: react-native-refactor
 description: Migrate legacy React Native components or modules to the canonical react-native-* patterns safely, one anti-pattern at a time with characterization tests first. Use when existing code violates the standards and behaviour must not change.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: Refactor Legacy React Native Code
 
 > **Purpose:** Migrate a component, module or feature folder from common

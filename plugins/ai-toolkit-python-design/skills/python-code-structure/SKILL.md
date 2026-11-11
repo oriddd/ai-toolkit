@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Code Structure Skill
 ## When to use
 Whenever you create a Python service, add a feature, or touch more than one module: it defines the

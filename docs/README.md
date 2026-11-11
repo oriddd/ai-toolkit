@@ -39,7 +39,7 @@ libraries or token shapes are assumed.
 | [`response-layout`](../plugins/ai-toolkit-java-design/skills/response-layout/SKILL.md) | Layout query parameter (`?layout=summary/detailed/full`) support — `LayoutHandler` resolves the layout, routes via a registry to a `LayoutStrategy`, returns a tailored DTO. Add a layout by adding one strategy. Application of `strategy-registry-pattern`. |
 | [`response-mapper`](../plugins/ai-toolkit-java-design/skills/response-mapper/SKILL.md) | API versioning & response projection mapping — `MapperHandler` resolves the target version/projection (Accept header / URI / query param), routes via a registry to a `MapperStrategy`, returns a version-specific DTO. Add a version by adding one strategy. Application of `strategy-registry-pattern`. |
 | [`openapi-first-codegen`](../plugins/ai-toolkit-java-design/skills/openapi-first-codegen/SKILL.md) | Drive controllers and DTOs from `api.yaml` via `openapi-generator-maven-plugin` — controllers implement generated `<Resource>Api`, generated DTOs never leak past the controller, generated sources excluded from coverage / static analysis. |
-| [`exception-handling`](../plugins/ai-toolkit-java-build/skills/exception-handling/SKILL.md) | Domain exception hierarchy + `ExceptionMessages` + `@RestControllerAdvice` → RFC 7807 `ProblemDetail`. |
+| [`exception-handling`](../plugins/ai-toolkit-java-build/skills/exception-handling/SKILL.md) | Domain exception hierarchy + `ExceptionMessages` + `@RestControllerAdvice` → RFC 9457 `ProblemDetail`. |
 | [`input-validation`](../plugins/ai-toolkit-java-build/skills/input-validation/SKILL.md) | Custom Jakarta `ConstraintValidator` (annotation-driven, Spring-bean-aware, parameter/field level) and Spring `Validator` (object/cross-field level) with reusable domain rule beans, custom violation messages, `@InitBinder` registration, and test patterns. |
 | [`permissions`](../plugins/ai-toolkit-java-build/skills/permissions/SKILL.md) | Pluggable Strategy + Handler authorization with `CallerContextResolver` / `ResourceAuthorizationSource` SPIs. |
 | [`graceful-shutdown`](../plugins/ai-toolkit-java-ops/skills/graceful-shutdown/SKILL.md) | `server.shutdown=graceful` + K8s `terminationGracePeriodSeconds` + executor / consumer / pool drain. |
@@ -66,7 +66,7 @@ libraries or token shapes are assumed.
 | [`adapter-contract-tests`](../plugins/ai-toolkit-java-quality/skills/adapter-contract-tests/SKILL.md) | TCK-style shared abstract test suite per port, run against every adapter so swapping a provider cannot change business behaviour — proves the lego-brick contract. |
 | **Lifecycle** | |
 | [`git-commit-conventions`](../plugins/ai-toolkit-workflow/skills/git-commit-conventions/SKILL.md) | Conventional Commit prefixes, small single-purpose commits, every commit compiles on its own, subject/body rules, commit-msg hook + interactive rebase clean-up, squash-vs-preserve policy for PRs. |
-| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Write and update pull request descriptions — structured sections (Problem, Solution, Key Changes, Testing, Notes), updated with `gh` on GitHub or via the Bitbucket Server REST API with optimistic locking, checklist for completeness. |
+| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Write and update pull request descriptions — structured sections (Problem, Solution, Key Changes, Testing, Notes), updated on any git host (GitHub, GitLab, Azure DevOps, Bitbucket) without clobbering concurrent edits, checklist for completeness. |
 | [`release-versioning`](../plugins/ai-toolkit-workflow/skills/release-versioning/SKILL.md) | Conventional Commits + SemVer + `release-please` / `semantic-release` + CHANGELOG generation + deprecation policy. |
 | [`local-dev-experience`](../plugins/ai-toolkit-java-ops/skills/local-dev-experience/SKILL.md) | `docker-compose.yml` for deps, `Makefile`, `.devcontainer`, `.editorconfig`, pre-commit hooks. |
 
@@ -80,7 +80,7 @@ libraries or token shapes are assumed.
 | [`code-hygiene`](../plugins/ai-toolkit-quality/skills/code-hygiene/SKILL.md) | `ai-toolkit-quality` | Keep a diff minimal and self-explanatory — no comments or docs that restate the code, no dead code, no speculative abstraction, no unrelated churn, and no redundant or meaningless tests. |
 | [`sonar-quality-gate`](../plugins/ai-toolkit-quality/skills/sonar-quality-gate/SKILL.md) | `ai-toolkit-quality` | Run the project's SonarQube/SonarCloud analysis on your change and drive the new-code quality gate to green — bugs, vulnerabilities, code smells, security hotspots, duplication and coverage — without suppressing findings, and report honestly when Sonar cannot be reached. |
 
-## Python (draft)
+## Python (experimental)
 
 Language pilot — see [`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md). Grouped by phase plugin.
 
@@ -88,7 +88,7 @@ Language pilot — see [`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md). Grouped
 | --- | --- | --- |
 | [`python-code-structure`](../plugins/ai-toolkit-python-design/skills/python-code-structure/SKILL.md) | `ai-toolkit-python-design` | Apply the canonical Python 3.12 service layout (src layout, api/operations/services/clients/models/config layers, pydantic-settings, constructor injection, one-way dependency direction) where every module is a small single-purpose LEGO brick named so it documents itself. |
 | [`python-fastapi-conventions`](../plugins/ai-toolkit-python-design/skills/python-fastapi-conventions/SKILL.md) | `ai-toolkit-python-design` | Apply FastAPI conventions for a REST service — thin routers, Depends-based injection, explicit response models, one pagination contract, problem+json error responses, URL conventions and lifespan-managed resources. |
-| [`python-error-handling`](../plugins/ai-toolkit-python-build/skills/python-error-handling/SKILL.md) | `ai-toolkit-python-build` | Wire a clean error contract for a FastAPI service — a typed exception hierarchy, a static error-code and message catalogue, and ONE exception handler mapping every error to an RFC 7807 application/problem+json response. |
+| [`python-error-handling`](../plugins/ai-toolkit-python-build/skills/python-error-handling/SKILL.md) | `ai-toolkit-python-build` | Wire a clean error contract for a FastAPI service — a typed exception hierarchy, a static error-code and message catalogue, and ONE exception handler mapping every error to an RFC 9457 application/problem+json response. |
 | [`python-input-validation`](../plugins/ai-toolkit-python-build/skills/python-input-validation/SKILL.md) | `ai-toolkit-python-build` | Implement all input validation in a Python service with pydantic v2 — Field constraints and validated types for per-field rules, model validators for cross-field rules, injectable rule objects for rules that need data or collaborators, custom messages, and a single validation layer. |
 | [`python-persistence`](../plugins/ai-toolkit-python-build/skills/python-persistence/SKILL.md) | `ai-toolkit-python-build` | Wire the persistence layer of a Python service with SQLAlchemy 2.0 (typed Mapped models, async sessions) and Alembic migrations — repository per aggregate behind a Protocol, a single transaction/unit-of-work boundary, optimistic locking, and ORM models that never leak past the repository. |
 | [`python-integration-tests`](../plugins/ai-toolkit-python-quality/skills/python-integration-tests/SKILL.md) | `ai-toolkit-python-quality` | Test a Python service against real infrastructure with testcontainers-python (PostgreSQL, Redis, Kafka, ...) and strict pytest-marker segregation between unit and integration suites, including Alembic migration checks and full-app API tests. |
@@ -97,7 +97,7 @@ Language pilot — see [`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md). Grouped
 | [`python-ci`](../plugins/ai-toolkit-python-ops/skills/python-ci/SKILL.md) | `ai-toolkit-python-ops` | Generate the Continuous Integration setup for a Python 3.12 service — a GitHub Actions workflow using uv with dependency caching and separate lint, type, unit and integration gates, plus a multi-stage, non-root, reproducible Dockerfile. |
 | [`python-observability`](../plugins/ai-toolkit-python-ops/skills/python-observability/SKILL.md) | `ai-toolkit-python-ops` | Wire the three observability pillars into a Python/FastAPI service — structlog JSON logs with contextvars correlation IDs, OpenTelemetry distributed traces, and prometheus-client metrics with low-cardinality labels. |
 
-## React Native (draft)
+## React Native (experimental)
 
 Language pilot — see [`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md). Grouped by phase plugin.
 

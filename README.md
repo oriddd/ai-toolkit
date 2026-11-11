@@ -18,7 +18,7 @@ is that language (detected from `pom.xml`, `pyproject.toml`, `package.json` with
 languages you use** — every installed skill adds its description to each session. Details, team-wide setup, updates,
 Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./setup/claude-code/README.md).
 
-| Phase | Neutral | Java | Python (draft) | React Native (draft) |
+| Phase | Neutral | Java | Python (experimental) | React Native (experimental) |
 | --- | --- | --- | --- | --- |
 | Workflow — commits, PRs, releases, delegation | `ai-toolkit-workflow` | | | |
 | Docs — ADRs, diagrams, context | `ai-toolkit-docs` | | | |
@@ -29,6 +29,27 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 | Ops — CI/CD, observability | | `-java-ops` | `-python-ops` | `-react-native-ops` |
 | Scaffold | | `-java-scaffold` | | |
 | Task agents | `update-context` (in `-docs`) | `-java-agents` | `-python-agents` | `-react-native-agents` |
+
+## Support status and prerequisites
+
+| Language | Status | Prerequisites |
+| --- | --- | --- |
+| Java | **Supported** — the user-tested core of the catalogue; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
+| Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.12, FastAPI, uv |
+| React Native | **Experimental** — required concerns only, not yet validated on production projects | React Native with TypeScript, Expo (EAS) or bare workflow (Fastlane), npm |
+
+The Java skills' examples and templates use Lombok (`@Slf4j`, `@RequiredArgsConstructor`, `@Builder`, …). The
+`create-repo` and `ci` POM templates already include it; add it to an existing project before applying the skills.
+Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see
+[`docs/AUTHORING.md` §9](./docs/AUTHORING.md#9-freshness-policy).
+
+## Defaults you can override
+
+The skills are **opinionated defaults**, not universal law: one exception-message catalogue, `MessageFormat`
+placeholders, the `<basePackage>` layout, Strategy + Registry for runtime variation, and so on. They are written as
+firm rules so that an agent produces one consistent style instead of a mix. When your team has a different
+convention, state it in the project's `CLAUDE.md` (or `context/code-standards.md`): project instructions take
+precedence over a skill, and the agents follow the project's existing style when it conflicts with a skill's default.
 
 All plugin names are prefixed `ai-toolkit`. How the axes and the per-language skill contract work:
 [`docs/LANGUAGE_CONTRACT.md`](./docs/LANGUAGE_CONTRACT.md). Other agents (Cursor, Copilot, …) can read the `SKILL.md` files directly.
@@ -56,6 +77,7 @@ Full guide: [`setup/jetbrains/README.md`](./setup/jetbrains/README.md) · ready-
 .claude-plugin/marketplace.json
 plugins/ai-toolkit-<phase | lang-phase>/{.claude-plugin/plugin.json, skills/, agents/, hooks/}
 docs/    indexes, BACKEND_GUILD (non-negotiables), guides
+evals/   claude plugin eval suites per plugin (tools/run-evals.sh)
 tools/   validate-skills.sh, build-indexes.py, check-links.py, test-hooks.sh, check-repo-hygiene.sh, check-versions.sh
 setup/   client setup notes
 ```

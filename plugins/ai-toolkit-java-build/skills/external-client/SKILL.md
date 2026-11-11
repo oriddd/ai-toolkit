@@ -177,8 +177,12 @@ do not load them all.
    use `RestClient` (`exchange` or `onStatus`) and must still map every non-2xx.
 ✅ Build the transport from Boot's injected `RestClient.Builder` /
    `WebClient.Builder` (`.clone()`), never the static `builder()`, so metrics and
-   trace propagation stay on; give each per-dependency bean a name and inject it
-   with `@Qualifier`.
+   trace propagation stay on. The per-dependency transport is **never injectable by
+   type alone** — pick one of the two forms and show it in the code:
+   (a) a named bean (`@Bean("inventoryRestClient")`) injected with
+   `@Qualifier("inventoryRestClient")`, or (b) no transport bean at all: build it inside
+   the `@Bean` method that creates the `*Client` and pass it to the constructor
+   (`templates/CacheClientConfig.java.tmpl`).
 ✅ Keep `*FilterMapBuilder` as a non-Spring plain object — instantiated with
    `new` at the call site for fluent, readable filter composition.
 ✅ Split `*ResponseParser` (extract values) from `*ResponseVerifier`
@@ -191,6 +195,8 @@ do not load them all.
 ❌ Never return a "default" / silent empty value from a fallback — throw a
    domain exception so the `@RestControllerAdvice` maps it to `503`.
 ❌ Never share one `WebClient` bean across two external dependencies.
+❌ An unnamed `RestClient` / `WebClient` `@Bean` injected by type — the second
+   dependency makes injection ambiguous or silently wires the wrong base URL.
 ❌ Never keep repository/analyzer/scheduler code under `client/<dep>/`
    once the integration has grown past pure transport — see §11b Growth path.
 ❌ Never read the same dependency property (endpoint, namespace, topic)

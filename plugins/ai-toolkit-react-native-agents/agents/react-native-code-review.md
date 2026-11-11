@@ -4,6 +4,8 @@ description: Review a React Native diff or PR against the react-native-* skills 
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: React Native Pre-PR Code Review
 
 > **Purpose:** Review a diff against the guild standards before it is

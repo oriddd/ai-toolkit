@@ -2,7 +2,7 @@
 name: exception-handling
 description: >
   Java / Spring Boot error contract — typed domain exception hierarchy, static ExceptionMessages catalogue,
-  @RestControllerAdvice mapping each exception to an RFC 7807 ProblemDetail. Use when throwing, adding or mapping any
+  @RestControllerAdvice mapping each exception to an RFC 9457 ProblemDetail. Use when throwing, adding or mapping any
   exception or error response; never throw a raw RuntimeException.
 tier: must
 applies_to: [rest, event, monolith]
@@ -19,7 +19,7 @@ This skill enforces a project-wide error contract:
 - Internal code throws **domain exceptions** — typed subclasses of the unchecked
   `BaseDomainException`, never a raw `RuntimeException`.
 - A single `@RestControllerAdvice` translates every exception (domain or
-  third-party) into an [RFC 7807 `ProblemDetail`](https://www.rfc-editor.org/rfc/rfc7807)
+  third-party) into an [RFC 9457 `ProblemDetail`](https://www.rfc-editor.org/rfc/rfc9457)
   with a stable HTTP status.
 - All user-facing messages live in `exception/constants/ExceptionMessages`
   and are formatted with `java.text.MessageFormat` — never inlined.

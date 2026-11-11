@@ -136,7 +136,7 @@ diff, including untracked files.
 - [ ] URL is plural noun, kebab-case, versioned per `ai-toolkit-java-design:api-design` §3 (e.g. `/api/v1/…`).
 - [ ] Controller class has `@Validated`.
 - [ ] Operation contains permission check before any service call.
-- [ ] All 4xx cases return RFC 7807 ProblemDetail.
+- [ ] All 4xx cases return RFC 9457 ProblemDetail.
 - [ ] No business logic in the controller.
 - [ ] Request DTO validated with `@Valid`; custom rules use a validator.
 - [ ] Unit tests cover happy path + every exception branch.

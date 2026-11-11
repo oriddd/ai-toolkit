@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python CI Skill
 ## When to use
 When bootstrapping a Python repository, or when the pipeline or container image needs to follow the standard.

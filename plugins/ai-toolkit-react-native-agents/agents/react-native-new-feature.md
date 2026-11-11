@@ -3,6 +3,8 @@ name: react-native-new-feature
 description: Implement a multi-layer feature in a React Native (TypeScript) app from scratch — screens, data layer, state, validation, error handling, tests, analytics/observability hooks and docs. Use when the change spans several screens or a whole feature folder.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: New React Native Feature
 
 > **Purpose:** Implement a multi-layer feature end to end in a feature

@@ -235,7 +235,8 @@ pipeline {
 The block above is identical to [`templates/Jenkinsfile.tmpl`](./templates/Jenkinsfile.tmpl); edit both together.
 Placeholders: `{{imageRegistry}}` (e.g. `ghcr.io/<org>`), `{{artifactId}}`, and `{{registryCredentialsId}}` (a Jenkins
 username/password credential for the registry), `{{nvdApiKeyCredentialsId}}` (secret-text NVD API key for
-dependency-check). The image is scanned with Trivy before it is pushed, failing on HIGH/CRITICAL (same policy as
+dependency-check). The agent label `maven-21` stands for any Jenkins agent with JDK 21, Maven, Docker, Node.js and
+Trivy — rename it to the label your Jenkins uses. The image is scanned with Trivy before it is pushed, failing on HIGH/CRITICAL (same policy as
 `github-actions-ci`); pin the `dependency-check-maven` version in the pom's `pluginManagement` and the Trivy version on
 the agent, both kept current by Renovate. Required Jenkins plugins: Pipeline, JUnit, Coverage, Credentials Binding,
 Email Extension (for `emailextrecipients`). The `Commit messages` stage needs Node.js on the agent and a

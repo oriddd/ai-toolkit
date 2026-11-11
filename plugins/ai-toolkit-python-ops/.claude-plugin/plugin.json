@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-python-ops",
-  "description": "Python ops phase — GitHub Actions with uv, hardened Dockerfile, structlog, OpenTelemetry and Prometheus observability. (draft)",
-  "version": "0.3.0",
+  "description": "Experimental — Python ops phase — GitHub Actions with uv, hardened Dockerfile, structlog, OpenTelemetry and Prometheus observability.",
+  "version": "0.4.0",
   "author": {
     "name": "oriddd"
   },

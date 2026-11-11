@@ -2,7 +2,7 @@
   "name": "ai-toolkit",
   "metadata": {
     "description": "Engineering standards as Claude Code plugins, organised by delivery phase and language — skills, task agents and routing hooks.",
-    "version": "2.1.1"
+    "version": "2.2.0"
   },
   "owner": {
     "name": "oriddd"
@@ -35,7 +35,7 @@
     {
       "name": "ai-toolkit-java-design",
       "source": "./plugins/ai-toolkit-java-design",
-      "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Part of the `ai-toolkit-java` set.",
+      "description": "Java 21 / Spring Boot design phase — package structure, strategy/registry, ports and adapters, domain modeling, Spring conventions and REST API design. Ships the Java routing hook. Part of the `ai-toolkit-java` set — install that to get the whole language.",
       "category": "development"
     },
     {
@@ -59,37 +59,37 @@
     {
       "name": "ai-toolkit-python",
       "source": "./plugins/ai-toolkit-python",
-      "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
+      "description": "Experimental — Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-python-agents",
       "source": "./plugins/ai-toolkit-python-agents",
-      "description": "Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker (draft). Requires the python-* plugins.",
+      "description": "Experimental — Python task agents that compose the python-* skills — new endpoint, feature, refactor, code review and the parallel test-writer worker. Requires the python-* plugins.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-python-build",
       "source": "./plugins/ai-toolkit-python-build",
-      "description": "Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation and SQLAlchemy 2.0 persistence. (draft)",
+      "description": "Experimental — Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation and SQLAlchemy 2.0 persistence.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-python-design",
       "source": "./plugins/ai-toolkit-python-design",
-      "description": "Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. (draft) Part of the `ai-toolkit-python` set.",
+      "description": "Experimental — Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. Part of the `ai-toolkit-python` set — install that to get the whole language.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-python-ops",
       "source": "./plugins/ai-toolkit-python-ops",
-      "description": "Python ops phase — GitHub Actions with uv, hardened Dockerfile, structlog, OpenTelemetry and Prometheus observability. (draft)",
+      "description": "Experimental — Python ops phase — GitHub Actions with uv, hardened Dockerfile, structlog, OpenTelemetry and Prometheus observability.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-python-quality",
       "source": "./plugins/ai-toolkit-python-quality",
-      "description": "Python quality phase — pytest unit and integration tests, ruff and mypy static analysis. (draft)",
+      "description": "Experimental — Python quality phase — pytest unit and integration tests, ruff and mypy static analysis.",
       "category": "development"
     },
     {
@@ -101,37 +101,37 @@
     {
       "name": "ai-toolkit-react-native",
       "source": "./plugins/ai-toolkit-react-native",
-      "description": "React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional. (draft)",
+      "description": "Experimental — React Native — installs the whole React Native toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-react-native-agents`) stay optional.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-react-native-agents",
       "source": "./plugins/ai-toolkit-react-native-agents",
-      "description": "React Native task agents that compose the react-native-* skills — new screen, feature, refactor, code review and the parallel test-writer worker (draft). Requires the react-native-* plugins.",
+      "description": "Experimental — React Native task agents that compose the react-native-* skills — new screen, feature, refactor, code review and the parallel test-writer worker. Requires the react-native-* plugins.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-react-native-build",
       "source": "./plugins/ai-toolkit-react-native-build",
-      "description": "React Native build phase: typed error handling, schema-based input validation and mobile security (draft)",
+      "description": "Experimental — React Native build phase: typed error handling, schema-based input validation and mobile security.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-react-native-design",
       "source": "./plugins/ai-toolkit-react-native-design",
-      "description": "React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook (draft) Part of the `ai-toolkit-react-native` set.",
+      "description": "Experimental — React Native design phase: feature-based code structure, server/client state and data layer, plus the React Native routing hook. Part of the `ai-toolkit-react-native` set — install that to get the whole language.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-react-native-ops",
       "source": "./plugins/ai-toolkit-react-native-ops",
-      "description": "React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability (draft)",
+      "description": "Experimental — React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability.",
       "category": "development"
     },
     {
       "name": "ai-toolkit-react-native-quality",
       "source": "./plugins/ai-toolkit-react-native-quality",
-      "description": "React Native quality phase: Jest and RNTL unit tests, static analysis gates and Maestro E2E (draft)",
+      "description": "Experimental — React Native quality phase: Jest and RNTL unit tests, static analysis gates and Maestro E2E.",
       "category": "development"
     },
     {

@@ -3,6 +3,8 @@ name: react-native-new-screen
 description: Add a standards-compliant screen to an existing React Native (TypeScript) app — typed navigation route, screen, hook, api/query, validation schema, error handling and tests. Use when the developer asks for a new screen or page-level flow.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: New React Native Screen
 
 > **Purpose:** Add a standards-compliant screen to an existing React Native

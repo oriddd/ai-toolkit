@@ -239,7 +239,10 @@ Sections below keep their numbers but live in `references/` so this file stays s
   `log.debug` for happy-path detail, `log.warn` for recoverable, `log.error`
   for unexpected with the exception as the **last** argument (not
   concatenated). Never log secrets or URLs with credentials.
-- **Lombok:** prefer plain `@RequiredArgsConstructor` for DI (a single
+- **Lombok (prerequisite):** every Java skill's examples and templates assume
+  `org.projectlombok:lombok` (`<optional>true</optional>`, version managed by the Spring Boot parent) is on
+  the compile classpath and, when `annotationProcessorPaths` is set, listed there too. If it is missing, add it
+  before applying any example. Prefer plain `@RequiredArgsConstructor` for DI (a single
   constructor needs no `@Autowired`); avoid field injection. Pick one style per class.
 - **Configuration:** All env-driven config is read from `application.yaml`
   into `@ConfigurationProperties` records (see `spring-boot-conventions` §1)

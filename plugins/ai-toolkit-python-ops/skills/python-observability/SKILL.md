@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Observability Skill
 ## When to use
 When a service is created, or whenever you cannot answer "what happened to this request?" from telemetry.

@@ -47,7 +47,7 @@ A language is **complete** when it provides these concerns (names are `<slug>-<c
 | quality | `unit-tests`, `static-analysis` |
 | ops | `ci` |
 
-Languages marked **draft** (marked "(draft)" in the plugin description) may provide only these;
+Languages marked **experimental** (plugin description starts with `Experimental — `, every skill and agent carries the Experimental banner) may provide only these;
 everything else is optional and added as the standards mature.
 
 ## Routing hook

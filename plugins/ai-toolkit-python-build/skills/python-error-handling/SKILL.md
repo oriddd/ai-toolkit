@@ -2,7 +2,7 @@
 name: python-error-handling
 description: >
   Python / FastAPI error contract — typed exception hierarchy, error-code and message catalogue, ONE handler mapping
-  errors to RFC 7807 problem+json. Use when raising, adding or mapping any exception or error response. For request
+  errors to RFC 9457 problem+json. Use when raising, adding or mapping any exception or error response. For request
   validation use `python-input-validation`.
 tier: must
 applies_to: [rest, worker, cli, library]
@@ -12,6 +12,8 @@ hitl: false
 version: 1.0
 last_reviewed: 2026-11-03
 ---
+
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
 
 # Python Error Handling Skill
 ## When to use

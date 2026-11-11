@@ -4,6 +4,8 @@ description: Review a Python diff or PR against the python-* skills and code-hyg
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: Python Pre-PR Code Review
 
 > **Purpose:** Review a diff or PR against the python-* standards before it

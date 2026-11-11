@@ -4,6 +4,8 @@ description: Write Jest + React Native Testing Library (and MSW) tests for a giv
 tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: React Native Test Writer
 
 > **Purpose:** Produce meaningful Jest + React Native Testing Library tests
