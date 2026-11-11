@@ -2,7 +2,7 @@
 name: api-design
 description: >
   Java / Spring Boot REST API design — resources and URLs, HTTP verbs, status codes, versioning,
-  pagination/filtering/sorting, deprecation headers, RFC 7807 errors, OpenAPI-first vs code-first. Use when designing
+  pagination/filtering/sorting, deprecation headers, RFC 9457 errors, OpenAPI-first vs code-first. Use when designing
   a new endpoint or reviewing an existing API.
 tier: must
 applies_to: [rest, monolith]
@@ -54,7 +54,7 @@ GET    /api/v1/invoices/{id}/attachments/{attachmentId}/content   # Accept: appl
 | **500 Internal Server Error** | Unhandled failure |
 | **503 Service Unavailable** | Downstream unhealthy — include `Retry-After` |
 
-Every 4xx/5xx body is an **RFC 7807 `ProblemDetail`** (see `exception-handling`).
+Every 4xx/5xx body is an **RFC 9457 `ProblemDetail`** (see `exception-handling`).
 
 ## 3. Versioning
 

@@ -20,7 +20,7 @@ last_reviewed: 2026-07-13
 Validation is a **first-class concern** in every Spring Boot service. This skill
 defines the two canonical validation styles, when to use each, the package
 layout, and the full authoring contract for both. Validation errors surface as
-RFC 7807 `ProblemDetail` 400 responses — wired automatically by the
+RFC 9457 `ProblemDetail` 400 responses — wired automatically by the
 `@RestControllerAdvice` from the `exception-handling` skill.
 
 > Ad-hoc `if (x == null) throw new BadRequestException(...)` blocks inside

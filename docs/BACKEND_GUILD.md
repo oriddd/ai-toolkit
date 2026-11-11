@@ -38,7 +38,7 @@ task-driven recipes.
 | [`permissions`](../plugins/ai-toolkit-java-build/skills/permissions/SKILL.md) | Java / Spring Boot authorization via Strategy + Handler — PermissionsHandler dispatches by caller context (user, service account, external system) to … |
 | [`resilience-patterns`](../plugins/ai-toolkit-java-build/skills/resilience-patterns/SKILL.md) | Java / Spring Boot stability with Resilience4j — timeouts, bulkheads, circuit breakers, fallbacks, fail-fast. |
 | [`security-hardening`](../plugins/ai-toolkit-java-build/skills/security-hardening/SKILL.md) | Java / Spring Boot security beyond authn/authz — OWASP Top 10 checklist, CORS, security headers, secret management, dependency scanning, image signing. |
-| [`api-design`](../plugins/ai-toolkit-java-design/skills/api-design/SKILL.md) | Java / Spring Boot REST API design — resources and URLs, HTTP verbs, status codes, versioning, pagination/filtering/sorting, deprecation headers, RFC 7807 … |
+| [`api-design`](../plugins/ai-toolkit-java-design/skills/api-design/SKILL.md) | Java / Spring Boot REST API design — resources and URLs, HTTP verbs, status codes, versioning, pagination/filtering/sorting, deprecation headers, RFC 9457 … |
 | [`code-structure`](../plugins/ai-toolkit-java-design/skills/code-structure/SKILL.md) | Java / Spring Boot package hierarchy and layering — controller/operation/service, filter + recorder; every class a small, testable LEGO brick. |
 | [`pattern-selection`](../plugins/ai-toolkit-java-design/skills/pattern-selection/SKILL.md) | Java / Spring Boot: choose the smallest pattern that fits the actual scale — decision tables for clients, operations and layers, over-engineering red flags. |
 | [`pluggable-architecture`](../plugins/ai-toolkit-java-design/skills/pluggable-architecture/SKILL.md) | Java / Spring Boot ports and adapters — every external technology (cache, DB, broker, metrics, object store, secrets, identity) behind a port, with adapters … |
@@ -91,7 +91,7 @@ task-driven recipes.
 | [`integration-tests`](../plugins/ai-toolkit-java-quality/skills/integration-tests/SKILL.md) | Java / Spring Boot integration tests against real dependencies (DB, broker, object store, mocked HTTP) with Testcontainers, Surefire/Failsafe split, optional … |
 | [`sonar-quality-gate`](../plugins/ai-toolkit-quality/skills/sonar-quality-gate/SKILL.md) | Drive the SonarQube/SonarCloud new-code quality gate to green — bugs, vulnerabilities, smells, hotspots, duplication, coverage — without suppressing findings … |
 | [`parallel-delegation`](../plugins/ai-toolkit-workflow/skills/parallel-delegation/SKILL.md) | When and how to hand work to subagents in parallel without conflicts — what is safe to delegate, how to brief a subagent, file ownership, verifying results. |
-| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Pull request descriptions — problem, solution, key changes, testing, notes; update the PR with `gh` on GitHub or the Bitbucket Server REST API with optimistic … |
+| [`pr-description`](../plugins/ai-toolkit-workflow/skills/pr-description/SKILL.md) | Pull request descriptions — problem, solution, key changes, testing, notes; update the PR on any git host (GitHub, GitLab, Azure DevOps, Bitbucket) without … |
 
 ### FOUNDATIONAL — patterns other skills build on (2)
 

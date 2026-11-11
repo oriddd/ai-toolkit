@@ -4,6 +4,8 @@ description: Write pytest unit and integration tests for a given list of already
 tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: Python Test Writer
 
 > **Purpose:** Produce meaningful pytest unit tests (and integration tests

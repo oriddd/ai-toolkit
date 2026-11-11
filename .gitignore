@@ -19,3 +19,6 @@ typescript-*
 # Local release blocklist — keep it out of the repository
 .publication-blocklist
 
+
+# claude plugin eval output
+evals/results/

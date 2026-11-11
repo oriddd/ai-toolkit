@@ -168,11 +168,16 @@ else:
             err(f"{pname}: plugin.json name `{pj.get('name')}` does not match marketplace entry")
         for key in ("description", "version"):
             if not pj.get(key): err(f"{pname}: plugin.json missing `{key}`")
+        mp_desc = next(p.get("description") for p in mp["plugins"] if p["name"] == pname)
+        if mp_desc != pj.get("description"):
+            err(f"{pname}: marketplace.json description differs from plugin.json — keep them identical")
+        if re.match(r"ai-toolkit-(python|react-native)", pname) and not pj.get("description", "").startswith("Experimental — "):
+            err(f"{pname}: experimental language plugins must start their description with `Experimental — `")
     on_disk = {d for d in os.listdir(os.path.join(root, "plugins")) if os.path.isdir(os.path.join(root, "plugins", d))}
     for d in sorted(on_disk - {os.path.basename(x) for x in listed.values()}):
         err(f"plugins/{d}: not listed in marketplace.json")
 
-    # Language contract: every complete/draft language provides the required concerns
+    # Language contract: every complete/experimental language provides the required concerns
     REQUIRED = {"design": ["code-structure"], "build": ["input-validation"], "quality": ["unit-tests", "static-analysis"], "ops": ["ci"]}
     langs = {}
     for pname in listed:
@@ -361,6 +366,48 @@ for name, (path, fm) in sorted(skill_fm.items()):
         in_lang_plugin = ("-" + lang + "-") in pdir
         if in_lang_plugin and not any(m in desc.lower() for m in markers):
             err(f"{rel}: description of a {lang} skill must name its language ({'/'.join(markers)}) so it does not mis-route in other stacks")
+    if re.match(r"ai-toolkit-(python|react-native)", pdir) and "> ⚠️ **Experimental.**" not in read(path)[:2000]:
+        err(f"{rel}: experimental language skill needs the Experimental banner after the frontmatter (docs/AUTHORING.md §7)")
+
+# freshness: every skill is re-reviewed within the window (docs/AUTHORING.md §9)
+import datetime
+FRESH_MAX_DAYS = int(os.environ.get("FRESHNESS_MAX_DAYS", "180"))
+FRESH_WARN_DAYS = FRESH_MAX_DAYS - 30
+today = datetime.date.today()
+for name, (path, fm) in sorted(skill_fm.items()):
+    rel = os.path.relpath(path, root)
+    try:
+        reviewed = datetime.date.fromisoformat(str(fm.get("last_reviewed", "")).strip())
+    except ValueError:
+        err(f"{rel}: `last_reviewed` must be an ISO date (YYYY-MM-DD)"); continue
+    age = (today - reviewed).days
+    if age < 0:
+        err(f"{rel}: `last_reviewed` {reviewed} is in the future")
+    elif age > FRESH_MAX_DAYS:
+        err(f"{rel}: last reviewed {age} days ago (limit {FRESH_MAX_DAYS}) — re-review it per docs/AUTHORING.md §9 and bump `last_reviewed`")
+    elif age > FRESH_WARN_DAYS:
+        warn(f"{rel}: last reviewed {age} days ago — due for review within {FRESH_MAX_DAYS - age} days")
+
+# evals: every skill has a trigger case that loads its plugin's dependency closure (docs/AUTHORING.md §10)
+for name, (path, fm) in sorted(skill_fm.items()):
+    pdir = path.split(os.sep)[-4]
+    case = os.path.join(root, "evals", pdir, f"trigger-{name}")
+    prompt, grader = os.path.join(case, "prompt.md"), os.path.join(case, "graders", "skill-loaded.md")
+    if not (os.path.exists(prompt) and os.path.exists(grader)):
+        err(f"{os.path.relpath(path, root)}: no trigger eval — add evals/{pdir}/trigger-{name}/ (docs/AUTHORING.md §10)")
+        continue
+    if f"plugins/{pdir}\"" not in read(prompt):
+        err(f"{os.path.relpath(prompt, root)}: `plugins:` must load ../../../plugins/{pdir} and its dependencies")
+    if not re.search(r"\(" + re.escape(name) + r"\)", read(grader)):
+        err(f"{os.path.relpath(grader, root)}: grader must match skill `{name}`")
+for agent in agents_all:
+    name, pdir = os.path.basename(agent)[:-3], agent.split(os.sep)[-3]
+    cases = [os.path.join(root, "evals", pdir, c, "graders") for c in (f"delegate-{name}", f"no-delegate-{name}")]
+    if not any(os.path.isdir(c) for c in cases):
+        err(f"{os.path.relpath(agent, root)}: no agent eval — add evals/{pdir}/delegate-{name}/ (docs/AUTHORING.md §10)")
+for d in sorted(glob.glob(os.path.join(root, "evals", "*", ""))):
+    if os.path.basename(os.path.dirname(d)) not in ("results",) and not os.path.isdir(os.path.join(root, "plugins", os.path.basename(os.path.dirname(d)))):
+        err(f"evals/{os.path.basename(os.path.dirname(d))}: no plugin of that name")
 for name, (path, fm) in sorted(agent_fm.items()):
     if name.lower() in BUILTIN_NAMES and not name.startswith(("ai-toolkit",)):
         pass  # bare agent names are plugin-namespaced at runtime; collisions are documented, not an error

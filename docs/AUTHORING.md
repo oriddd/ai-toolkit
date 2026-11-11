@@ -173,7 +173,7 @@ bash tools/validate-skills.sh
 Add a banner immediately after the frontmatter:
 
 ```markdown
-> ⚠️ **Experimental.** API may change before promotion to stable.
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
 ```
 
 ```markdown
@@ -181,7 +181,8 @@ Add a banner immediately after the frontmatter:
 ```
 
 Name the replacement in backticks. Link it (`../<replacement>/SKILL.md`) only when it is in the *same* plugin (§1).
-The validator does not block on these — they are advisory.
+The validator requires the Experimental banner on every Python and React Native skill and an `Experimental — `
+prefix on those plugins' descriptions; the Deprecated banner is advisory.
 
 ## 8. Phases and languages
 
@@ -190,3 +191,57 @@ language-neutral (`ai-toolkit-workflow`) or per language (`ai-toolkit-<lang>-<ph
 the phase it belongs to — delivery workflow (commits, PRs, releases) never shares a plugin with
 implementation (errors, validation) or testing. See [`LANGUAGE_CONTRACT.md`](./LANGUAGE_CONTRACT.md)
 for naming, the required skills per language and the routing-hook convention.
+
+## 9. Freshness policy
+
+Skills pin real versions (Java 21, Spring Boot 3.5, Python 3.12, library majors), so they go stale. Every skill is
+re-reviewed at least every **180 days**; `last_reviewed` records the date of the last review.
+
+| Age of `last_reviewed` | Validator |
+| --- | --- |
+| ≤ 150 days | OK |
+| 151–180 days | warning: due for review |
+| > 180 days, or in the future | error: CI fails |
+
+A review means, for each skill:
+
+1. Check every pinned version and API against the upstream release notes (Spring Boot, Spring Framework, JDK, Maven
+   plugins, Python / npm packages, GitHub Actions) and the standards it cites (RFCs, OWASP lists).
+2. Fix what moved, keeping the skill's rules intact; record a behaviour change in `docs/CHANGELOG.md`.
+3. Run the plugin's eval suite (§10) and the repo checks.
+4. Set `last_reviewed` to today and bump the plugin version.
+
+Only bump `last_reviewed` after an actual review — never in bulk to silence the validator. A new major version of a
+pinned platform (for example Spring Boot 4) triggers a review of every skill that names it, whatever its date.
+`FRESHNESS_MAX_DAYS` overrides the window for a local run only.
+
+## 10. Evals
+
+Each plugin with skills has a `claude plugin eval` suite under `evals/<plugin>/` (Claude Code ≥ 2.1.269). The suites
+live at the repo root, not inside the plugin, because a case must load the plugin together with its `dependencies`
+(`plugins: ["../../../plugins/<plugin>", …]`) and `claude plugin eval` only loads plugins below the directory it runs
+against. A suite has three kinds of case:
+
+- **Trigger cases** (`trigger-<skill>`): a realistic task phrased the way a developer would ask, with a `tool_used`
+  grader asserting that the skill loaded. One per skill.
+- **Behaviour cases** (`behaviour-<skill>`): the agent applies the skill to a small task; `regex` graders check the
+  output for the skill's rules. Under the default with/without ablation the report shows the score with and without
+  the plugin — the before/after evidence that the skill changes the agent's output.
+- **Negative cases** (`no-trigger-*`): an unrelated request that must not load the plugin's skills.
+- **Agent cases** (`delegate-<agent>`): a small project fixture (`fixture.sh`: a Spring Boot, FastAPI or React Native
+  skeleton) and a request that names the agent, as documented in `docs/agents/CHEATSHEET.md`. Graders check that the
+  main session starts the plugin agent and that the agent itself loads its key skill. `no-delegate-*` cases check that
+  no agent starts for an unrelated question and that the main-session-only `scaffold-repo` is never run as a subagent.
+
+```bash
+bash tools/run-evals.sh                     # every trigger + negative case, 1 run, no baseline
+bash tools/run-evals.sh behaviour           # behaviour cases, 3 runs, with/without-plugin baseline
+bash tools/run-evals.sh agents              # agent cases (runs the fixture scripts, grants the Agent tool)
+claude plugin eval . --eval-dir evals --case 'trigger-persistence' --runs 1 --ablation none --trust-plugin   # one case
+```
+
+`tools/validate-skills.sh` fails when a skill has no trigger case, the case does not load the skill's plugin, or an
+agent has no agent case. Add
+the trigger case in the same PR as the skill. Evals cost API credits, so CI does not run them: run them before a
+release and after any change to a skill's `description`, and record the pass rate in `docs/CHANGELOG.md`.
+

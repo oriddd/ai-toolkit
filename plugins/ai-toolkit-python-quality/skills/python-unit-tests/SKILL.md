@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Unit Tests Skill
 ## When to use
 Whenever you add a module, fix a bug (write the failing test first) or change behaviour.

@@ -24,3 +24,5 @@ stale copies).
 3. Components render state from hooks: no fetching or business rules inside them.
 
 Postman skills apply only to Postman collections or workspaces — code standards come from this table.
+
+`CLAUDE.md` overrides skill defaults.

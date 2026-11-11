@@ -33,6 +33,6 @@ Skills apply only if LOADED — no code from memory. Load with the Skill tool as
 Agents: `ai-toolkit-java-agents:` new-endpoint, new-feature, new-validation, new-metric, new-microservice-client,
 new-kafka-consumer, refactor, scaffold-repo, test-writer, code-review; `ai-toolkit-docs:update-context`.
 
-Gates: smallest pattern that fits. Before saying done run `ai-toolkit-quality:completion-gate` (the project's build,
+Gates: smallest pattern that fits. Before done, run `ai-toolkit-quality:completion-gate` (the project's build,
 wrapper first: `mvn -B clean verify` or `./gradlew build`) and review the diff against `golden-path`. Never commit unless
-the developer asks. Postman skills are only for Postman collections/workspaces.
+the developer asks. Postman skills: Postman collections/workspaces only. `CLAUDE.md` overrides skill defaults.

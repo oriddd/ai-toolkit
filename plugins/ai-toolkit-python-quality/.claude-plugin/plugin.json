@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-python-quality",
-  "description": "Python quality phase — pytest unit and integration tests, ruff and mypy static analysis. (draft)",
-  "version": "0.3.0",
+  "description": "Experimental — Python quality phase — pytest unit and integration tests, ruff and mypy static analysis.",
+  "version": "0.4.0",
   "author": {
     "name": "oriddd"
   },

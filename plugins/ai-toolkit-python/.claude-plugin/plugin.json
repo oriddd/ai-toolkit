@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-python",
-  "description": "Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional. (draft)",
-  "version": "0.1.1",
+  "description": "Experimental — Python 3.12 / FastAPI — installs the whole Python toolkit: design, build, quality and ops skills plus the neutral workflow, docs and quality plugins. Task agents (`ai-toolkit-python-agents`) stay optional.",
+  "version": "0.2.0",
   "author": {
     "name": "oriddd"
   },

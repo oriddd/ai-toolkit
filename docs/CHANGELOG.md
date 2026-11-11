@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per
+  plugin (unrelated request; other language stack), with/without-plugin behaviour cases for 21 skills, and agent cases
+  (one per agent, on a small Spring Boot / FastAPI / React Native fixture). The validator fails when a skill or agent
+  has no case. Results are under "Eval results" below.
+- **Freshness policy** (`docs/AUTHORING.md` §9): skills are re-reviewed within 180 days; the validator warns after 150
+  and fails after 180 or on a future `last_reviewed`.
+- README: support status and prerequisites per language (Java: Java 21, Spring Boot 3.5, Maven, **Lombok**), and
+  "Defaults you can override". Routing hooks: project `CLAUDE.md` conventions override skill defaults.
+- Validator: marketplace and `plugin.json` descriptions must be identical; experimental plugins and skills must carry
+  their label.
+
+### Changed
+- RFC 7807 → **RFC 9457** (Problem Details) everywhere; the wire format is unchanged.
+- Python and React Native are **Experimental** (was "draft"): plugin descriptions start with `Experimental — ` and every
+  skill and agent carries the Experimental banner.
+- `pr-description` is host-neutral (GitHub, GitLab, Azure DevOps, Bitbucket Cloud/Server); the Bitbucket Server REST
+  procedure moved unchanged to `references/bitbucket-server.md`.
+- `external-client`: the per-dependency transport is never injectable by type alone — a named bean with `@Qualifier`,
+  or no transport bean at all (as the template does).
+- `code-structure` declares Lombok as a prerequisite of every Java skill; `ci` documents the `maven-21` Jenkins agent
+  label as a placeholder.
+
+### Fixed
+- Five plugins had different descriptions in `marketplace.json` and `plugin.json`.
+
+### Eval results (2026-11-11, Claude Code 2.1.311, default model)
+- **Routing:** 73/73 trigger cases loaded their skill; 29/29 negative cases (unrelated request, other language stack)
+  loaded none — 1 run each.
+- **Behaviour**, mean score with plugin vs without (3 runs per arm). Clear lift on 16 of 21:
+
+  | Skill | With | Without | Only with the skill |
+  | --- | --- | --- | --- |
+  | `permissions` | 1.00 | 0.00 | `PermissionsHandler` + one `PermissionsCheckStrategy` per caller, `ForbiddenException` |
+  | `request-metrics` | 1.00 | 0.00 | Filter + `MetricsRecorder`, `MonitoringConstants`, `shouldNotFilter` |
+  | `feature-flags` | 1.00 | 0.33 | `FeatureTogglePort`, kebab-case flag names |
+  | `strategy-registry-pattern` | 0.80 | 0.20 | `*Registry` over an injected `List<*Strategy>` |
+  | `git-commit-conventions` | 1.00 | 0.33 | Conventional Commit subject |
+  | `pr-description` | 1.00 | 0.33 | Problem / Solution / Key Changes / Testing |
+  | `exception-handling` | 1.00 | 0.40 | typed hierarchy, `ExceptionMessages`, `MessageFormat` |
+  | `component-tests` | 1.00 | 0.47 | `ComponentTestConfiguration`, `MessageFormat` URLs, test profile |
+  | `external-client` | 1.00 | 0.50 | `<Dep>Properties`, `RestClient.Builder.clone()`, non-2xx mapping |
+  | `api-design` | 1.00 | 0.67 | export as a sub-resource |
+  | `integration-tests` | 1.00 | 0.75 | `@Tag("integration")` |
+  | `input-validation` | 0.80 | 0.60 | Spring `Validator` for the cross-field rule |
+  | `persistence` | 1.00 | 0.80 | JPA auditing |
+  | `domain-modeling` | 1.00 | 0.80 | identifier value object |
+  | `unit-tests` | 1.00 | 0.80 | `methodName_condition_expectedResult` naming |
+  | `spring-boot-conventions` | 1.00 | 0.83 | keys in `ConfigurationConstants` |
+
+  No measurable difference — the model already follows the practice: `messaging`, `graceful-shutdown`,
+  `resilience-patterns`, `release-versioning`, `documentation-and-adr`.
+  Open: `input-validation` put the SKU rule in the injected catalogue bean, not a `*Rule` class (0/3);
+  `strategy-registry-pattern` named the interface without `Strategy` in 1 of 3 runs.
+- **Agents** (request names the agent, on a small project fixture; 1 run each): 24/24 cases pass — every agent is
+  started under its plugin name and loads its key skills; no agent starts for an unrelated question, and
+  `scaffold-repo` is never run as a subagent. The first run passed 19/24; every failure was a fixture gap that made the
+  agent stop and ask instead of guessing, which is the intended behaviour. Open: `react-native-new-screen` and
+  `new-feature` sometimes ask for clarification before loading skills (1 of 2 runs).
+
 ### Changed (breaking)
 - **Spring Boot pinned to 3.5.x** for all Java skills, templates and `create-repo` (no longer "latest").
 - **Domain exceptions are unchecked**: `BaseDomainException extends RuntimeException` with subclasses per HTTP status (400/403/404/406/409/429/503/500) and `ExceptionMessages` in `exception.constants`; `GlobalExceptionHandler` in `exception.handler`. `@Transactional` now rolls back on domain failures.

@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python FastAPI Conventions Skill
 ## When to use
 Whenever you add or change an HTTP endpoint, a router, a `Depends` provider or the application factory.
@@ -104,7 +106,7 @@ async def list_orders(
 ```
 
 ## 5. Errors are problem+json
-Every non-2xx body is RFC 7807 `application/problem+json` produced by the handlers registered by
+Every non-2xx body is RFC 9457 `application/problem+json` produced by the handlers registered by
 `python-error-handling` (domain errors, validation, framework 404/405 and the catch-all 500). Routers never build error responses by hand and never raise `HTTPException`.
 
 ## 6. URL conventions

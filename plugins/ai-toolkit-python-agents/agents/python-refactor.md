@@ -3,6 +3,8 @@ name: python-refactor
 description: Migrate a Python module, package or service from legacy anti-patterns to the canonical python-* patterns safely and incrementally, writing characterization tests first. Use when code predates the standards or a review flagged structural debt.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: Refactor Legacy Python Code
 
 > **Purpose:** Migrate a module, package or service from common anti-patterns

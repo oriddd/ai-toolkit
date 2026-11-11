@@ -11,7 +11,7 @@ set (the most complete one); Python / FastAPI and React Native follow the same s
 
 A **vendor-neutral catalogue of reusable coding patterns** (Skills) and
 **documentation templates** (Context), shipped as Claude Code plugins: per-language sets for
-Java 21 / Spring Boot, Python / FastAPI (draft) and React Native (draft), plus language-neutral
+Java 21 / Spring Boot, Python / FastAPI (experimental) and React Native (experimental), plus language-neutral
 workflow, docs and quality plugins.
 
 Core philosophy: every service you build should read like an open-source SDK —

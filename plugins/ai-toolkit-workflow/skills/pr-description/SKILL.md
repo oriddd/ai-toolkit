@@ -1,9 +1,9 @@
 ---
 name: pr-description
 description: >
-  Pull request descriptions — problem, solution, key changes, testing, notes; update the PR with `gh` on GitHub or
-  the Bitbucket Server REST API with optimistic locking. Use when creating a PR, updating its description, or
-  summarising a branch for reviewers.
+  Pull request descriptions — problem, solution, key changes, testing, notes; update the PR on any git host (GitHub,
+  GitLab, Azure DevOps, Bitbucket) without clobbering concurrent edits. Use when creating a PR, updating its
+  description, or summarising a branch for reviewers.
 tier: should
 applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [git-commit-conventions]
@@ -57,60 +57,22 @@ Breaking changes, follow-up tickets, known limitations, deployment steps, config
 > **Ask first.** Show the developer the proposed description and write it to the PR only after they approve — this is an
 > external write that the commit guard does not intercept. If they decline, hand them `description.md` to paste.
 
-**GitHub:** `gh pr edit <n> --body-file description.md` (or `gh pr create --body-file description.md` when the
-developer asked you to open the PR). **GitLab:** `glab mr update <n> --description "$(cat description.md)"`.
-**Other hosts:** use their CLI or REST API with the same rule. The rest of this section is the Bitbucket Server REST
-API, which needs care: optimistic locking and a full PUT body.
+Detect the host from `git remote get-url origin`, then use its CLI (authenticated by the developer) or REST API:
 
-Keep the token out of the process list: the helper below feeds the header to curl on stdin.
+| Host | Update an existing PR | Notes |
+| --- | --- | --- |
+| GitHub | `gh pr edit <n> --body-file description.md` | `gh pr create --body-file description.md` when the developer asked you to open it |
+| GitLab | `glab mr update <n> --description "$(cat description.md)"` | |
+| Azure DevOps | `az repos pr update --id <n> --description "$(cat description.md)"` | 4,000-character limit |
+| Bitbucket Cloud | `PUT https://api.bitbucket.org/2.0/repositories/{workspace}/{repo}/pullrequests/{id}` with `title` and `description` | token from the environment |
+| Bitbucket Server / Data Center | REST API with optimistic locking — follow [`references/bitbucket-server.md`](./references/bitbucket-server.md) | must send `version`, `title`, `reviewers` |
+| Anything else | its CLI or REST API, same rules | |
 
-```bash
-# Reads the token from the environment; never put it on a command line
-bb() { printf 'header = "Authorization: Bearer %s"\n' "$BITBUCKET_TOKEN" | curl -s -K - "$@"; }
-```
-
-### Step 1 — Fetch the current PR (captures `version` for optimistic locking, and the reviewers)
-
-```bash
-bb "https://<host>/rest/api/1.0/projects/{proj}/repos/{repo}/pull-requests/{id}" > pr.json
-jq '{id, title, description, version, reviewers: [.reviewers[] | {user: {name: .user.name}}]}' pr.json
-```
-
-Note the `version` integer — it is required for the update call. Keep the `reviewers` list: on some server versions a
-PUT without it replaces the reviewers with an empty list.
-
-### Step 2 — Replace the description
-
-Write the new description to a file and let `jq` build the JSON — hand-escaping quotes and newlines breaks on real text:
-
-```bash
-body="$(mktemp)"
-jq --rawfile description description.md \
-   '{version, title, description: $description, reviewers: [.reviewers[] | {user: {name: .user.name}}]}' \
-   pr.json > "$body"   # version, title and reviewers come unchanged from Step 1
-bb -X PUT \
-  -H "Content-Type: application/json" \
-  --data @"$body" \
-  "https://<host>/rest/api/1.0/projects/{proj}/repos/{repo}/pull-requests/{id}"
-rm -f "$body" pr.json
-```
-
-**Important:**
-- `version` must match the current version or the server returns `409 Conflict`
-- `title` must always be included in the PUT body (it resets to empty if omitted)
-- `reviewers` must be sent unchanged (some versions drop reviewers that are missing from the body)
-- The description must be a valid JSON string — let `jq --rawfile` (Step 2) escape newlines and quotes; never hand-escape
-- On `409`, re-fetch the PR to get the latest `version` and retry
-
-### Parsing a PR URL
-
-Given `https://<host>/projects/PROJ/repos/my-service/pull-requests/42`:
-
-| Segment   | Value       | Position in URL              |
-|-----------|-------------|------------------------------|
-| `project` | `PROJ`      | `/projects/{project}/`       |
-| `repo`    | `my-service`| `/repos/{repo}/`             |
-| `PR_ID`   | `42`        | `/pull-requests/{PR_ID}`     |
+Rules on every host:
+- Read the token from the environment and keep it off the command line (feed headers to `curl -K -` on stdin).
+- Fetch the PR first and send back every field you do not mean to change; on a concurrent-edit conflict, re-fetch and
+  retry — never overwrite someone else's edit blindly.
+- Build JSON bodies with `jq --rawfile`, never by hand-escaping quotes and newlines.
 
 ---
 
@@ -166,7 +128,7 @@ Before calling the PR "described":
 - [ ] Testing section names at least the test class(es) added or the manual steps taken
 - [ ] Any state machine, non-trivial algorithm, or data flow has a diagram or numbered walkthrough
 - [ ] Notes lists any breaking changes, config changes, or follow-up work
-- [ ] After the developer approved, the description was written to the PR (Bitbucket: with the current `version`, no `409`, reviewers kept) — or handed to the developer to paste
+- [ ] After the developer approved, the description was written to the PR (fields you did not change sent back unchanged, no conflict) — or handed to the developer to paste
 
 ---
 
@@ -175,8 +137,8 @@ Before calling the PR "described":
 | ❌ Don't | ✅ Do instead |
 |---|---|
 | Write only a ticket ID as the description | Always add a human summary alongside the ticket reference |
-| Forget to include `title` in the PUT body | Always copy the current `title` (and `reviewers`) into the update payload |
-| Skip optimistic locking (`version`) | Fetch the current PR first; use its `version` in the PUT |
+| Send a partial update body the host treats as a full replace | Copy the current `title` (and `reviewers`, where the API needs them) into the payload |
+| Overwrite a concurrent edit | Fetch the current PR first; use its version / ETag where the host supports it |
 | Write what changed (the diff) | Write *why* it changed and what the effect is |
 | Leave the description blank until "later" | Write a draft description before requesting the first review |
 | Describe every file individually | Group by logical concern; omit trivial files (test helpers, imports) |

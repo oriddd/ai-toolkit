@@ -3,6 +3,8 @@ name: python-new-feature
 description: Implement a multi-layer feature in a Python/FastAPI service from scratch — endpoint(s), persistence, downstream calls, validation, tests and docs. Use when a request spans several layers rather than a single endpoint.
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Agent: New Feature (End-to-End, Python)
 
 > **Purpose:** Implement a multi-layer feature from scratch — endpoint(s),

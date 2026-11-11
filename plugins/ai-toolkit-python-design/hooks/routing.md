@@ -25,3 +25,5 @@ stale copies).
 3. Never commit unless the developer asks; before commit / PR, check the diff against the loaded skills' Do/Don't lists.
 
 Postman skills apply only to Postman collections or workspaces — code standards come from this table.
+
+`CLAUDE.md` overrides skill defaults.

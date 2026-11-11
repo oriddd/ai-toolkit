@@ -12,6 +12,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Static Analysis Skill
 ## When to use
 When creating a repo, configuring tooling, or whenever `ruff` / `mypy` reports a problem.

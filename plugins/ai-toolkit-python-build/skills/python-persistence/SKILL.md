@@ -13,6 +13,8 @@ version: 1.0
 last_reviewed: 2026-11-03
 ---
 
+> ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
+
 # Python Persistence Skill
 ## When to use
 Whenever a service reads or writes a relational database, adds an entity, or changes the schema.
