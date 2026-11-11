@@ -136,7 +136,7 @@ public interface OutboxRepository extends JpaRepository<OutboxEntity, UUID> {
 ```
 
 Stopping at the first failed row keeps per-aggregate order. **One active
-relay** (ShedLock, as for every `@Scheduled` job) is the default. Several
+relay** (ShedLock, as for every `@Scheduled` job — setup in `references/delivery-and-testing.md`) is the default. Several
 concurrent relays with `SELECT … FOR UPDATE SKIP LOCKED` scale further but
 break per-aggregate ordering unless each relay locks whole aggregates
 (e.g. `pg_try_advisory_xact_lock(hashtext(aggregate_id))`) ordered by

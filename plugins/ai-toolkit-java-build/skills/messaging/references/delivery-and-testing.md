@@ -20,6 +20,41 @@ For high-throughput services, the outbox table can grow rapidly:
   "exactly-once effect" = at-least-once delivery + the idempotent consumer
   (§4) + the outbox (§3). That is the default for every service here.
 
+### ShedLock for the relay (and every `@Scheduled` job)
+
+```xml
+<dependency><groupId>net.javacrumbs.shedlock</groupId><artifactId>shedlock-spring</artifactId><version>6.10.0</version></dependency>
+<dependency><groupId>net.javacrumbs.shedlock</groupId><artifactId>shedlock-provider-jdbc-template</artifactId><version>6.10.0</version></dependency>
+```
+
+```java
+@Configuration
+@EnableScheduling
+@EnableSchedulerLock(defaultLockAtMostFor = "PT1M")
+@Profile("!component-test")                                  // component tests have no DataSource (component-tests §3b)
+class ShedLockConfig {
+    @Bean
+    LockProvider lockProvider(DataSource dataSource) {
+        return new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
+                .withJdbcTemplate(new JdbcTemplate(dataSource))
+                .usingDbTime()                               // one clock for every pod
+                .build());
+    }
+}
+```
+
+```sql
+-- V00x__create_shedlock.sql
+CREATE TABLE shedlock (
+    name       VARCHAR(64)  NOT NULL PRIMARY KEY,
+    lock_until TIMESTAMP    NOT NULL,
+    locked_at  TIMESTAMP    NOT NULL,
+    locked_by  VARCHAR(255) NOT NULL
+);
+```
+
+6.10.0 is the release verified on Spring Boot 3.5; check the ShedLock release notes before moving to 7.x.
+
 ## 7. Testing
 
 - **Unit tests** use a pure Mockito mock of the producer interface — no

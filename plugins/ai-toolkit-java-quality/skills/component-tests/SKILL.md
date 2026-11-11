@@ -63,6 +63,10 @@ A `@TestConfiguration` annotated with `@Profile("component-test")` that:
   when the operation under test is slow (file conversion, ML inference, …).
 - Provides `@Primary` mocks for every collaborator that touches the network
   or filesystem (e.g. `PermissionsHandler`, HTTP clients, blob-store / file-store clients).
+  A client class that carries Resilience4j annotations (`@CircuitBreaker(fallbackMethod = …)`) is proxied even as a
+  mock, so a fault the mock throws lands in the mock's fallback — fake it with
+  `mock(Client.class, withSettings().defaultAnswer(CALLS_REAL_METHODS))` or fake the layer below the annotations.
+  Name test beans differently from production ones (`fakeInventoryClient`) to avoid `BeanDefinitionOverrideException`.
   These mocks must be **deterministic** – branch on the input (file id, doc
   id, request body) so a single test class can exercise success, forbidden,
   not-found, and internal-error paths from one fixture set.
@@ -160,7 +164,17 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
       - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+  kafka:                              # services with messaging: no broker in component tests
+    listener.auto-startup: false
+    admin.auto-create: false
 ```
+
+- Excluding JPA also removes the `PlatformTransactionManager`, so `@Transactional` and an injected
+  `TransactionTemplate` fail. Register a no-op `AbstractPlatformTransactionManager` bean in
+  `ComponentTestConfiguration` (its `doGetTransaction` returns a new `Object()`, `doBegin`/`doCommit`/`doRollback` do
+  nothing) — the fakes hold the state, so there is nothing to roll back.
+- With messaging, also drop listener startup and topic creation (above) and fake the `KafkaTemplate` /
+  publisher port; `@RetryableTopic` and `@KafkaListener` containers otherwise retry `localhost:9092` in every context.
 
 - Without a `DataSource` Boot creates no `EntityManagerFactory` and no Spring Data repositories, so each repository
   the service injects needs a bean in `ComponentTestConfiguration` — an in-process fake when the repository is a

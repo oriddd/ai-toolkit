@@ -79,13 +79,13 @@ exceptions, and `@Transactional` rolls back on them by default.
 public abstract class BaseDomainException extends RuntimeException {
     private final String errorCode;
     protected BaseDomainException(String errorCode, String message)                  { super(message); this.errorCode = errorCode; }
-    protected BaseDomainException(String errorCode, String message, Throwable cause) { super(message, cause); this.errorCode = errorCode; }
+    protected BaseDomainException(String errorCode, String message, @Nullable Throwable cause) { super(message, cause); this.errorCode = errorCode; }
     public String getErrorCode() { return errorCode; }
 }
 
 public class BadRequestException extends BaseDomainException {
     public BadRequestException(String errorCode, String message)                  { super(errorCode, message); }
-    public BadRequestException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+    public BadRequestException(String errorCode, String message, @Nullable Throwable cause) { super(errorCode, message, cause); }
 }
 // …Forbidden / NotFound / Conflict / TooManyRequests / Unavailable similarly
 ```
@@ -123,7 +123,7 @@ public final class ExceptionMessages {
     public static NotFoundException resourceNotFound(String type, String id) {
         return new NotFoundException(ERR_NOT_FOUND, MessageFormat.format(RESOURCE_NOT_FOUND, type + " " + id));
     }
-    public static UnavailableException dependencyUnavailable(String dependency, Throwable cause) {
+    public static UnavailableException dependencyUnavailable(String dependency, @Nullable Throwable cause) {
         return new UnavailableException(ERR_UNAVAILABLE, MessageFormat.format(DEPENDENCY_UNAVAILABLE, dependency), cause);
     }
 }

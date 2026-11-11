@@ -1,16 +1,17 @@
 package {{basePackage}}.exception;
+import org.jspecify.annotations.Nullable;
 import java.time.Duration;
 import java.util.Optional;
 /** Maps to 429 — the caller exceeded its rate limit. An optional retryAfter becomes the Retry-After header. */
 public class TooManyRequestsException extends BaseDomainException {
     private final Duration retryAfter;
     public TooManyRequestsException(String errorCode, String message) { this(errorCode, message, Duration.ZERO); }
-    public TooManyRequestsException(String errorCode, String message, Throwable cause) { this(errorCode, message, cause, Duration.ZERO); }
+    public TooManyRequestsException(String errorCode, String message, @Nullable Throwable cause) { this(errorCode, message, cause, Duration.ZERO); }
     public TooManyRequestsException(String errorCode, String message, Duration retryAfter) {
         super(errorCode, message);
         this.retryAfter = retryAfter;
     }
-    public TooManyRequestsException(String errorCode, String message, Throwable cause, Duration retryAfter) {
+    public TooManyRequestsException(String errorCode, String message, @Nullable Throwable cause, Duration retryAfter) {
         super(errorCode, message, cause);
         this.retryAfter = retryAfter;
     }

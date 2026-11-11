@@ -1,5 +1,7 @@
 package {{basePackage}}.exception;
+
+import org.jspecify.annotations.Nullable;
 public class NotFoundException extends BaseDomainException {
     public NotFoundException(String errorCode, String message) { super(errorCode, message); }
-    public NotFoundException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+    public NotFoundException(String errorCode, String message, @Nullable Throwable cause) { super(errorCode, message, cause); }
 }

@@ -1,6 +1,8 @@
 package {{basePackage}}.exception;
+
+import org.jspecify.annotations.Nullable;
 /** A downstream answered with an unexpected non-2xx that is not an outage (e.g. a 4xx caused by our request). Maps to 500. */
 public class DependencyException extends BaseDomainException {
     public DependencyException(String errorCode, String message) { super(errorCode, message); }
-    public DependencyException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+    public DependencyException(String errorCode, String message, @Nullable Throwable cause) { super(errorCode, message, cause); }
 }

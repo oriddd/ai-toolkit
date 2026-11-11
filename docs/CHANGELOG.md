@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `react-native-ci` 1.00 vs 0.33), 6 where the model already follows the practice (`documentation-and-adr`,
   `messaging`, `resilience-patterns`, `graceful-shutdown`, `python-unit-tests`, `release-versioning`).
   Open: `strategy-registry-pattern` 0.80 and `react-native-state-and-data` 0.80 (`safeParse` at the edge 0/3).
+- Clean Java rebuild (a fresh agent follows create-repo and the skills literally: REST + JWT + JPA/Flyway + Kafka
+  outbox + metrics + health): BUILD SUCCESS — 154 tests, JaCoCo 85/75 per class, PIT 93 %, Spotless, Checkstyle,
+  SpotBugs, Error Prone/NullAway clean, Helm lint strict. It needed 4 workarounds (the previous audit needed 9); all
+  are fixed here: `@Nullable` exception causes (+ JSpecify in the ci pom), a transaction manager and Kafka switches for
+  component tests with persistence/messaging, Resilience4j-annotated client mocks, a parseable health-indicator test
+  URL; ShedLock setup documented. Testcontainers ITs did not run (no Docker).
 
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per
