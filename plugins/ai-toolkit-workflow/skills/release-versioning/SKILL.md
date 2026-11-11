@@ -10,7 +10,7 @@ depends_on: [git-commit-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Release & Versioning Skill
@@ -38,7 +38,11 @@ Every commit message:
 | `!` after any type/scope (`feat!:`, `fix(api)!:`) or a `BREAKING CHANGE:` footer — either is enough | **Major** bump |
 
 Enforced by `commitlint` (npm) in pre-commit / CI (see `git-commit-conventions` for the local commit-msg hook).
-commitlint skips merge and `fixup!` / `squash!` commits by default.
+commitlint skips merge and `fixup!` / `squash!` commits by default. Use this one config file name everywhere: the
+GitHub action reads `commitlint.config.mjs` by default and the Jenkins `npx` command finds it too.
+
+Actions are pinned to a full commit SHA with the release in a comment (a tag can be re-pointed); Dependabot /
+Renovate (`github-actions`) bump both. The SHAs below are the releases current when this skill was reviewed.
 
 ```js
 // commitlint.config.mjs
@@ -54,9 +58,9 @@ jobs:
   commitlint:            # this job name is the required status check in branch protection
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }   # commitlint needs the whole PR range
-      - uses: wagoid/commitlint-github-action@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }   # commitlint needs the whole PR range
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed  # v6.2.1
 ```
 
 On Jenkins (`ci`), run the same check in a PR-only stage:
@@ -93,13 +97,14 @@ jobs:
   rp:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         # A tag or release created with the default GITHUB_TOKEN does not trigger other workflows, so the
         # image build on `v*` tags would never run. Use a PAT or GitHub App token (same as `github-actions-ci`).
-        with: { token: "${{ secrets.RELEASE_PLEASE_TOKEN }}" }   # settings come from the two files below
+        with: { token: "${{ secrets.RELEASE_PLEASE_TOKEN }}" }   # no release-type: settings come from the two files below
 ```
 
-Package settings live in two files at the repo root (v4 has no `package-name` input). `release-type` is `maven`,
+Package settings live in two files at the repo root (the action has no `package-name` input, and a `release-type`
+input would switch it to single-package mode and ignore these files). `release-type` is `maven`,
 `python`, `node` or `simple` per stack; `extra-files` keeps the Helm chart's `appVersion` equal to the release (§6);
 the manifest holds the last released version and the bot updates it.
 

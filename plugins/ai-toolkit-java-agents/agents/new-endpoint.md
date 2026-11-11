@@ -62,7 +62,8 @@ abstraction.
    a. Update api.yaml (if openapi-first) — operationId, request/response
       schemas, response codes; under openapi-first the controller gets no
       springdoc annotations (code-first: springdoc `@Operation`).
-   b. Controller method — @Validated, correct HTTP annotations, delegates
+   b. Controller method — `@Valid` request body / Jakarta constraints on parameters (Boot 3.5 built-in method
+      validation: no class-level `@Validated`), correct HTTP annotations, delegates
       to one *Operation, returns ResponseEntity.
    c. *Operation class — permission check, service orchestration, no HTTP
       types.
@@ -134,7 +135,8 @@ diff, including untracked files.
 ## Checklist before returning
 
 - [ ] URL is plural noun, kebab-case, versioned per `ai-toolkit-java-design:api-design` §3 (e.g. `/api/v1/…`).
-- [ ] Controller class has `@Validated`.
+- [ ] Parameter constraints are enforced by Boot 3.5 built-in method validation — **no** class-level `@Validated` on the
+      controller (it switches to `ConstraintViolationException`, `input-validation` §2c).
 - [ ] Operation contains permission check before any service call.
 - [ ] All 4xx cases return RFC 9457 ProblemDetail.
 - [ ] No business logic in the controller.

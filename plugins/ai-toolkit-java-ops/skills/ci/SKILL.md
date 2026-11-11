@@ -10,7 +10,7 @@ depends_on: [static-analysis]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # CI Skill
@@ -193,10 +193,11 @@ pipeline {
     }
     stage('Dependency scan') {
       // OWASP dependency-check (security-hardening). Without an NVD API key the NVD download is throttled and very
-      // slow: store the key as a Jenkins secret-text credential. Fails on CVSS >= 7.
+      // slow: store the key as a Jenkins secret-text credential. The plugin reads it from the environment variable, so the
+      // key never appears on the command line (`ps`) or in Maven debug output. Fails on CVSS >= 7.
       steps {
         withCredentials([string(credentialsId: '{{nvdApiKeyCredentialsId}}', variable: 'NVD_API_KEY')]) {
-          sh 'mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DnvdApiKey="$NVD_API_KEY"'
+          sh 'mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DnvdApiKeyEnvironmentVariable=NVD_API_KEY'
         }
       }
     }
@@ -239,8 +240,12 @@ dependency-check). The agent label `maven-21` stands for any Jenkins agent with 
 Trivy — rename it to the label your Jenkins uses. The image is scanned with Trivy before it is pushed, failing on HIGH/CRITICAL (same policy as
 `github-actions-ci`); pin the `dependency-check-maven` version in the pom's `pluginManagement` and the Trivy version on
 the agent, both kept current by Renovate. Required Jenkins plugins: Pipeline, JUnit, Coverage, Credentials Binding,
-Email Extension (for `emailextrecipients`). The `Commit messages` stage needs Node.js on the agent and a
-`.commitlintrc.json` with `{"extends": ["@commitlint/config-conventional"]}` at the repo root.
+Email Extension (for `emailextrecipients`). The `Commit messages` stage needs Node.js on the agent and the
+`commitlint.config.mjs` from `release-versioning` §1 (`export default { extends: ['@commitlint/config-conventional'] };`)
+at the repo root — the same file the GitHub `commitlint` action reads by default. It also needs `origin/<target branch>`
+and the history back to the merge base: keep the checkout non-shallow, and if the branch source's PR strategy does not
+fetch the target branch (it does when PRs are merged with the target), add `+refs/heads/*:refs/remotes/origin/*` to its
+refspecs. `nvdApiKeyEnvironmentVariable` needs dependency-check-maven 10 or newer (verified on 13.0.0).
 
 This pipeline is **deliberately vanilla** — no `@Library('…')` import,
 no custom DSL, no environment-specific image registry. You can replace

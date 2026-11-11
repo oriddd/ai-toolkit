@@ -16,7 +16,7 @@ public class CacheAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(CachePort.class)        // safe fallback — cache is a harmless capability
     CachePort noOpCachePort() {
-        return new NoOpCacheAdapter();
+        return new NoOpCacheAdapter();                // adapter/cache/noop/: public, it is created from config/cache/
     }
 }
 ```
@@ -61,7 +61,7 @@ public class InfinispanCacheConfiguration {
 # application.yaml — swap the whole technology with ONE line
 platform:
   cache:
-    provider: redis        # redis | infinispan | noop
+    provider: redis        # redis | infinispan | http | noop
 ```
 
 Register the auto-configuration in
@@ -169,11 +169,11 @@ One typed `@ConfigurationProperties` record per capability (see
 @Validated                                          // without it @NotNull is never checked
 @ConfigurationProperties(prefix = "platform.cache")
 public record CacheProperties(
-        @NotNull Provider provider,                 // enum: REDIS, INFINISPAN, NOOP
+        @NotNull Provider provider,                 // enum: REDIS, INFINISPAN, HTTP, NOOP
         CompositionMode mode,                       // default SINGLE
         List<String> providers,                     // for multi-provider modes
         Duration defaultTtl) {
-    public enum Provider { REDIS, INFINISPAN, NOOP }
+    public enum Provider { REDIS, INFINISPAN, HTTP, NOOP }   // one constant per havingValue (HTTP: external-client CacheClientConfig)
     public CacheProperties {
         if (mode == null) mode = CompositionMode.SINGLE;
         if (providers == null) providers = List.of();

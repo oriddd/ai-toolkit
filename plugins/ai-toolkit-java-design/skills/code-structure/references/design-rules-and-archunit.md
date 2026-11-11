@@ -36,8 +36,12 @@ Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings 
   need.
 - Make `public` only types that appear in another package's signature or
   that a downstream module (auto-config, tests in another package) must see.
-- In libraries, route internals through an `internal/` sub-package and keep
-  them package-private (see `sdk-publishing`).
+- In libraries, route internals through an `internal/` sub-package. Classes
+  the auto-configuration (a different package) instantiates must be `public` —
+  package-private would not compile; keep consumers out by not exporting the
+  package (JPMS `exports`, `@API(status = INTERNAL)`) and never returning an
+  internal type from `api/` (see `sdk-publishing`). Everything else in
+  `internal/` stays package-private.
 - `@Component` classes can be package-private — Spring scans them and the
   injection point only depends on the interface they implement.
 
@@ -68,7 +72,7 @@ class ArchitectureTest {
         .consideringOnlyDependenciesInLayers()   // config/, adapter/, spi/, acl/, domain/, event/ … are not layers, so they are not flagged
         .optionalLayer("Controller").definedBy("..controller..")   // optional: event-driven / scheduler services have none
         .optionalLayer("Operation").definedBy("..operation..")
-        .layer("Service").definedBy("..service..")
+        .optionalLayer("Service").definedBy("..service..")   // optional: an empty skeleton / thin consumer has none yet
         .optionalLayer("Repository").definedBy("..repository..")
         .optionalLayer("Scheduler").definedBy("..scheduler..")
         .optionalLayer("Health").definedBy("..health..")
@@ -96,12 +100,14 @@ class ArchitectureTest {
 
     @ArchTest static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")
-            .should().haveSimpleNameEndingWith("Controller");
+            .should().haveSimpleNameEndingWith("Controller")
+            .allowEmptyShould(true);
 
     // ArchUnit has no notDependOnClassesThat(): express "must not depend" with noClasses()
     @ArchTest static final ArchRule controllersAreThin =
         noClasses().that().resideInAPackage("..controller..")
-            .should().dependOnClassesThat().resideInAPackage("..client..");
+            .should().dependOnClassesThat().resideInAPackage("..client..")
+            .allowEmptyShould(true);
 
     // match the whole HTTP-client packages (WebClient, RestClient and their Builders, exchange types, …);
     // client/ wraps them, adapter/ holds HTTP-based vendor adapters, config/ and health/ build the beans
@@ -111,9 +117,9 @@ class ArchitectureTest {
                 "org.springframework.web.reactive.function.client..",
                 "org.springframework.web.client..");
 
-    // config/ is allowed so JPA auditing (persistence AuditConfig) can read the current principal
+    // the JPA AuditorAware (persistence SecurityAuditorAware) lives in permission/ too; config/AuditConfig only enables auditing
     @ArchTest static final ArchRule securityHolderLivesInPermissionOnly =
-        noClasses().that().resideOutsideOfPackages("..permission..", "..config..")
+        noClasses().that().resideOutsideOfPackage("..permission..")
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.security.core.context.SecurityContextHolder");
 }
 ```

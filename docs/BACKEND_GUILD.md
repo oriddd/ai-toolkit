@@ -191,10 +191,18 @@ graph LR
   cd --> create_repo
   local_dev_experience --> create_repo
   python_code_structure --> python_error_handling
+  python_code_structure --> python_external_client
+  python_error_handling --> python_external_client
   python_code_structure --> python_input_validation
   python_error_handling --> python_input_validation
+  python_code_structure --> python_messaging
+  python_persistence --> python_messaging
+  python_error_handling --> python_messaging
   python_code_structure --> python_persistence
   python_error_handling --> python_persistence
+  python_code_structure --> python_security
+  python_fastapi_conventions --> python_security
+  python_error_handling --> python_security
   python_code_structure --> python_fastapi_conventions
   python_static_analysis --> python_ci
   python_unit_tests --> python_ci

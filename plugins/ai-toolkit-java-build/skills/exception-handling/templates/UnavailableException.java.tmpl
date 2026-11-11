@@ -1,6 +1,21 @@
 package {{basePackage}}.exception;
-/** Maps to 503 — a downstream dependency is down or timed out (retryable). */
+import java.time.Duration;
+import java.util.Optional;
+/** Maps to 503 — a downstream dependency is down or timed out (retryable). An optional retryAfter becomes the Retry-After header. */
 public class UnavailableException extends BaseDomainException {
-    public UnavailableException(String errorCode, String message) { super(errorCode, message); }
-    public UnavailableException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+    private final Duration retryAfter;
+    public UnavailableException(String errorCode, String message) { this(errorCode, message, Duration.ZERO); }
+    public UnavailableException(String errorCode, String message, Throwable cause) { this(errorCode, message, cause, Duration.ZERO); }
+    public UnavailableException(String errorCode, String message, Duration retryAfter) {
+        super(errorCode, message);
+        this.retryAfter = retryAfter;
+    }
+    public UnavailableException(String errorCode, String message, Throwable cause, Duration retryAfter) {
+        super(errorCode, message, cause);
+        this.retryAfter = retryAfter;
+    }
+    /** Empty when the thrower did not know how long to wait; the advice then sends its default. */
+    public Optional<Duration> getRetryAfter() {
+        return retryAfter.isZero() || retryAfter.isNegative() ? Optional.empty() : Optional.of(retryAfter);
+    }
 }

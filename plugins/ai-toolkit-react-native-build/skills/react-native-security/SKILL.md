@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure, react-native-input-validation]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -38,7 +38,8 @@ features/links/model/linkSchemas.ts
 { "dependencies": { "react-native-keychain": "^11.0.0", "react-native-url-polyfill": "^4.0.0" } }
 ```
 
-(Expo apps may use `expo-secure-store` behind the same interface.) `react-native-keychain` 11 peers on
+(Expo apps may use `expo-secure-store` behind the same interface, added with `npx expo install expo-secure-store` so it
+matches the SDK.) `react-native-keychain` 11 peers on
 React Native >= 0.82; an older app stays on the newest major that supports its React Native version.
 
 ## 1. Secure storage behind an interface
@@ -117,6 +118,11 @@ export function resolveDeepLink(url: string): Route | null {
 Minimum React Native: with `react-native-url-polyfill` installed there is no minimum for this code. Without it,
 use only a React Native release whose `URL` implements these getters (not 0.79 or earlier) and unit-test
 `resolveDeepLink` in the app's own test setup. Do not hand-parse links with regexes.
+
+Wire it once: every incoming URL (the initial one from `Linking.getInitialURL()` and later ones from
+`Linking.addEventListener('url', ...)`, or React Navigation's `linking.getStateFromPath`) goes through `resolveDeepLink`,
+and a `null` result is ignored (the app stays where it is). Test the mapping as a pure function (`react-native-unit-tests`)
+and the entry as one Maestro flow (`react-native-e2e-tests`).
 
 Prefer verified universal/app links over custom schemes. Never navigate to a route or open a URL taken
 from a link without the allow-list. Links never carry tokens or trigger a state-changing action without a confirm step.

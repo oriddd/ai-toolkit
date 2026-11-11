@@ -10,7 +10,7 @@ depends_on: [react-native-error-handling, react-native-security, react-native-ci
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -28,6 +28,7 @@ fakeable, and feature code never imports an SDK directly.
 shared/services/
 ├── observability/
 │   ├── initSentry.ts          # the only file that calls Sentry.init
+│   ├── scrubPii.ts            # scrubEvent / scrubBreadcrumb, exported and unit-tested
 │   └── SentryErrorReporter.ts # implements ErrorReporter
 ├── logger/Logger.ts  ConsoleLogger.ts  SentryBreadcrumbLogger.ts
 └── analytics/
@@ -43,20 +44,36 @@ test/fakes/FakeAnalytics.ts
 { "dependencies": { "@sentry/react-native": "<current>" } }
 ```
 
-`<current>`: pin the latest stable `@sentry/react-native` release (same version as `react-native-error-handling`).
+`<current>`: in an Expo app, `npx expo install @sentry/react-native` (the version the SDK is built against, SDK 58:
+`~8.28.0`); in a bare app, the latest stable release. Same version as `react-native-error-handling`.
 
 ## 1. Sentry init, once, early
 
 ```ts
-// shared/config/env.ts: build-time configuration, filled from app.config / EXPO_PUBLIC_* (all public)
-export type AppEnv = {
-  name: 'development' | 'staging' | 'production';
-  apiBaseUrl: string;
-  sentryDsn: string;
-  appId: string;
-  version: string;
-  buildNumber: string;                        // a string even when numeric: Sentry's `dist` is a string
-};
+// shared/config/env.ts: build-time configuration, all public (react-native-security §2), parsed once at startup
+const appEnvSchema = z.object({
+  name: z.enum(['development', 'staging', 'production']),
+  apiBaseUrl: z.url({ protocol: /^https$/ }),
+  sentryDsn: z.string(),
+  appId: z.string().min(1),
+  version: z.string().min(1),
+  buildNumber: z.string().min(1),             // a string even when numeric: Sentry's `dist` is a string
+});
+export type AppEnv = z.infer<typeof appEnvSchema>;
+export const parseEnv = (raw: unknown): AppEnv => appEnvSchema.parse(raw);   // a bad build fails at launch, loudly
+
+// app/env.ts: Expo inlines each `process.env.EXPO_PUBLIC_*` at build time, so write every reference out in full
+// (no destructuring, no `process.env[name]`); tests call parseEnv directly
+export const env = parseEnv({ name: process.env.EXPO_PUBLIC_APP_ENV, apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+  sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '', appId: process.env.EXPO_PUBLIC_APP_ID,
+  version: process.env.EXPO_PUBLIC_APP_VERSION, buildNumber: process.env.EXPO_PUBLIC_BUILD_NUMBER });
+```
+
+Expo types `process.env` with an `any` index signature, so each read fails `no-unsafe-assignment`. Declare the
+variables once in `shared/config/processEnv.d.ts`:
+`declare global { namespace NodeJS { interface ProcessEnv { EXPO_PUBLIC_API_BASE_URL?: string; /* one per variable */ } } } export {};`
+
+```ts
 
 // shared/services/observability/initSentry.ts
 export function initSentry(env: AppEnv) {
@@ -66,7 +83,7 @@ export function initSentry(env: AppEnv) {
     release: `${env.appId}@${env.version}+${env.buildNumber}`,
     dist: env.buildNumber,
     enabled: !__DEV__,
-    sendDefaultPii: false,                    // no IP, cookies or user details attached automatically
+    sendDefaultPii: false,                    // no IP, cookies or user details attached automatically; never true
     tracesSampleRate: env.name === 'production' ? 0.1 : 1.0,
     enableAutoPerformanceTracing: true,
     beforeSend: scrubEvent,                   // section 2
@@ -77,11 +94,17 @@ export function initSentry(env: AppEnv) {
 // App.tsx: initSentry(env) before render; export default Sentry.wrap(App);
 ```
 
+On `@sentry/react-native` 8.28 (Expo SDK 58) `no-deprecated` reports `sendDefaultPii` through a typings bug (the core
+option it inherits is deprecated for `dataCollection`, which the React Native options do not accept); 8.34 fixed it.
+There, delete the line rather than disable the rule: `false` is the default.
+
 ## 2. PII scrubbing
 
-Errors, transactions and breadcrumbs all leave the device, so all three are scrubbed:
+Errors, transactions and breadcrumbs all leave the device, so all three are scrubbed. The scrubbers live in
+`scrubPii.ts`, exported, so `react-native-unit-tests` can prove each rule:
 
 ```ts
+// shared/services/observability/scrubPii.ts
 const SENSITIVE_KEY = /pass|token|secret|auth|cookie|email|phone|address/i;
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
 const scrubText = (s: string) => s.replace(EMAIL, '[email]');
@@ -91,7 +114,7 @@ const redact = (data: Record<string, unknown>) =>
     k, SENSITIVE_KEY.test(k) ? '[redacted]' : typeof v === 'string' ? scrubText(stripQuery(v)) : v,
   ]));
 
-function scrubEvent<E extends Sentry.Event>(event: E): E {
+export function scrubEvent<E extends Sentry.Event>(event: E): E {
   if (event.user) event.user = event.user.id === undefined ? {} : { id: event.user.id };  // opaque id only
   if (event.request)
     event.request = {                                   // no headers, cookies, body or query string
@@ -104,7 +127,7 @@ function scrubEvent<E extends Sentry.Event>(event: E): E {
   return event;
 }
 
-const scrubBreadcrumb = (crumb: Sentry.Breadcrumb): Sentry.Breadcrumb => ({
+export const scrubBreadcrumb = (crumb: Sentry.Breadcrumb): Sentry.Breadcrumb => ({
   ...crumb,
   ...(crumb.message && { message: scrubText(crumb.message) }),
   ...(crumb.data && { data: redact(crumb.data) }),      // http breadcrumbs carry the URL in data.url

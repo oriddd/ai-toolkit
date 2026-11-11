@@ -57,11 +57,14 @@ skill:project-types
 skill:python-ci
 skill:python-code-structure
 skill:python-error-handling
+skill:python-external-client
 skill:python-fastapi-conventions
 skill:python-input-validation
 skill:python-integration-tests
+skill:python-messaging
 skill:python-observability
 skill:python-persistence
+skill:python-security
 skill:python-static-analysis
 skill:python-unit-tests
 skill:quality-review

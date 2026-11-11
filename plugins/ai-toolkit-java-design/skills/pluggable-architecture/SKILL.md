@@ -10,7 +10,7 @@ depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-30
+last_reviewed: 2026-11-11
 ---
 
 # Pluggable Architecture Skill
@@ -86,7 +86,8 @@ Rules:
 - **`adapter/<capability>/<vendor>/`** is the *only* place a vendor SDK may be
   imported. It holds the adapter and a `public` vendor `@Configuration` class that
   creates the adapter bean. Because that configuration sits in the same package,
-  the adapter itself can stay `package-private`.
+  the adapter itself can stay `package-private`. An adapter that `config/x/`
+  creates itself (the `NoOp` fallback) must be `public`.
 - **`config/x/`** holds the conditional wiring and nothing else — no business
   logic, no vendor calls, no vendor imports: it `@Import`s the vendor
   configurations and declares the fallback, guarded by `@ConditionalOn…`.

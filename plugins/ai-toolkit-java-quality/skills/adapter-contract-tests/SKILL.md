@@ -10,7 +10,7 @@ depends_on: [pluggable-architecture, unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-30
+last_reviewed: 2026-11-11
 ---
 
 # Adapter Contract Tests Skill
@@ -65,22 +65,22 @@ public abstract class CachePortContract {
 
     protected CachePort cache;
 
-    @BeforeEach void setUp() { clearBackend(); cache = newCache(); }
+    @BeforeEach protected void setUp() { clearBackend(); cache = newCache(); }
 
     @Test
-    void get_missingKey_returnsEmpty() {
+    protected void get_missingKey_returnsEmpty() {
         assertThat(cache.get(new CacheKey("absent"))).isEmpty();
     }
 
     @Test
-    void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).map(b -> new String(b, UTF_8)).contains("v1");
     }
 
     @Test
-    void evict_storedKey_removesValue() {
+    protected void evict_storedKey_removesValue() {
         var key = new CacheKey("k2");
         cache.put(key, "v".getBytes(UTF_8), Duration.ofMinutes(5));
         cache.evict(key);
@@ -88,7 +88,7 @@ public abstract class CachePortContract {
     }
 
     @Test
-    void providerId_anyAdapter_isStableAndNonBlank() {
+    protected void providerId_anyAdapter_isStableAndNonBlank() {
         assertThat(cache.providerId()).isNotBlank().isEqualTo(cache.providerId());
     }
 
@@ -99,6 +99,9 @@ public abstract class CachePortContract {
 
 Rules:
 
+- **Test methods and `setUp` are `protected`.** The TCK lives in `spi/<capability>/`, the subclasses in
+  `adapter/<capability>/<vendor>/` — another package. A package-private test method cannot be overridden from there:
+  `@Override` does not compile, and without it JUnit still runs the TCK's assertion next to the subclass's method.
 - **All assertions live here, once.** A new behavioural guarantee is added in
   the TCK and automatically enforced for every adapter.
 - The TCK speaks **only the port's language** (port DTOs + JDK types). It must
@@ -161,7 +164,7 @@ class NoOpCacheAdapterContractTest extends CachePortContract {
     // That is its documented contract (pluggable-architecture safe default), not a bug.
     @Override
     @Test
-    void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).isEmpty();
@@ -176,7 +179,8 @@ class NoOpCacheAdapterContractTest extends CachePortContract {
   them in `mvn test`); in-memory ones keep `*ContractTest`.
 - A subclass may legitimately `@Override` a TCK test **only** when the adapter's
   documented semantics differ (e.g. a `NoOp` cache). Any such override must
-  carry a comment explaining the divergence; everything else stays inherited.
+  carry a comment explaining the divergence; everything else stays inherited. It keeps `@Override`, `@Test` and the
+  `protected` modifier, so the compiler proves it really replaces the TCK method.
 
 ## 4. Composite-adapter contract
 

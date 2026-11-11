@@ -8,8 +8,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Idempotent consumer skeleton — replace `processEvent` and the
- * dedup-store calls with project specifics. Retry / DLQ topology lives
- * in application.yaml under `spring.kafka.*` + RetryTopicConfiguration.
+ * dedup-store calls with project specifics. Retry / DLT topology: add the `@RetryableTopic` and
+ * `@DltHandler` of DlqHandler.java.tmpl to this class (SKILL.md §5).
+ * The value is the JSON String the outbox relay sent: configure `StringDeserializer` (SKILL.md §4) and map it
+ * with an ObjectMapper inside processEvent. A JsonDeserializer would hand this method an event object
+ * (ClassCastException) and break DLT publishing through the StringSerializer template.
  * The event id is the `event-id` record header the outbox relay sends (SKILL.md §3), never a payload field.
  */
 @Component

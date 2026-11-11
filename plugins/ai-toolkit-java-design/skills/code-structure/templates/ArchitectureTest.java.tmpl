@@ -11,18 +11,20 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule controllers_never_touch_repositories =
         noClasses().that().resideInAPackage("..controller..")
-            .should().dependOnClassesThat().resideInAPackage("..repository..");
+            .should().dependOnClassesThat().resideInAPackage("..repository..")
+            .allowEmptyShould(true);   // ArchUnit 1.x fails a rule whose that() matches nothing: no controller/ yet, or none at all
     @ArchTest
     static final ArchRule services_never_depend_on_controllers =
         noClasses().that().resideInAPackage("..service..")
-            .should().dependOnClassesThat().resideInAPackage("..controller..");
+            .should().dependOnClassesThat().resideInAPackage("..controller..")
+            .allowEmptyShould(true);
     @ArchTest
     static final ArchRule layered =
         // only dependencies between two layers are checked, so config/, adapter/, spi/, acl/, domain/, event/ … are not flagged
         layeredArchitecture().consideringOnlyDependenciesInLayers()
             .optionalLayer("Controller").definedBy("..controller..")   // optional: event-driven / scheduler services have none
             .optionalLayer("Operation").definedBy("..operation..")
-            .layer("Service").definedBy("..service..")
+            .optionalLayer("Service").definedBy("..service..")   // optional: an empty skeleton / thin consumer has none yet
             .optionalLayer("Repository").definedBy("..repository..")
             .optionalLayer("Scheduler").definedBy("..scheduler..")
             .optionalLayer("Health").definedBy("..health..")
@@ -44,11 +46,13 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")
-            .should().haveSimpleNameEndingWith("Controller");
+            .should().haveSimpleNameEndingWith("Controller")
+            .allowEmptyShould(true);
     @ArchTest
     static final ArchRule controllersAreThin =
         noClasses().that().resideInAPackage("..controller..")
-            .should().dependOnClassesThat().resideInAPackage("..client..");
+            .should().dependOnClassesThat().resideInAPackage("..client..")
+            .allowEmptyShould(true);
     @ArchTest
     static final ArchRule webClientLivesInClientOnly =
         // HTTP-client packages only in client/ (wrappers), adapter/ (HTTP vendor adapters), config/ and health/ (bean wiring)
@@ -58,7 +62,7 @@ class ArchitectureTest {
                 "org.springframework.web.client..");
     @ArchTest
     static final ArchRule securityHolderLivesInPermissionOnly =
-        // config/ is allowed so JPA auditing (persistence AuditConfig) can read the current principal
-        noClasses().that().resideOutsideOfPackages("..permission..", "..config..")
+        // the JPA AuditorAware (persistence SecurityAuditorAware) lives in permission/ too; config/AuditConfig only enables auditing
+        noClasses().that().resideOutsideOfPackage("..permission..")
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.security.core.context.SecurityContextHolder");
 }

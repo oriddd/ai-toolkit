@@ -2,7 +2,7 @@
   "name": "ai-toolkit",
   "metadata": {
     "description": "Engineering standards as Claude Code plugins, organised by delivery phase and language — skills, task agents and routing hooks.",
-    "version": "2.2.0"
+    "version": "2.3.0"
   },
   "owner": {
     "name": "oriddd"
@@ -71,7 +71,7 @@
     {
       "name": "ai-toolkit-python-build",
       "source": "./plugins/ai-toolkit-python-build",
-      "description": "Experimental — Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation and SQLAlchemy 2.0 persistence.",
+      "description": "Experimental — Python 3.12 / FastAPI build phase — typed errors with problem+json, pydantic validation, SQLAlchemy 2.0 persistence, outbound HTTP clients, security and messaging (outbox, idempotent consumer).",
       "category": "development"
     },
     {

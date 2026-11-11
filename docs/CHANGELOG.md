@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audit fix round (2026-11-11)
+- Java: about 50 verified fixes from an independent audit and a real build (Kafka DLT loop, lost domain events, `@Validated`
+  on Boot 3.2+, `/api/v2` denied, NullAway/SpotBugs/Spotless build breaks, contract-test override, IT-only command, guard gaps).
+- React Native: toolchain brought current (Jest 30, RNTL 14, ESLint 10, boundaries v7); a sample Expo SDK 58 app passes `verify`.
+- Python: 17 fixes; new `python-external-client`, `python-security`, `python-messaging`; a sample FastAPI service passes `verify`.
+- Evals generated from `tools/eval_cases/` by `tools/build-evals.py` (CI checks they are in sync); 44 behaviour cases.
+- Results: routing 105/105; agents 20/24 full pass (4 agents sometimes ask before loading skills). Behaviour: 31 of 44
+  measured before the usage limit stopped the run — 23 show a with/without lift; open: `python-error-handling` timed out,
+  `python-ci` 0.47, `python-security` `alg-allowlist` 0/3. The React Native and workflow behaviour cases and the clean Java
+  rebuild did not run yet.
+
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per
   plugin (unrelated request; other language stack), with/without-plugin behaviour cases for 21 skills, and agent cases

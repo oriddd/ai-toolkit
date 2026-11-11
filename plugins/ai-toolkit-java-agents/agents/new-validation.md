@@ -49,7 +49,9 @@ validation/
   validator/<RuleName>Validator.java
   rule/<RuleName>Rule.java            (domain rule bean)
 ```
-Add `@Validated` to the controller class if not already present.
+Put the annotation on the controller parameter (or on a field of a `@Valid` request body). Boot 3.5 validates it with
+the built-in method validation — do **not** add class-level `@Validated` to the controller (it switches to
+`ConstraintViolationException`; `input-validation` §2c). Only on Spring Boot < 3.2 is `@Validated` required.
 
 ### Spring Validator style
 ```
@@ -76,7 +78,8 @@ the gate a second time.
 - [ ] `ctx.disableDefaultConstraintViolation()` called before custom
       message template.
 - [ ] Parsers / lookups in the rule bean, never directly in `isValid()`.
-- [ ] Controller carries `@Validated` (Jakarta style).
+- [ ] Jakarta constraints are actually enforced: built-in method validation, **no** class-level `@Validated` on the
+      controller (Boot 3.5; `input-validation` §2c).
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.

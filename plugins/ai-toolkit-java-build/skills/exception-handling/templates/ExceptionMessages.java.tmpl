@@ -8,6 +8,7 @@ import {{basePackage}}.exception.TooManyRequestsException;
 import {{basePackage}}.exception.UnavailableException;
 import {{basePackage}}.exception.UnsupportedApiVersionException;
 import java.text.MessageFormat;
+import java.time.Duration;
 /**
  * Static catalogue of error codes + message templates. Every domain
  * exception is constructed via a method in this class — never with an
@@ -60,7 +61,7 @@ public final class ExceptionMessages {
     }
     public static TooManyRequestsException rateLimitExceeded(long retryAfterSeconds) {
         return new TooManyRequestsException(ERR_TOO_MANY_REQUESTS,
-            MessageFormat.format(RATE_LIMIT_EXCEEDED, String.valueOf(retryAfterSeconds)));
+            MessageFormat.format(RATE_LIMIT_EXCEEDED, String.valueOf(retryAfterSeconds)), Duration.ofSeconds(retryAfterSeconds));
     }
     /** {@code dependency} is our own name for the downstream (e.g. "foo"), never text from its response. */
     public static UnavailableException dependencyUnavailable(String dependency, Throwable cause) {

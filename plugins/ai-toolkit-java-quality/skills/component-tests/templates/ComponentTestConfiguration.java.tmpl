@@ -65,4 +65,17 @@ public class ComponentTestConfiguration {
     //     }).when(mock).handle(anyString());
     //     return mock;
     // }
+    //
+    // With persistence: application-component-test.yaml excludes DataSourceAutoConfiguration,
+    // HibernateJpaAutoConfiguration and FlywayAutoConfiguration, so no Spring Data repository exists and each one
+    // the service injects is provided here, deterministic like the mock above (SKILL.md §3b):
+    //
+    // @Bean
+    // public InvoiceRepository invoiceRepository() {
+    //     final var mock = mock(InvoiceRepository.class);
+    //     doAnswer(inv -> "inv-1".equals(inv.getArgument(0))
+    //             ? Optional.of(new Invoice("inv-1", "acme")) : Optional.empty())
+    //         .when(mock).findById(anyString());
+    //     return mock;
+    // }
 }

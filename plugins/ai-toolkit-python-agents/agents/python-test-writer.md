@@ -24,6 +24,8 @@ Load each skill with the Skill tool, by its qualified name, before writing tests
    `dependency_overrides`.
 2. `ai-toolkit-python-quality:python-integration-tests` — only when the brief lists DB/broker-dependent modules: testcontainers,
    `@pytest.mark.integration`, one container per session, clean state per test.
+3. `ai-toolkit-python-build:python-external-client` §6 — only when the brief lists HTTP client adapters: respx with the
+   real `httpx.AsyncClient` and a no-wait retry policy.
 
 ## Rules
 

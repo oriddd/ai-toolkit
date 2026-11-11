@@ -10,7 +10,7 @@ depends_on: [code-hygiene, sonar-quality-gate]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 # Completion Gate Skill
@@ -29,7 +29,8 @@ after each fix the gate makes you do. It decides "done"; the language skills def
   clean tree (for a baseline build, for example). It hides or discards the developer's uncommitted work and a failed
   `pop` leaves conflicts. To compare against the base branch, use a separate worktree (`git worktree add`) or ask.
 - `ai-toolkit-workflow` ships a best-effort hook that asks for confirmation before direct `git commit|push|tag|rebase|merge|
-  cherry-pick|am|revert`, `gh pr create|merge`, `npm version|publish` and `mvn release:*|deploy` in Claude's Bash tool.
+  cherry-pick|am|revert|stash`, discards (`git clean`, `git restore`, `git checkout -- <file>`, `git reset --hard`),
+  `gh pr create|edit|merge`, `npm version|publish` and `mvn release:*|deploy` in Claude's Bash tool.
   It cannot see aliases, scripts that commit internally, or other tools — it is a backstop, not a guarantee, and a prompt
   does not replace the developer's request. The rule is yours to follow.
 

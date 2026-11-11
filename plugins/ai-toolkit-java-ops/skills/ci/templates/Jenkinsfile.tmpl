@@ -38,10 +38,11 @@ pipeline {
     }
     stage('Dependency scan') {
       // OWASP dependency-check (security-hardening). Without an NVD API key the NVD download is throttled and very
-      // slow: store the key as a Jenkins secret-text credential. Fails on CVSS >= 7.
+      // slow: store the key as a Jenkins secret-text credential. The plugin reads it from the environment variable, so the
+      // key never appears on the command line (`ps`) or in Maven debug output. Fails on CVSS >= 7.
       steps {
         withCredentials([string(credentialsId: '{{nvdApiKeyCredentialsId}}', variable: 'NVD_API_KEY')]) {
-          sh 'mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DnvdApiKey="$NVD_API_KEY"'
+          sh 'mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7 -DnvdApiKeyEnvironmentVariable=NVD_API_KEY'
         }
       }
     }

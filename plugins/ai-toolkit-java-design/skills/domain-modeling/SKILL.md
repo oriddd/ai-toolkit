@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Domain Modeling Skill
@@ -42,7 +42,7 @@ public class Invoice extends AbstractAggregateRoot<Invoice> {   // Aggregate Roo
 
     public void rename(String newName, Clock clock) {   // invariant: name not blank, invoice not deleted
         requireNotDeleted();
-        if (newName == null || newName.isBlank()) throw new InvariantViolationException(...);
+        if (newName == null || newName.isBlank()) throw ExceptionMessages.invalidField("name", "must not be blank");   // exception-handling catalogue → 400
         this.name = newName;
         registerEvent(new InvoiceRenamedEvent(id, newName, Instant.now(clock)));   // caller passes its injected Clock, never Instant.now()
     }
@@ -52,17 +52,51 @@ public class Invoice extends AbstractAggregateRoot<Invoice> {   // Aggregate Roo
 ```
 
 `registerEvent` is inherited from Spring Data's `AbstractAggregateRoot`: the
-events are published **in-process** (as application events) when the repository
-`save()`s the root, and they are not durable. For events that must leave the
-service, bridge them to the outbox: a `@TransactionalEventListener(phase =
-BEFORE_COMMIT)` (or a plain `@EventListener`) writes the outbox row in the same
-transaction (see `messaging`).
+events are published **in-process** (as application events) when **this object**
+is passed to a Spring Data repository's `save()` / `saveAll()` / `delete()`, and
+they are not durable. For events that must leave the service, bridge them to
+the outbox: a `@TransactionalEventListener(phase = BEFORE_COMMIT)` (or a plain
+`@EventListener`) writes the outbox row in the same transaction (see `messaging`).
 
 This is a **domain class**, not a JPA entity: `final` fields and no no-arg
-constructor are deliberate. Either keep a separate JPA entity in `entity/` and
-map between the two in the repository adapter, or, if you annotate the root
-itself with `@Entity`, add a `protected` no-arg constructor and drop `final` on
-the persistent fields (JPA needs both).
+constructor are deliberate. Pick one mapping:
+
+- **The root is the `@Entity`** (keeps `AbstractAggregateRoot`): annotate it,
+  add a `protected` no-arg constructor and drop `final` on the persistent fields
+  (JPA needs both). `repository.save(invoice)` publishes the events.
+- **A separate JPA entity in `entity/`**, mapped in the repository adapter. Then
+  `AbstractAggregateRoot` publishes **nothing**: the adapter saves the
+  `InvoiceEntity`, which carries no events, so they — and the outbox rows a
+  `BEFORE_COMMIT` listener would write — are silently lost. Do not extend
+  `AbstractAggregateRoot` here (its `domainEvents()` is `protected`); the root
+  keeps its own list and the adapter publishes it in the same transaction:
+
+```java
+public class Invoice {                                         // no AbstractAggregateRoot in this variant
+    private final List<DomainEvent> domainEvents = new ArrayList<>();
+    public void rename(String newName, Clock clock) { …; domainEvents.add(new InvoiceRenamedEvent(id, newName, Instant.now(clock))); }
+    public List<DomainEvent> pullDomainEvents() {             // returns and clears, so a second save never republishes
+        List<DomainEvent> events = List.copyOf(domainEvents);
+        domainEvents.clear();
+        return events;
+    }
+}
+
+@Repository
+@RequiredArgsConstructor
+class JpaInvoiceRepositoryAdapter implements InvoiceRepository {
+    private final InvoiceJpaRepository jpa;                    // Spring Data, over entity/InvoiceEntity
+    private final InvoiceEntityMapper mapper;
+    private final ApplicationEventPublisher events;
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)        // runs inside the service's transaction
+    public void save(Invoice invoice) {
+        jpa.save(mapper.toEntity(invoice));
+        invoice.pullDomainEvents().forEach(events::publishEvent);   // BEFORE_COMMIT listeners see them in this transaction
+    }
+}
+```
 
 Rules:
 - One transaction = one aggregate. Cross-aggregate consistency is **eventual**
@@ -172,7 +206,7 @@ public final class InvoiceSpecs {
 }
 ```
 
-`overdueFor(now).and(ownedBy(alice))` — readable, testable, composable.
+`overdueFor(now).and(ownedBy(callerId))` — readable, testable, composable.
 
 ## 9. When DDD is overkill
 

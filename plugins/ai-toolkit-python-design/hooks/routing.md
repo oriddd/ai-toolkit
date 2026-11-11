@@ -10,7 +10,9 @@ stale copies).
 | --- | --- |
 | New module / package / service / settings | `python-code-structure` (d) |
 | New or changed endpoint, router, dependency | `python-fastapi-conventions` (d), `python-error-handling` (b), `python-input-validation` (b) |
-| Outbound HTTP client, settings, dependency injection | `python-code-structure` (d), `python-error-handling` (b) |
+| Outbound HTTP client / downstream API | `python-external-client` (b), `python-error-handling` (b) |
+| Authentication, authorization, CORS, secrets | `python-security` (b) |
+| Publish or consume events (outbox, idempotent consumer) | `python-messaging` (b), `python-persistence` (b) |
 | Raising / mapping errors | `python-error-handling` (b) |
 | Validation rule | `python-input-validation` (b) |
 | Database model / repository / migration | `python-persistence` (b) |

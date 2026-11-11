@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""PreToolUse(Bash): ask before commits, pushes, tags, stashes, history rewrites and releases.
+"""PreToolUse(Bash): ask before commits, pushes, tags, stashes, discards, history rewrites and releases.
 
 Policy (skill: completion-gate): never commit/push/tag/stash/rebase/release until the developer asks.
 Reads the tool-call JSON on stdin; prints a permissionDecision "ask" JSON when the command would
-create a commit/tag, stash or restore work, publish, or rewrite history. Parses the command (quotes,
+create a commit/tag, stash, restore or discard work, publish, or rewrite history. Parses the command (quotes,
 newlines, operators, comments, heredocs, shell -c strings, wrappers, env prefixes) instead of grepping
 text, so quoted paths, multi-line commands and chains are handled while `echo "git commit"` is not.
 
@@ -22,7 +22,7 @@ ASK = {"hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "ask",
     "permissionDecisionReason": (
-        "ai-toolkit policy: do not commit, push, tag, stash, release or rewrite history until the developer "
+        "ai-toolkit policy: do not commit, push, tag, stash, discard work, release or rewrite history until the developer "
         "asks. Approve only if you asked for it. Headless runs (claude -p) have nobody to approve, so the "
         "command is refused: run it yourself, run interactively, or pass --permission-prompt-tool."),
 }}
@@ -79,12 +79,21 @@ JS_PMS = {"npm", "yarn", "pnpm", "bun"}
 JS_VALUE_OPTS = {"--prefix", "-C", "--dir", "--cwd", "--filter", "-F", "--workspace", "-w", "--registry", "--userconfig"}
 JS_PUBLISH = {"publish", "version", "release"}
 MAVEN = {"mvn", "mvnw", "mvn.cmd", "mvnw.cmd", "mvnd"}
+MAVEN_VALUE_OPTS = {"-f", "--file", "-pl", "--projects", "-rf", "--resume-from", "-P", "--activate-profiles", "-s",
+                    "--settings", "-gs", "--global-settings", "-t", "--toolchains", "-gt", "--global-toolchains", "-T",
+                    "--threads", "-l", "--log-file", "-b", "--builder", "-D", "--define", "-emp",
+                    "--encrypt-master-password", "-ep", "--encrypt-password"}
+MAVEN_PUBLISH_PLUGINS = {"deploy", "release", "maven-deploy-plugin", "maven-release-plugin"}
 GRADLE = {"gradle", "gradlew", "gradlew.bat", "gradle.bat"}
+GRADLE_VALUE_OPTS = {"-x", "--exclude-task", "-p", "--project-dir", "-b", "--build-file", "-c", "--settings-file",
+                     "-g", "--gradle-user-home", "-I", "--init-script", "--include-build", "--project-cache-dir"}
 OTHER_PUBLISH = {("twine", "upload"), ("poetry", "publish"), ("cargo", "publish"), ("uv", "publish"),
                  ("hatch", "publish"), ("flit", "publish"), ("gem", "push"), ("pdm", "publish")}
 KNOWN_PROGS = {"git", "gh"} | JS_PMS | MAVEN | GRADLE | SHELLS | {p for p, _ in OTHER_PUBLISH}
 
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+IFS_RE = re.compile(r"\$\{IFS\}|\$IFS(?![A-Za-z0-9_])")  # `git commit$IFS-m x` splits into words at run time
+GRAPHQL_MUTATION = re.compile(r"\bmutation\b")
 RISKY_WORDS = {"commit", "push", "tag", "stash", "rebase", "cherry-pick", "merge", "am", "revert", "publish", "deploy", "release"}
 BUDGET = [2000]  # max parse calls per hook run; nested wrappers/shells cannot blow up the runtime
 # Conservative text match used when the command cannot be parsed or nests too deep.
@@ -273,15 +282,25 @@ def git_risky(args, depth):
         if any(f in ("--hard", "--merge", "--keep", "--soft") for f in flags):
             return True
         before_dashdash = rest[:rest.index("--")] if "--" in rest else rest
-        return any(re.search(r"[~^]|^@\{|^ORIG_HEAD$|^FETCH_HEAD$|^[0-9a-f]{7,40}$", p) for p in positionals(before_dashdash))
+        pos = positionals(before_dashdash)
+        if len(pos) > 1 or ("--" in rest and rest[rest.index("--") + 1:]):
+            return False  # `git reset <commit> -- <paths>` only unstages those paths; HEAD does not move
+        return any(re.search(r"[~^]|^@\{|^ORIG_HEAD$|^FETCH_HEAD$|^[0-9a-f]{7,40}$", p) for p in pos)
     if sub == "stash":
         return not rest or rest[0] not in STASH_QUIET
     if sub == "branch":
-        return any(f in ("-f", "--force", "-M", "-C") for f in flags)
+        return any(f in ("-f", "--force", "-M", "-C", "-D") for f in flags)
     if sub == "checkout":
-        return "-B" in flags
+        return checkout_risky(rest, flags)
     if sub == "switch":
-        return any(f in ("-C", "--force-create") for f in flags)
+        return any(f in ("-C", "--force-create", "-f", "--force", "--discard-changes") for f in flags)
+    if sub == "restore":
+        if any(f in ("-h", "--help") for f in flags):
+            return False
+        staged = any(f in ("-S", "--staged") for f in flags)
+        return not staged or any(f in ("-W", "--worktree") for f in flags)  # `--staged` alone only unstages
+    if sub == "clean":
+        return not any(f in ("-h", "--help", "--dry-run") or re.match(r"^-[A-Za-z]*n[A-Za-z]*$", f) for f in flags)
     if sub == "pull":
         return any(f in ("-r", "--rebase") or (f.startswith("--rebase=") and f != "--rebase=false") for f in flags)
     if sub == "svn":
@@ -297,6 +316,23 @@ def git_risky(args, depth):
             tail = " ".join(shlex.quote(r) for r in rest)
             return risky(alias[1:] + " " + tail if alias.startswith("!") else "git " + alias + " " + tail, depth + 1)
     return False
+
+
+def checkout_risky(rest, flags):
+    """`-B`, `--force` and path checkouts (`git checkout -- f`, `git checkout .`, `git checkout HEAD f`) discard work."""
+    if any(f in ("-B", "-f", "--force") for f in flags):
+        return True
+    if "--" in rest and rest[rest.index("--") + 1:]:
+        return True
+    pos, skip = [], False
+    for r in (rest[:rest.index("--")] if "--" in rest else rest):
+        if skip:
+            skip = False
+        elif r.startswith("-"):
+            skip = r in ("-b", "-B", "--orphan")
+        else:
+            pos.append(r)
+    return "." in pos or len(pos) > 1
 
 
 def gh_risky(args):
@@ -315,6 +351,8 @@ def gh_risky(args):
 
 def gh_api_risky(args):
     """`gh api` writes when the method is a write verb, or — with no explicit method — when it sends a body (-f/-F/--input)."""
+    if args and args[0] == "graphql":
+        return gh_graphql_risky(args[1:])
     method, has_body = None, False
     for j, a in enumerate(args):
         if a in ("-X", "--method") and j + 1 < len(args):
@@ -330,6 +368,23 @@ def gh_api_risky(args):
     return has_body
 
 
+def gh_graphql_risky(args):
+    """`gh api graphql` always POSTs; it writes only when the query is a mutation (or comes from a file we cannot read)."""
+    for j, a in enumerate(args):
+        if a in GH_BODY_FLAGS and j + 1 < len(args):
+            value = args[j + 1]
+        elif a.startswith(("--field=", "--raw-field=", "--input=")):
+            value = a.split("=", 1)[1]
+        elif re.match(r"^-[fF].", a):
+            value = a[2:]
+        else:
+            continue
+        if a == "--input" or a.startswith("--input=") or GRAPHQL_MUTATION.search(value) \
+                or value.split("=", 1)[-1].startswith("@"):
+            return True
+    return False
+
+
 def js_risky(prog, args):
     pos, skip = [], False
     for a in args:
@@ -339,7 +394,7 @@ def js_risky(prog, args):
             skip = a in JS_VALUE_OPTS
         else:
             pos.append(a)
-    if not pos:
+    if not pos or any(a in ("-h", "--help") for a in args):
         return False
     if pos[0] in JS_PUBLISH:
         return True
@@ -347,9 +402,32 @@ def js_risky(prog, args):
 
 
 def gradle_risky(args):
+    skip = False
     for a in args:
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-"):
+            skip = a in GRADLE_VALUE_OPTS
+            continue
         task = a.rsplit(":", 1)[-1]
-        if not a.startswith("-") and task.startswith("publish") and not task.endswith("MavenLocal"):
+        if task.startswith("publish") and not task.endswith("MavenLocal"):
+            return True
+    return False
+
+
+def maven_risky(args):
+    """The `deploy` phase and any deploy/release plugin goal (`deploy:deploy-file`, `release:prepare`, full coordinates)."""
+    skip = False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-"):
+            skip = a in MAVEN_VALUE_OPTS
+            continue
+        parts = a.split(":")
+        if a == "deploy" or (len(parts) > 1 and any(p in MAVEN_PUBLISH_PLUGINS for p in parts[:-1])):
             return True
     return False
 
@@ -370,6 +448,7 @@ def risky(cmd, depth=0):
     BUDGET[0] -= 1
     if depth > MAX_DEPTH or BUDGET[0] < 0:
         return bool(FALLBACK_RE.search(cmd))
+    cmd = IFS_RE.sub(" ", cmd)
     if SUBST_PROG.search(cmd):
         return True
     try:
@@ -389,7 +468,7 @@ def risky(cmd, depth=0):
             return True
         if prog in JS_PMS and js_risky(prog, args):
             return True
-        if prog in MAVEN and any(a.startswith(("release:", "deploy")) for a in args):
+        if prog in MAVEN and maven_risky(args):
             return True
         if prog in GRADLE and gradle_risky(args):
             return True

@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # API Design Skill
@@ -77,7 +77,7 @@ Rules:
 ## 4. Pagination, filtering, sorting
 
 ```
-GET /api/v1/invoices?status=READY&owner=alice&page=2&size=20&sort=createdAt,desc
+GET /api/v1/invoices?status=READY&ownerId=7f3c9a1e-…&page=2&size=20&sort=createdAt,desc
 ```
 
 - Use **Spring `Pageable`** (offset-based) for ≤ 100 000 records, default
@@ -91,8 +91,9 @@ GET /api/v1/invoices?status=READY&owner=alice&page=2&size=20&sort=createdAt,desc
 
 Two acceptable shapes:
 
-- **Simple** — `?status=READY&owner=alice` (AND-only). Default.
-- **Expression** — `?filter=status eq 'READY' and owner eq 'alice'` (OData-style).
+- **Simple** — `?status=READY&ownerId=7f3c9a1e-…` (AND-only). Default. Filter by opaque ids, never by a
+  username or e-mail: URLs land in access logs, proxies and browser history (`data-privacy`).
+- **Expression** — `?filter=status eq 'READY' and ownerId eq '7f3c9a1e-…'` (OData-style).
   Required only when callers need OR / nesting.
 
 Map to **Specifications** in the repository (see `persistence`). Never

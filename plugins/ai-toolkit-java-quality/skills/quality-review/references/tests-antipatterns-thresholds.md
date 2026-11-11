@@ -120,7 +120,7 @@ junit-named edge case may justify breaking one).
 | F29. Public API surface of a `client/<dep>/` sub-package | **≤ 1 facade type** that callers depend on (others may be public if returned from the facade) | manual |
 | F30. Magic literals in business code | **0** — every literal lives in a `*Constants` class or `*Properties` record | grep |
 | F31. Line coverage by Jacoco | **≥ 85 % line, ≥ 75 % branch** (per class) | Jacoco |
-| F32. Mutation score by PIT | **≥ 75 %** (per package) | PIT |
+| F32. Mutation score by PIT | **≥ 75 %** for the module (the `ci` pom's `mutationThreshold` is module-wide); name any package far below it in the report | PIT |
 | F33. Architecture rules in `ArchitectureTest` | **PASS** | ArchUnit |
 
 Surface every violation as:

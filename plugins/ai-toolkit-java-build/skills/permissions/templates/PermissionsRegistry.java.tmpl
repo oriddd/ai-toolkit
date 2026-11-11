@@ -27,7 +27,7 @@ public class PermissionsRegistry {
         this.strategiesByContext = Map.copyOf(byContext);
     }
 
-    /** @return the strategy for this context, or empty if none supports it (the handler turns that into a 403). */
+    /** Returns the strategy for this context, or empty if none supports it (the handler turns that into a 403). */
     public Optional<PermissionsCheckStrategy> getStrategy(final CallerContext callerContext) {
         return Optional.ofNullable(callerContext).map(strategiesByContext::get);
     }

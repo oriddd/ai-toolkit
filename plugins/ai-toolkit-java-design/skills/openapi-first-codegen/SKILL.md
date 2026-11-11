@@ -10,7 +10,7 @@ depends_on: [api-design]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # openapi-first-codegen
@@ -80,6 +80,10 @@ default for the plugin). They MUST be:
         <modelPackage>{{basePackage}}.generated.api.model</modelPackage>
         <configOptions>
           <useSpringBoot3>true</useSpringBoot3>      <!-- also switches imports to jakarta.* (useJakartaEe) -->
+          <!-- the spring generator defaults to springdoc + swagger2 annotations (io.swagger.v3.oas.annotations):
+               without springdoc on the classpath the generated interfaces do not compile. The spec is the documentation. -->
+          <documentationProvider>none</documentationProvider>
+          <annotationLibrary>none</annotationLibrary>
           <interfaceOnly>true</interfaceOnly>          <!-- controllers stay hand-written -->
           <useTags>true</useTags>
           <skipDefaultInterface>true</skipDefaultInterface>
@@ -95,7 +99,10 @@ default for the plugin). They MUST be:
 </plugin>
 ```
 
-Pin the generator version in `<properties>` and let Renovate bump it.
+Pin the generator version in `<properties>` and let Renovate bump it. The generated code also needs
+`spring-boot-starter-validation` (`jakarta.validation` constraints from `useBeanValidation`, on by default). The
+generated interfaces are annotated `@Validated`, so parameter constraints are checked through the AOP proxy and fail
+with `ConstraintViolationException` — the `exception-handling` template maps it to `400`.
 `invokerPackage` is omitted on purpose: with `interfaceOnly=true` the generator emits no invoker classes.
 
 ## 3. Static-analysis / coverage exclusions

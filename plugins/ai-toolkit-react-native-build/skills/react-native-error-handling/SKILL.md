@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure, react-native-state-and-data]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -39,7 +39,8 @@ shared/errors/
 { "dependencies": { "react-error-boundary": "^6.0.0", "@sentry/react-native": "<current>" } }
 ```
 
-`<current>`: pin the latest stable `@sentry/react-native` release (same version as `react-native-observability`).
+`<current>`: the same `@sentry/react-native` as `react-native-observability` (Expo: `npx expo install @sentry/react-native`,
+SDK 58: `~8.28.0`; bare: the latest stable release).
 `react-error-boundary` 6 types `FallbackProps.error` and the `onError` error as `unknown`: narrow before use.
 
 ## 1. Typed hierarchy

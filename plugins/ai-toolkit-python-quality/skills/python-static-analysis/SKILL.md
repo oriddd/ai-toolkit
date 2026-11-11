@@ -9,7 +9,7 @@ depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -66,9 +66,12 @@ strict = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 files = ["src", "tests"]
+mypy_path = "src"          # `mypy tests/unit/test_x.py` resolves the project from src/, not as an untyped install
 ```
 Every function is fully typed; `Any` is a last resort. Prefer `Protocol`, `TypedDict`, generics.
-Third-party packages without stubs get a narrow `[[tool.mypy.overrides]]` for that module, not a global ignore.
+Third-party packages without stubs: first add the stub package if one exists (`types-docker`), otherwise a
+narrow `[[tool.mypy.overrides]]` (`module = ["aiokafka", "aiokafka.*"]`, `ignore_missing_imports = true`), never
+a global ignore.
 
 ## 3. Architecture rules
 Enforce the dependency direction from `python-code-structure` with import-linter:
@@ -84,9 +87,29 @@ type = "forbidden"
 source_modules = ["my_service.services"]
 forbidden_modules = ["my_service.api", "fastapi"]
 ```
-Every module named in a contract must exist or `lint-imports` fails with "Module ... does not exist":
-add `my_service.operations` to `source_modules` only once that package is created (see `python-code-structure`:
-create only the packages you need).
+The `layers` contract enforces the whole direction of `python-code-structure` §2 (higher layers may import
+lower ones, never the reverse; `|` separates independent siblings that may not import each other):
+
+```toml
+[[tool.importlinter.contracts]]
+name = "layers point one way"
+type = "layers"
+containers = ["my_service"]
+layers = [
+  "api",
+  "(operations)",
+  "services",
+  "(repositories) | (clients)",
+  "(models)",                     # domain models may raise domain errors
+  "(errors) | (config)",
+]
+```
+
+Every module named in a contract must exist or `lint-imports` fails with "Module ... does not exist".
+A layer in parentheses is optional: list a package that does not exist yet that way, and add
+`my_service.operations` to the forbidden contract's `source_modules` only once that package is created (see
+`python-code-structure`: create only the packages you need). Packages outside `layers` (`messaging`, `security`,
+`observability`, `main`) are not checked by it; keep them out of `services` with the forbidden contract if needed.
 
 ## 4. Pre-commit
 ```yaml

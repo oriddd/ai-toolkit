@@ -12,10 +12,10 @@ enforce that every skill has a home in this file.
 | Tier | Count |
 | --- | --- |
 | MUST | 48 |
-| SHOULD | 22 |
+| SHOULD | 25 |
 | MAY | 1 |
 | FOUNDATIONAL | 2 |
-| **Total** | **73** |
+| **Total** | **76** |
 
 ## Skills
 
@@ -71,8 +71,11 @@ Legend — **T** = ships templates; **HITL** = human-in-the-loop;
 | [`create-repo`](../plugins/ai-toolkit-java-scaffold/skills/create-repo/SKILL.md) | MUST | ✓ | ✓ | rest, event, scheduler, library, monolith | `project-types`, `code-structure`, `ci`, `cd`, `local-dev-experience` | Java / Spring Boot repository scaffolder — asks for project metadata, then applies ci, cd and code-structure to produce Jenkinsfile … |
 | [`project-types`](../plugins/ai-toolkit-java-scaffold/skills/project-types/SKILL.md) | MUST |  | ✓ | rest, event, scheduler, library, monolith | — | Java / Spring Boot meta-skill — picks the skill set for the kind of service: synchronous REST, event-driven, scheduler/batch, library/SDK … |
 | [`python-error-handling`](../plugins/ai-toolkit-python-build/skills/python-error-handling/SKILL.md) | MUST |  |  | rest, worker, cli, library | `python-code-structure` | Python / FastAPI error contract — typed exception hierarchy, error-code and message catalogue, ONE handler mapping errors to RFC 9457 … |
+| [`python-external-client`](../plugins/ai-toolkit-python-build/skills/python-external-client/SKILL.md) | SHOULD |  |  | rest, worker, cli | `python-code-structure`, `python-error-handling` | Python / FastAPI outbound HTTP client — one httpx.AsyncClient per dependency with explicit timeouts, a Protocol port, tenacity retries for … |
 | [`python-input-validation`](../plugins/ai-toolkit-python-build/skills/python-input-validation/SKILL.md) | MUST |  |  | rest, worker, cli | `python-code-structure`, `python-error-handling` | Python input validation with pydantic v2 — Field constraints and validated types, model validators for cross-field rules, injectable rule … |
+| [`python-messaging`](../plugins/ai-toolkit-python-build/skills/python-messaging/SKILL.md) | SHOULD |  |  | rest, worker | `python-code-structure`, `python-persistence`, `python-error-handling` | Python async messaging — transactional outbox written in the use case's unit of work, a relay with FOR UPDATE SKIP LOCKED, an idempotent … |
 | [`python-persistence`](../plugins/ai-toolkit-python-build/skills/python-persistence/SKILL.md) | SHOULD |  |  | rest, worker | `python-code-structure`, `python-error-handling` | Python persistence with SQLAlchemy 2.0 (typed models, async sessions) and Alembic — repository per aggregate behind a Protocol, one … |
+| [`python-security`](../plugins/ai-toolkit-python-build/skills/python-security/SKILL.md) | SHOULD |  | ✓ | rest | `python-code-structure`, `python-fastapi-conventions`, `python-error-handling` | Python / FastAPI security — JWT bearer authentication as a dependency, scope and object-level authorization, OWASP API Top 10 basics … |
 | [`python-code-structure`](../plugins/ai-toolkit-python-design/skills/python-code-structure/SKILL.md) | MUST |  |  | rest, worker, cli, library | — | Python 3.12 service layout — src layout, api/operations/services/clients/models/config layers, pydantic-settings, constructor injection … |
 | [`python-fastapi-conventions`](../plugins/ai-toolkit-python-design/skills/python-fastapi-conventions/SKILL.md) | MUST |  |  | rest | `python-code-structure` | Python FastAPI conventions — thin routers, Depends injection, explicit response models, one pagination contract, problem+json errors … |
 | [`python-ci`](../plugins/ai-toolkit-python-ops/skills/python-ci/SKILL.md) | MUST |  |  | rest, worker, cli, library | `python-static-analysis`, `python-unit-tests` | Python 3.12 CI — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a multi-stage, non-root … |

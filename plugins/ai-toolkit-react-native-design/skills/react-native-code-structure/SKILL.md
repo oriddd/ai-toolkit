@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -52,12 +52,15 @@ src/
 ## Dependencies
 
 ```json
-{ "devDependencies": { "typescript": ">=5.6 <6.1", "babel-plugin-module-resolver": "^5.0.0",
-  "eslint-plugin-boundaries": "^5.0.0" } }
+{ "dependencies": { "@react-navigation/native": "^7.1.0", "@react-navigation/native-stack": "^7.3.0",
+  "react-native-screens": "<sdk-matched>", "react-native-safe-area-context": "<sdk-matched>" },
+  "devDependencies": { "typescript": ">=5.6 <6.1", "babel-plugin-module-resolver": "^5.0.0",
+  "eslint-plugin-boundaries": "^7.4.0" } }
 ```
 
-`typescript`: use the version your Expo SDK (or React Native template) ships; `typescript-eslint` supports
-TypeScript below 6.1, which sets the upper bound.
+`typescript`: use the version your Expo SDK (or React Native template) ships (SDK 58: `~6.0`); `typescript-eslint`
+supports TypeScript below 6.1, which sets the upper bound, so never TypeScript 7. Add packages with native code
+(`react-native-screens`, `react-native-safe-area-context`) with `npx expo install` so they match the SDK.
 
 ## 1. TypeScript strict and path aliases
 
@@ -196,6 +199,18 @@ Features build their own api from `useServices().http` in a hook (`useOrdersApi`
 
 Smallest pattern that fits: a module-level singleton is fine for a pure function; use a provider
 only for things you need to fake or swap.
+
+## 7–8. Accessibility and lists (reference)
+
+Load only the file you need:
+
+| § | Topic | Load when | File |
+| --- | --- | --- | --- |
+| 7 | Roles, labels, states, touch targets, font scaling | building any interactive component or form field | [accessibility-and-lists.md](./references/accessibility-and-lists.md) |
+| 8 | `FlatList` rules, stable keys, pagination, FlashList | rendering a list that can outgrow one screen | [accessibility-and-lists.md](./references/accessibility-and-lists.md) |
+
+Minimum without loading it: every pressable has `accessibilityRole` and a name, inputs have `accessibilityLabel`, and
+growing lists are a virtualised `FlatList` keyed by the domain id, never `map` inside a `ScrollView`.
 
 ## Do / Don't
 

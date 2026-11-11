@@ -1,24 +1,32 @@
 package {{basePackage}}.messaging;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.retry.annotation.Backoff;
 /**
  * Annotation recipe, not a bean: copy `@RetryableTopic` onto the `@KafkaListener` method of your consumer
  * (e.g. IdempotentConsumer) and add the `@DltHandler` method to that same class. Spring then creates the
  * retry topics and the final `<topic>-dlt` topic. Without a `@KafkaListener` on the annotated method
- * `@RetryableTopic` does nothing.
+ * `@RetryableTopic` does nothing. The values come from the `kafka.retry.*` keys (SKILL.md §4, §5); Boot's
+ * `spring.kafka.retry.topic.*` properties cannot exclude exceptions and do not create the topics.
+ * The record value is a String on both sides (StringDeserializer + StringSerializer), so the recoverer can
+ * republish it to the retry and DLT topics.
  */
 public class DlqHandler {
     @RetryableTopic(
-        attempts = "5",
-        exclude = IllegalArgumentException.class,   // e.g. missing event-id header: retrying cannot help, go straight to the DLT
-        backoff = @Backoff(delay = 1000, multiplier = 2.0, maxDelay = 30000),
+        attempts = "${kafka.retry.attempts:5}",
+        // retrying cannot help: missing event-id header, unparseable JSON — straight to the DLT
+        exclude = {IllegalArgumentException.class, JsonProcessingException.class},
+        backoff = @Backoff(delayExpression = "${kafka.retry.delay-ms:1000}", multiplierExpression = "${kafka.retry.multiplier:2}",
+                           maxDelayExpression = "${kafka.retry.max-delay-ms:30000}"),
         topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE
     )
     public void onMessage(String payload) { /* delegate to IdempotentConsumer */ }
     @DltHandler
-    public void onDlt(String payload) {
-        // Log + alert. Never throw — DLT is the terminal queue.
+    public void onDlt(String payload, @Header(KafkaHeaders.ORIGINAL_TOPIC) String originalTopic) {
+        // Log + count (metric + alert). Never throw — DLT is the terminal queue.
     }
 }

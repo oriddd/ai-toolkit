@@ -10,7 +10,7 @@ depends_on: [code-structure, observability, spring-boot-conventions, strategy-re
 ships_templates: false
 hitl: false
 version: 1.1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-11
 ---
 
 # Request Metrics Skill
@@ -41,7 +41,7 @@ monitor/
 │   ├── MetricNameResolver.java     # resolves metric name from URI using MonitoringConfig
 │   ├── RequestMethodParser.java    # extracts HTTP method tag
 │   ├── ResponseStatusParser.java   # extracts HTTP status tag
-│   ├── ClientIdParser.java         # extracts authenticated client ID tag
+│   ├── ClientIdParser.java         # authenticated client ID tag — only with Spring Security (parsers-and-helpers §6)
 │   └── <Domain>Parser.java         # one per additional domain tag (format, orderType, …)
 └── recorder/
     ├── MetricsRecorder.java         # interface: recordMetrics + getSupportedMetricName + canHandle

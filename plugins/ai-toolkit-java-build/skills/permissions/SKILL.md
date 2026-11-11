@@ -10,7 +10,7 @@ depends_on: [code-structure, exception-handling, strategy-registry-pattern]
 ships_templates: true
 hitl: false
 version: 1.1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-11
 ---
 
 # Permissions Skill
@@ -81,9 +81,9 @@ service actually accepts (Phase 1 #2).
 
 ```java
 public interface CallerContextResolver {
-    /** @return the context of the current request's principal, or {@code null} if absent. */
+    /** Returns the context of the current request's principal, or {@code null} if absent. */
     CallerContext resolve();
-    /** @return the current principal's OAuth2 scopes, {@code SCOPE_} prefix stripped (empty if none). */
+    /** Returns the current principal's OAuth2 scopes, {@code SCOPE_} prefix stripped (empty if none). */
     Set<String> grantedScopes();
 }
 ```
@@ -179,9 +179,13 @@ routing never depends on bean order.
   `external-client` skill to add the real back-end. Your own deployment
   provides an implementation via a `@Primary @Bean`. The in-memory stub
   lives in `src/test` only; the production default is a fail-closed
-  `DenyAllResourceAuthorizationSource` registered with
-  `@ConditionalOnMissingBean`, so a service that forgot the real
-  implementation denies every request instead of trusting a stub.
+  `DenyAllResourceAuthorizationSource`: `ResourcePermissionsCheck` injects an
+  `ObjectProvider<ResourceAuthorizationSource>` and resolves it with
+  `getIfAvailable(DenyAllResourceAuthorizationSource::new)`, so a service that
+  forgot the real implementation denies every request instead of trusting a
+  stub. Not `@ConditionalOnMissingBean` on a bean in your own `@Configuration`:
+  there it is evaluated before other configuration classes and scanned beans
+  may be registered, so it is unreliable (`spring-boot-conventions` §3).
 
 - **`NoOpPermissionsCheck`** – for `BASIC_AUTH`. Documented no-op for
   trusted system callers. Always include this when `BASIC_AUTH` is in the

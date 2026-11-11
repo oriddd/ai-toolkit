@@ -160,7 +160,7 @@ public class MetricNameResolver {
 
     private final MonitoringConfig monitoringConfig;
 
-    public Optional<String> resolve(final HttpServletRequest request) {
+    public Optional<String> resolve(final @Nullable HttpServletRequest request) {
         if (request == null || request.getRequestURI() == null) {
             return Optional.empty();
         }

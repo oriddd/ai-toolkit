@@ -10,7 +10,7 @@ depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Messaging Skill
@@ -153,14 +153,6 @@ one synchronous broker round-trip per row (`persistence` §4).
   mark-as-sent fails, the next tick re-publishes it. Consumers must handle
   this (see below).
 
-### Outbox Performance & Clean-up
-
-For high-throughput services, the outbox table can grow rapidly:
-1. **Indexes**: Ensure `publishedAt` (a partial index on the unpublished rows works well) and `createdAt` are indexed — the `outbox-migration.sql.tmpl` template ships both.
-2. **Partitioning**: Consider Postgres table partitioning by `createdAt` (e.g., one partition per day).
-3. **Retention**: Run a background job to delete records published more than 7 days ago.
-4. **Batching**: The relay should fetch and publish in batches of 100-500 to minimize overhead.
-
 ## 4. Consumer — idempotent + at-least-once
 
 Brokers guarantee at-least-once. The consumer must be **idempotent**:
@@ -171,16 +163,30 @@ Brokers guarantee at-least-once. The consumer must be **idempotent**:
 public class InvoiceCreatedConsumer {
 
     private final FooService service;
+    private final ObjectMapper objectMapper;
 
+    @RetryableTopic(                                 // §5: retries, backoff, DLT and the non-retryable exceptions
+            attempts = "${kafka.retry.attempts:5}",
+            backoff = @Backoff(delayExpression = "${kafka.retry.delay-ms:1000}",
+                    multiplierExpression = "${kafka.retry.multiplier:2}",
+                    maxDelayExpression = "${kafka.retry.max-delay-ms:30000}"),
+            exclude = {IllegalArgumentException.class, JsonProcessingException.class},
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE)
     @KafkaListener(topics = "${kafka.topics.invoices.name}", groupId = "${kafka.topics.invoices.group-id}")
-    public void on(ConsumerRecord<String, InvoiceCreatedEvent> rec, Acknowledgment ack) {
+    public void on(ConsumerRecord<String, String> rec, Acknowledgment ack) throws JsonProcessingException {
         var header = rec.headers().lastHeader("event-id");
-        if (header == null) {                       // not retryable: excluded in @RetryableTopic, goes straight to the DLT
+        if (header == null) {                       // not retryable: excluded above, goes straight to the DLT
             throw new IllegalArgumentException("Record without event-id header at offset " + rec.offset());
         }
         var eventId = new String(header.value(), StandardCharsets.UTF_8);
-        service.handleOnce(eventId, rec.value());   // @Transactional: dedupe insert + business effect commit together
+        var event = objectMapper.readValue(rec.value(), InvoiceCreatedEvent.class);   // poison JSON: excluded, straight to the DLT
+        service.handleOnce(eventId, event);         // @Transactional: dedupe insert + business effect commit together
         ack.acknowledge();                          // only after the transaction committed
+    }
+
+    @DltHandler
+    public void onDlt(String payload, @Header(KafkaHeaders.ORIGINAL_TOPIC) String originalTopic) {
+        // log + count (metric + alert, §5); never throw — the DLT is the terminal queue
     }
 }
 
@@ -212,9 +218,14 @@ public class FooService {
 - Use **manual ack** + **at-least-once**; commit offset only after the
   business transaction commits.
 
-The relay sends the payload as a JSON `String`; the consumer turns it into
-the event record. Configure both sides explicitly (topic and group come from
-properties, never literals):
+The relay sends the payload as a JSON `String`, and the consumer reads it as a
+`String` and maps it with the `ObjectMapper` (above). Keep the value a `String`
+on **both** sides: the dead-letter recoverer republishes the consumed value
+through the same `StringSerializer` `KafkaTemplate`, so a consumer that
+deserializes to the event record (`JsonDeserializer`) makes every DLT/retry
+publish fail with `SerializationException` — the record is redelivered forever,
+the partition is blocked and nothing reaches the DLT. Configure both sides
+explicitly (topic and group come from properties, never literals):
 
 ```yaml
 kafka:
@@ -222,6 +233,11 @@ kafka:
     invoices:
       name: ${KAFKA_TOPIC_INVOICES:invoices}
       group-id: ${spring.application.name}
+  retry:                       # read by @RetryableTopic (§5)
+    attempts: 5
+    delay-ms: 1000
+    multiplier: 2
+    max-delay-ms: 30000
 spring:
   kafka:
     producer:
@@ -229,23 +245,19 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer   # payload is already JSON
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      properties:
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.value.default.type: com.example.foo.event.InvoiceCreatedEvent
-        spring.json.use.type.headers: false
-        spring.json.trusted.packages: com.example.foo.event
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer  # mapped with ObjectMapper in the listener
 ```
 
-`ErrorHandlingDeserializer` turns a poison message into a non-retryable
-error that reaches the DLT instead of looping.
+A poison message (unparseable JSON, missing `event-id`) is a **non-retryable**
+error: the listener throws an excluded exception and the record goes straight
+to the DLT instead of looping or burning the retry topics.
 
 ## 5. Dead-letter topic
 
 After **N retries** with exponential backoff, send to a `<topic>-dlt` (Spring Kafka's default suffix) and
-emit a **metric + alert** so an operator notices. Default values (Spring Boot non-blocking retry topics, since
-Boot 2.7; the `backoff.*` keys are the Boot 3.4+ names that replace the deprecated `delay` / `multiplier` /
-`max-delay`):
+emit a **metric + alert** so an operator notices. Default values: 5 attempts, 1s initial delay, multiplier 2,
+max delay 30s — the `kafka.retry.*` keys of §4, applied by `@RetryableTopic` on the listener (non-blocking retry
+topics `<topic>-retry-0..n`, then `<topic>-dlt`; the `DlqHandler` template is the same recipe).
 
 ```yaml
 spring:
@@ -254,28 +266,16 @@ spring:
       ack-mode: manual
       concurrency: 3
       missing-topics-fatal: false
-    retry:
-      topic:
-        enabled: true
-        attempts: 5
-        backoff:
-          delay: 1s
-          multiplier: 2
-          max-delay: 30s
 ```
 
-A DLT record carries `kafka_dlt-exception-fqcn`, `kafka_dlt-exception-message` and `kafka_dlt-original-topic` headers explaining the failure. A redrive
+Use the annotation, not Boot's `spring.kafka.retry.topic.*` properties: those cannot list non-retryable exceptions
+(a missing header would be retried N times) and Boot builds them with `doNotAutoCreateRetryTopics()`, so on a
+cluster without broker-side auto-creation the retry and DLT topics do not exist. `@RetryableTopic` creates them
+(`autoCreateTopics`, default `true`); where the platform forbids that, create the retry topics
+(`<topic>-retry-0`, `-1`, … one per retry) and `<topic>-dlt` together with the topic itself.
+
+A DLT record carries `kafka_exception-fqcn`, `kafka_exception-message` and `kafka_original-topic` headers (`KafkaHeaders.EXCEPTION_FQCN`, `EXCEPTION_MESSAGE`, `ORIGINAL_TOPIC`; Spring Kafka 3.x no longer writes the old `kafka_dlt-*` names) explaining the failure. A redrive
 operator tool replays from DLT after a fix.
-
-### 5a. Exactly-once — what it does and does not cover
-
-- Kafka **exactly-once semantics (EOS)** only covers *read from Kafka →
-  write to Kafka* inside one Kafka transaction: set
-  `spring.kafka.producer.transaction-id-prefix` and
-  `spring.kafka.consumer.isolation-level: read-committed`.
-- It does **not** cover a database write or an HTTP call. For those,
-  "exactly-once effect" = at-least-once delivery + the idempotent consumer
-  (§4) + the outbox (§3). That is the default for every service here.
 
 ## 6. Concurrency & ordering
 
@@ -284,16 +284,13 @@ operator tool replays from DLT after a fix.
 - Consumer concurrency ≤ partition count.
 - **Never** assume cross-partition ordering. If you need it, redesign.
 
-## 7. Testing
+## Reference map — load only the part you are working on
 
-- **Unit tests** use a pure Mockito mock of the producer interface — no
-  broker. (`EmbeddedKafkaBroker` is a broker: `integration-tests` forbids
-  embedded brokers, so broker behaviour is tested only with Testcontainers.)
-- **Integration tests** use a **Testcontainer** (`KafkaContainer` /
-  `RabbitMQContainer`) — see `integration-tests`.
-- The outbox relay is unit-tested with a fake clock; the at-least-once
-  consumer is integration-tested by publishing the same event twice and
-  asserting one effect.
+Sections below keep their names and numbers but live in `references/` so this file stays small.
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3 Outbox Performance & Clean-up, §5a, §7 | outbox indexes / partitioning / retention, exactly-once scope, testing producers and consumers | tuning the outbox, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
 
 ## Do / Don't
 

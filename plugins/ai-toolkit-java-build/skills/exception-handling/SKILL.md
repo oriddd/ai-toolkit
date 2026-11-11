@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Exception Handling Skill
@@ -96,7 +96,12 @@ Rules:
   subclass of `BaseDomainException`, so the advice can map it.
 - **Never** add fields other than the `errorCode` taken from
   `ExceptionMessages` — the HTTP status belongs in the advice. The
-  exception's identity *is* the mapping.
+  exception's identity *is* the mapping. One exception: the two retryable
+  types, `TooManyRequestsException` and `UnavailableException`, may carry an
+  optional `retryAfter` (`Duration`) that the advice turns into the
+  `Retry-After` header — the thrower (a rate limiter, an open circuit
+  breaker) is the only one that knows how long to wait. Without it the
+  advice sends its default (30 s).
 
 ### 2. `ExceptionMessages`
 
@@ -165,10 +170,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return build(HttpStatus.NOT_FOUND, e);
     }
 
-    @ExceptionHandler(UnavailableException.class)          // 503 + Retry-After
+    @ExceptionHandler(UnavailableException.class)          // 503 + Retry-After (the exception's retryAfter, else 30 s)
     public ResponseEntity<ProblemDetail> onUnavailable(final UnavailableException e) {
+        final String seconds = String.valueOf(e.getRetryAfter().map(Duration::toSeconds).orElse(30L));
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .header(HttpHeaders.RETRY_AFTER, "30")
+                .header(HttpHeaders.RETRY_AFTER, seconds)
                 .body(build(HttpStatus.SERVICE_UNAVAILABLE, e));
     }
 
@@ -205,6 +211,15 @@ Rules:
 - **Extend `ResponseEntityExceptionHandler`** so Spring's built-in handlers
   for `MethodArgumentNotValidException`, `HttpMessageNotReadableException`,
   etc. remain wired and produce `ProblemDetail` responses.
+- **Validation errors share one 400 shape** (`errorCode` + `errors[{field, message}]`).
+  The template overrides `handleMethodArgumentNotValid` (`@Valid @RequestBody`)
+  and `handleHandlerMethodValidationException` (constraints on controller
+  parameters — Spring 6.1+ built-in method validation, the default because
+  controllers carry no class-level `@Validated`, see `input-validation` §2c),
+  and handles `ConstraintViolationException` (a `@Validated` bean outside the
+  web layer, or a controller implementing an openapi-generator interface — the
+  generated interface is `@Validated`). Spring's defaults answer only `"Invalid request content."` /
+  `"Validation failure"` with no field or message.
 - **Declaration order doesn't matter** — Spring picks the handler whose
   exception type is the closest match (by inheritance depth), so the
   `BaseDomainException` and `Exception` handlers only catch what nothing
@@ -234,31 +249,16 @@ Rules:
 | Downstream returned an unexpected error that is not an outage (e.g. a 4xx caused by our request) | `DependencyException` via `ExceptionMessages.dependencyCallFailed(dep, status)` (→ 500, generic detail) |
 | Programmer error (precondition violation inside the service) | `IllegalStateException` / `IllegalArgumentException` (not handled by `ResponseEntityExceptionHandler`, which only covers Spring MVC exceptions — they reach the catch-all handler and become a logged `500`, which is right for a bug) |
 
-## Tests
-
-For the handler, use the `unit-tests` skill with the
-`@WebMvcTest(FooController.class)` slice (it picks up `@RestControllerAdvice`
-beans automatically; add `@Import(GlobalExceptionHandler.class)` if you
-narrow the scan) or a full
-`MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`
-setup. Assert:
-
-- Status code matches.
-- `ProblemDetail.detail` equals the formatted message constant (4xx) or the
-  generic text (5xx other than 503); `errorCode` equals the catalogue code.
-- `ProblemDetail.title` / `status` are populated by the advice.
-
-For each thrown-exception path inside services, assert in unit tests that
-the **correct subclass** is thrown (`assertThatThrownBy(…).isInstanceOf(ForbiddenException.class)`),
-not just `BaseDomainException`. The HTTP mapping depends on the exact subclass.
-
-Component tests (see `component-tests`) prove the end-to-end status
-mapping for the full matrix (`200 / 400 / 403 / 404 / 406 / 409 / 500 / 503`).
-
 > **About the shipped templates.** They implement exactly the model above:
 > unchecked `BaseDomainException` with an `errorCode`, the
 > `ExceptionMessages` catalogue (codes, `MessageFormat` templates, factory
 > methods) and one `GlobalExceptionHandler` in `exception/handler/`.
+
+## Reference map — load only the part you are working on
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| Tests | slice / standalone tests of the advice, subclass assertions, component-test status matrix | testing the error contract | [`testing.md`](./references/testing.md) |
 
 ## Do / Don't
 

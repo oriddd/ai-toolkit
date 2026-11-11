@@ -10,7 +10,7 @@ depends_on: [react-native-static-analysis, react-native-unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -31,7 +31,7 @@ runners (full native control). Default to EAS unless you need custom native buil
 ├── e2e.yml           # Maestro critical flows (nightly and on demand, not a PR gate), see react-native-e2e-tests
 ├── audit.yml         # scheduled, advisory dependency audit
 └── release.yml       # tag-driven store build and submit
-.nvmrc                # the Node major CI and developers use (setup-node reads it)
+.nvmrc                # the Node LTS major CI and developers use (setup-node reads it), e.g. 24
 eas.json              # build profiles (EAS path)
 fastlane/Fastfile     # lanes (Fastlane path)
 ```
@@ -43,6 +43,9 @@ fastlane/Fastfile     # lanes (Fastlane path)
 ```
 
 `<current>`: pin the latest stable `eas-cli` as an exact version (no `^`), and use the same value for `eas-version` below.
+`.nvmrc` holds a Node LTS major that the toolchain accepts: RNTL 14 needs `^22.13 || >=24` and `lint-staged` 17
+needs `>=22.22.1`, so use 24 (or 22 at 22.22.1+). `expo/expo-github-action` installs the CLIs with yarn unless told
+otherwise: set `packager: npm` in an npm repo.
 
 ## 1. PR gates (required checks)
 
@@ -113,8 +116,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v8
-        with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }   # equals the eas-cli pin in package.json
+      - uses: expo/expo-github-action@v9
+        with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }   # eas-version = the eas-cli pin
       - run: npm ci
       - run: eas build --profile preview --platform all --non-interactive --no-wait
 ```
@@ -150,8 +153,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v8
-        with: { eas-version: <current>, token: '${{ secrets.EXPO_TOKEN }}' }
+      - uses: expo/expo-github-action@v9
+        with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }
       - run: npm ci && npm run verify
       - run: eas build --profile production --platform all --non-interactive --auto-submit
 ```

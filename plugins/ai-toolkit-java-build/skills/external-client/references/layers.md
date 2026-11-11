@@ -155,7 +155,7 @@ public class FooRequestBuilder {
             return Collections.emptyList();
         }
         return filters.entrySet().stream()
-                .map(e -> new TermFilterDto(e.getKey(), e.getValue()))
+                .<FilterDto>map(e -> new TermFilterDto(e.getKey(), e.getValue()))   // without the witness: List<TermFilterDto>, does not compile
                 .toList();
     }
 }

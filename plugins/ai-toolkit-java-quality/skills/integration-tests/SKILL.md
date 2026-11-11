@@ -10,7 +10,7 @@ depends_on: [component-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Integration Tests Skill
@@ -87,10 +87,16 @@ names; the toolkit targets 3.5.)
 ```
 
 Preferred wiring (Boot 3.1+): `@ServiceConnection` derives the connection
-properties from the container, so no `@DynamicPropertySource` is needed:
+properties from the container, so no `@DynamicPropertySource` is needed.
+
+An IT boots the **production** configuration — never the `component-test` profile, which swaps the real
+dependencies out (`component-tests`). Every `${VAR}` without a default therefore needs a test value, e.g.
+`JWT_ISSUER_URI` from `permissions`; without it the context fails with "Could not resolve placeholder". The resource
+server does not contact the issuer at startup, so any URL will do:
 
 ```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+@SpringBootTest(webEnvironment = RANDOM_PORT,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")   // auth = yes only
 @Testcontainers
 @Tag("integration")
 class FooRepositoryIT {
@@ -124,7 +130,8 @@ static void props(DynamicPropertyRegistry reg) {
 Available canonical containers:
 - `PostgreSQLContainer`, `MySQLContainer`, `MongoDBContainer`
 - `KafkaContainer`, `RabbitMQContainer`
-- `MinIOContainer`, `LocalStackContainer` (for S3/SQS/SNS)
+- `LocalStackContainer` (for S3/SQS/SNS); `MinIOContainer` only with an image you pin and trust — MinIO stopped
+  publishing community images in late 2025 (`local-dev-experience` §1), so prefer LocalStack for S3
 - `GenericContainer` for anything else
 
 Rules:
@@ -138,7 +145,7 @@ Rules:
 - **Never** rely on a fixed host port — always read the mapped port from the
   container.
 - **Always name them `*IT.java`** — that is what makes Failsafe run them and Surefire skip them. `@Tag("integration")` only adds a way to
-  select them with `-Dgroups=integration`; a tag on its own excludes nothing from Surefire.
+  filter by tag; a tag on its own excludes nothing from Surefire.
 
 ## WireMock — contract-faithful HTTP stub
 
@@ -155,7 +162,8 @@ too heavy), use **WireMock**:
 ```
 
 ```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+@SpringBootTest(webEnvironment = RANDOM_PORT,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")   // auth = yes only
 @Tag("integration")
 class FooClientIT {
 
@@ -258,9 +266,15 @@ class FooProviderPactIT {
 ## CI integration
 
 ```
-mvn -B test                          # fast — unit + component
-mvn -B -Dgroups=integration verify   # slow — integration (requires Docker)
+mvn -B test                                                    # fast — unit + component
+mvn -B test-compile failsafe:integration-test failsafe:verify  # integration only (requires Docker)
+mvn -B verify                                                  # everything + the JaCoCo / PIT gates (what CI runs)
 ```
+
+Never select ITs with `mvn -Dgroups=integration verify`: `groups` filters Surefire too, so no unit or component test
+runs, while the JaCoCo per-class gate and PIT still run in `verify` — the gate then fails on coverage measured from
+ITs alone. Calling the Failsafe goals directly runs only the `*IT` classes and no gate (the Spring Boot parent points
+Failsafe at `target/classes`, so no jar is needed).
 
 Make integration green a **required** check on `main`. The `ci` /
 `github-actions-ci` pipelines run `mvn verify`, so Failsafe ITs run on every

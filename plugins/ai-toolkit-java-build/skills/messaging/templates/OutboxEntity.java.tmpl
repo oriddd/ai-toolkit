@@ -2,6 +2,7 @@ package {{basePackage}}.messaging;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 @Entity
 @Table(name = "outbox")
 public class OutboxEntity {
@@ -13,11 +14,12 @@ public class OutboxEntity {
     // `text` on Postgres — change both together on another database (e.g. CLOB on Oracle)
     @Column(nullable = false, columnDefinition = "text") private String payload;
     /** W3C trace context of the request that wrote the row; the relay sends it as the `traceparent` header. */
-    private String traceparent;
+    private @Nullable String traceparent;
     @Column(nullable = false) private Instant createdAt = Instant.now();
-    private Instant publishedAt;
+    private @Nullable Instant publishedAt;
+    @SuppressWarnings("NullAway.Init") // JPA-only constructor: Hibernate sets every field right after it (persistence §1)
     protected OutboxEntity() {}
-    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload, String traceparent) {
+    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload, @Nullable String traceparent) {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
@@ -29,7 +31,7 @@ public class OutboxEntity {
     public String getAggregateId()   { return aggregateId; }   // the Kafka record key (partition key = aggregate id)
     public String getEventType()     { return eventType; }
     public String getPayload()       { return payload; }
-    public String getTraceparent()   { return traceparent; }
-    public Instant getPublishedAt()  { return publishedAt; }
+    public @Nullable String getTraceparent()  { return traceparent; }
+    public @Nullable Instant getPublishedAt() { return publishedAt; }
     public void markPublished()      { this.publishedAt = Instant.now(); }
 }

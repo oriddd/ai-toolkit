@@ -10,7 +10,7 @@ depends_on: [git-commit-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-08-12
+last_reviewed: 2026-11-11
 ---
 
 # PR Description Skill
@@ -55,7 +55,8 @@ Breaking changes, follow-up tickets, known limitations, deployment steps, config
 ## 2. Updating a PR Description
 
 > **Ask first.** Show the developer the proposed description and write it to the PR only after they approve — this is an
-> external write that the commit guard does not intercept. If they decline, hand them `description.md` to paste.
+> external write. The commit guard asks before `gh pr create` / `gh pr edit` and `gh api` writes, but not before `glab`,
+> `az` or `curl` calls, so the rule is yours to follow. If they decline, hand them `description.md` to paste.
 
 Detect the host from `git remote get-url origin`, then use its CLI (authenticated by the developer) or REST API:
 

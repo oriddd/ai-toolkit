@@ -22,8 +22,10 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 ```
 IF new REST endpoint:        → python-fastapi-conventions
 IF new entity / DB table:    → python-persistence (repository, Alembic revision)
-IF new downstream call:      → python-code-structure (clients/ layer, behind a Protocol)
+IF new downstream call:      → python-external-client (clients/<dep>/ package, behind a Protocol)
 IF new validation rule:      → python-input-validation
+IF callers are authenticated:→ python-security (scope dependency, object-level checks)
+IF events published/consumed:→ python-messaging (outbox, idempotent consumer)
 IF new metric / trace span:  → python-observability
 ```
 
@@ -43,7 +45,9 @@ IF new metric / trace span:  → python-observability
 1. DECOMPOSE the feature into layers:
    - Which endpoints?            (→ python-fastapi-conventions)
    - Which entities/repositories? (→ python-persistence)
-   - Which downstreams?          (→ python-code-structure clients/)
+   - Which downstreams?          (→ python-external-client)
+   - Which events?               (→ python-messaging)
+   - Who may call it?            (→ python-security)
    - Which validation rules?     (→ python-input-validation)
    - Which metrics?              (→ python-observability)
 
@@ -59,7 +63,8 @@ IF new metric / trace span:  → python-observability
    a. Alembic revision (if new entity)
    b. Domain/pydantic models and the Protocols (ports) for repositories and downstream clients
    c. ORM model + repository implementation
-   d. Downstream client(s) behind their Protocol, with timeout and typed errors
+   d. Downstream client(s) behind their Protocol, with timeout, retries for idempotent calls and typed errors
+      (python-external-client); outbox rows for published events (python-messaging)
    e. Validation rules
    f. Service(s)
    g. Operation(s) (only when several services are orchestrated, python-code-structure §7)

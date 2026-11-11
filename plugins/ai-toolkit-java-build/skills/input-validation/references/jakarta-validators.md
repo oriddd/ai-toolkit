@@ -130,9 +130,8 @@ single-field `@RequestBody`):
 ```java
 @RestController
 @RequestMapping("/api/v1/products")
-@Validated  // REQUIRED on the controller — enables parameter-level validation
 @RequiredArgsConstructor
-public class ProductController {
+public class ProductController {           // no class-level @Validated on Spring Boot 3.2+ (see below)
 
     @PatchMapping("/{productId}")
     public ResponseEntity<ProductResponse> update(
@@ -144,13 +143,18 @@ public class ProductController {
 }
 ```
 
-- `@Validated` on the controller class enables Spring's AOP method-validation proxy. **Spring Boot < 3.2:** without it, `@EditableProductId` on a
-  `@PathVariable` is silently ignored. **Spring Boot 3.2+ (Spring Framework 6.1):** controller parameter constraints are validated without it and a
-  failure raises `HandlerMethodValidationException` (a `400` via `ResponseEntityExceptionHandler`). Class-level `@Validated` switches to the AOP path,
-  which raises `ConstraintViolationException` instead — it needs an explicit `400` handler (see the `exception-handling` template).
-- `@Valid` on `@RequestBody` triggers nested Jakarta validation of DTO fields.
-- Both `@Validated` (parameter constraints) and `@Valid` (nested DTO constraints)
-  can be active on the same method.
+- **Spring Boot 3.2+ (Spring Framework 6.1; the pinned Boot 3.5):** Spring MVC's built-in method validation checks
+  constraints placed directly on controller parameters. A failure raises `HandlerMethodValidationException`, which the
+  `exception-handling` template maps to the shared `400` shape with the violation messages. Do **not** add class-level
+  `@Validated`: it switches to the AOP proxy path, which raises `ConstraintViolationException` instead (a different
+  exception, and two validation mechanisms to reason about).
+- A controller that implements an **openapi-generator** interface inherits the generator's interface-level
+  `@Validated`, so it takes the AOP path and raises `ConstraintViolationException`; the `exception-handling`
+  template maps that to the same `400` shape.
+- **Spring Boot < 3.2 only:** `@Validated` on the controller class is required — without it `@EditableProductId` on a
+  `@PathVariable` is silently ignored.
+- `@Valid` on `@RequestBody` triggers nested Jakarta validation of DTO fields. When the same method also has a
+  constrained parameter, the body violations are reported in the same `HandlerMethodValidationException`.
 
 ### 2d. Annotation with extra attributes
 
@@ -167,7 +171,7 @@ the methods this endpoint supports"):
 public @interface SupportedShippingMethod {
     String[] allowed();             // required annotation attribute — the static policy
 
-    String message() default "Shipping method ''{value}'' is not supported here";
+    String message() default "Shipping method '{value}' is not supported here";   // not MessageFormat: '' would print twice
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

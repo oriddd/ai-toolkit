@@ -10,7 +10,7 @@ depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Create-Repo Skill (HITL)
@@ -146,7 +146,8 @@ Execute the following skills in order. Each one is documented in its own
    questions per dependency.
 7a. **`observability`** → JSON `logback-spring.xml` with MDC correlation IDs
    (guild #11), Micrometer / Prometheus and tracing. **`request-metrics`**
-   when Phase 1 #10 = yes.
+   when Phase 1 #10 = yes; with #9 auth = no, generate it without `ClientIdParser`, its interceptor and the
+   `clientId` tag (`request-metrics` parsers-and-helpers §6) — those classes need Spring Security.
 7b. **`security-hardening`** → security headers, CORS, secret handling
    (secrets as `${VAR}` with no default).
 7c. **`graceful-shutdown`** → `server.shutdown=graceful` +
@@ -190,7 +191,7 @@ Execute the following skills in order. Each one is documented in its own
     dependencies, Makefile, pre-commit hooks; dev settings in
     `application-local.yaml` (the `local` profile).
 15. **`release-versioning`** → Conventional Commits + release automation.
-16. **`documentation-and-adr`** → ADR-0001 under `docs/adr/`, ARCHITECTURE.md.
+16. **`documentation-and-adr`** → ADR-0001 under `docs/adr/`, `docs/ARCHITECTURE.md`.
 17. **`context-maintenance`** → the `context/` folder.
 
 ## Phase 4 – Common project infrastructure

@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -30,11 +30,15 @@ src/my_service/
 │   ├── orm.py                       # Mapped classes (private to this package)
 │   └── unit_of_work.py              # transaction boundary
 └── alembic/versions/                # migrations
-alembic.ini                          # repo root; points at src/my_service/alembic
+alembic.ini                          # repo root; script_location = my_service:alembic
 ```
 
-`alembic.ini` stays at the repository root with `script_location = %(here)s/src/my_service/alembic`, so the
-CLI, CI and the integration tests (which load `Config("alembic.ini")`) all run from the root.
+`alembic.ini` stays at the repository root, so the CLI, CI and the integration tests (which load
+`Config("alembic.ini")`) all run from the root. Point it at the package, not at the source tree:
+`script_location = my_service:alembic`. The migrations ship inside the installed package, so the same
+`alembic.ini` also works in the runtime image, which has only the non-editable `.venv` and no `src/`
+(`python-ci` §3); `%(here)s/src/my_service/alembic` fails there with "Path doesn't exist". `alembic init`
+writes the source path: change it once after `alembic init -t async src/my_service/alembic`.
 
 ## Dependencies
 ```toml
@@ -150,6 +154,9 @@ class SqlUnitOfWork:
             raise OrderAlreadyExistsError() from exc
 ```
 
+Call remote services before opening the unit of work, not inside it: a transaction held open across an HTTP
+call holds row locks and a pooled connection for the length of the slowest dependency.
+
 Build the factory once in the lifespan with `expire_on_commit=False` (attributes stay readable after
 commit, no implicit lazy load in async code):
 `factory = async_sessionmaker(engine, expire_on_commit=False)`.
@@ -217,3 +224,4 @@ ruff_format.options = format REVISION_SCRIPT_FILENAME
 - `python-error-handling` — `NotFound`/`Conflict` errors raised from the adapter.
 - `python-integration-tests` — real-database tests and Alembic checks.
 - `python-unit-tests` — in-memory fake repositories.
+- [`python-messaging`](../python-messaging/SKILL.md) — the outbox table written in the same unit of work.

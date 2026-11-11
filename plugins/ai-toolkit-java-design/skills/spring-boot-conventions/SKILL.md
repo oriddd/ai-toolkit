@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Spring Boot Conventions Skill
@@ -64,7 +64,7 @@ Spring Boot's profile mechanism (`spring.profiles.active`) allows for environmen
 
 **Reference Profile Strategy**:
 - `default`: Local development against a local DB / Docker Compose.
-- `test`: Used during `mvn test`. Unit tests need no database and no containers. Tests that need a real database use Testcontainers — never embedded H2 — and run as integration tests (`*IT`, Failsafe, `mvn verify`), not in `mvn test` (`integration-tests`).
+- `component-test` (test-only, `src/test/resources/application-component-test.yaml`): activated by component tests during `mvn test` (`component-tests`). Unit tests need no profile, no database and no containers. Tests that need a real database use Testcontainers — never embedded H2 — and run as integration tests (`*IT`, Failsafe, `mvn verify`), not in `mvn test` (`integration-tests`).
 - `k8s`: Common baseline for all Kubernetes environments.
 - `prod`: Strict production overrides.
 
@@ -147,10 +147,13 @@ For any list endpoint with > a few results, accept `Pageable` and return
 public Page<FooResponse> list(@ParameterObject Pageable pageable) { … }
 ```
 
-- Default page size: 20, max: 100 (set via `spring.data.web.pageable.*`).
+- Default page size: 20, max: 100 (set via `spring.data.web.pageable.default-page-size` / `max-page-size`).
 - Response shape is standardised — do not let `PageImpl` be serialized as-is (Spring Data 3.3+ warns). Either:
-  - enable `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` and keep returning `Page<T>`: it is written as
-    Spring Data's `PagedModel`, so clients rely on `content` plus a nested `page` object (`size`, `number`, `totalElements`, `totalPages`); or
+  - set `spring.data.web.pageable.serialization-mode: via-dto` (Boot 3.3+) and keep returning `Page<T>`: it is written as
+    Spring Data's `PagedModel`, so clients rely on `content` plus a nested `page` object (`size`, `number`, `totalElements`, `totalPages`).
+    Never use `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` for this: the annotation registers its
+    own pageable resolver, Boot's `SpringDataWebAutoConfiguration` backs off, and every `spring.data.web.pageable.*`
+    key is ignored — `?size=500` is then served as 500 rows, not capped at 100; or
   - map the `Page<T>` to your own page DTO record and return that, when clients need `content`, `totalElements`, `totalPages`,
     `number`, `size` at the top level.
 - For cursor-based pagination (when offset is too expensive), expose a

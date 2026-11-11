@@ -57,7 +57,8 @@ IF new layer / client / abstraction: → ai-toolkit-java-design:pattern-selectio
    d. Validation rules
    e. Service(s) — call the repositories, clients and rules from a–d
    f. Operation(s)
-   g. Controller(s) with @Validated
+   g. Controller(s) with `@Valid` / Jakarta parameter constraints (built-in method validation, no class-level
+      `@Validated` — `input-validation` §2c)
    h. Metrics recorder (if needed)
    i. Tests (unit → component → integration) — including the recorder from h
 5. VALIDATE against all 24 non-negotiables (`ai-toolkit-java-quality:golden-path`).

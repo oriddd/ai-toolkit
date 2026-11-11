@@ -9,7 +9,7 @@ depends_on: [permissions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Security Hardening Skill
@@ -87,7 +87,7 @@ module or a Redis JCache) and a per-client `cache-key` expression — without `c
 bucket4j:
   filters:
     - cache-name: rate-limits
-      url: /api/v1/.*
+      url: /api/.*                         # every API version — a v1-only pattern leaves /api/v2 unlimited
       rate-limits:
         - cache-key: "getRemoteAddr()"     # or the principal / API key — see rate-limiting §4 on trusted proxies
           bandwidths:
@@ -145,7 +145,7 @@ add the rest (cosign signing, SBOM) to your pipeline. Renovate ships via `create
 
 - **Renovate** for dependency upgrades (`create-repo` ships a `renovate.json`).
 - **`dependency-check-maven`** breaks the build on known CVEs ≥ 7.0. Version 9+ downloads the NVD feed through
-  the NVD API: configure an `nvdApiKey` (from a CI secret), or CI is throttled and fails. OSV-based scanners or
+  the NVD API: pass the key with `nvdApiKeyEnvironmentVariable` (the name of a CI-secret env var — `nvdApiKey` on the command line shows in `ps` and Maven debug output), or CI is throttled and fails. OSV-based scanners or
   Trivy's filesystem scan are key-free alternatives.
 - **Trivy** / **Grype** scans the container image; signed via **cosign**
   with key from KMS.
@@ -168,7 +168,7 @@ Either as a structured log line consumed by SIEM, or as an event onto an
 
 ✅ Default-deny: CORS, actuator, outbound hosts, file uploads (size + type
 limits).
-✅ Renovate + dep-check + Trivy + cosign in every CI pipeline (add them — the `ci` templates don't ship them yet).
+✅ Renovate + dep-check + Trivy + cosign in every CI pipeline (the `ci` Jenkins template ships dep-check and Trivy, `create-repo` ships Renovate; add cosign and the SBOM — §8).
 ✅ Validate at every boundary; the database is the last line of defence.
 ❌ Never log JWTs, passwords, PII without redaction.
 ❌ Never disable CSRF without justifying it in an ADR.

@@ -141,6 +141,7 @@ public Foo findById(String id) { … }
 
 ```java
 @ConfigurationProperties(prefix = ConfigurationConstants.CACHE_PREFIX)   // "foo.cache"
+@Validated                                                                // without it @NotEmpty is never checked (§1)
 public record CacheTtlProperties(@NotEmpty Map<String, Duration> ttl) {}  // foo.cache.ttl.foo-by-id: 10m
 
 @Configuration

@@ -1,11 +1,16 @@
 package {{basePackage}}.config;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 /**
  * Turns on JPA auditing. The AuditorAware bean ("auditorAware") is {@code permission.SecurityAuditorAware}, so
  * reading SecurityContextHolder stays inside permission/ (ArchUnit rule securityHolderLivesInPermissionOnly, code-structure).
+ * Off under the component-test profile: those tests exclude the DataSource / JPA auto-configuration, and
+ * {@code @EnableJpaAuditing} then fails at startup with "JPA metamodel must not be empty". If your component tests run
+ * against a real database instead, remove the {@code @Profile}.
  */
 @Configuration
+@Profile("!component-test")
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
 public class AuditConfig {
 }

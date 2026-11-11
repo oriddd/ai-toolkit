@@ -8,7 +8,7 @@ stale copies).
 
 | Task | Load first |
 | --- | --- |
-| New screen / component / hook / folder | `react-native-code-structure` (d) |
+| New screen / component / hook / folder, accessibility, lists | `react-native-code-structure` (d) |
 | Fetching, caching, mutations, global state | `react-native-state-and-data` (d) |
 | Throwing / mapping / displaying errors | `react-native-error-handling` (b) |
 | Form or any input rule | `react-native-input-validation` (b) |

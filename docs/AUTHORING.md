@@ -240,7 +240,8 @@ bash tools/run-evals.sh agents              # agent cases (runs the fixture scri
 claude plugin eval . --eval-dir evals --case 'trigger-persistence' --runs 1 --ablation none --trust-plugin   # one case
 ```
 
-`tools/validate-skills.sh` fails when a skill has no trigger case, the case does not load the skill's plugin, or an
+The case files are generated: edit the prompts and graders in `tools/eval_cases/` (`triggers.py`, `behaviour.py`,
+`agents.py`) and run `python3 tools/build-evals.py`; CI runs it with `--check`. `tools/validate-skills.sh` fails when a skill has no trigger case, the case does not load the skill's plugin, or an
 agent has no agent case. Add
 the trigger case in the same PR as the skill. Evals cost API credits, so CI does not run them: run them before a
 release and after any change to a skill's `description`, and record the pass rate in `docs/CHANGELOG.md`.

@@ -20,7 +20,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 1. Endpoint to meter (HTTP method + URI pattern)
 2. Metric name (follows `<service>.<resource>.<verb>`, e.g. `app.orders.create`)
 3. Extra domain tags beyond generic set (method, status, clientId)?
-4. Different SLO buckets from service default?
+4. Do the service-wide SLO buckets in `MetricsTimerHelper` fit this endpoint's latency? Buckets are defined once and
+   shared by every recorder (`request-metrics` §8) — if they do not fit, raise it with the developer as a change to
+   `MetricsTimerHelper`, never a per-recorder `Timer.builder(...)`.
 ## Generated file list
 ```
 monitor/MonitoringConstants.java      ← add METRIC_<NAME> constant

@@ -10,7 +10,7 @@ depends_on: [unit-tests]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Component Tests Skill
@@ -142,10 +142,43 @@ the canonical template.
   `application.yaml` *replaces* the main one (same resource name), so every
   property the test file omits (e.g. `${kafka.topics…}` placeholders) is
   missing and the context fails to start.
+- When the service has `persistence` (JPA / Flyway), the component test still runs without a database: see §3b.
 - Place binary fixtures under
   `src/test/resources/<descriptive-folder>/`. Load them via a single
   `TestsResourcesHolder` (singleton) so multiple component tests share the
   fixture cache.
+
+### 3b. Services with persistence
+
+Keep the database out of the component-test context and replace the repositories at the boundary:
+
+```yaml
+# src/test/resources/application-component-test.yaml
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+```
+
+- Without a `DataSource` Boot creates no `EntityManagerFactory` and no Spring Data repositories, so each repository
+  the service injects needs a bean in `ComponentTestConfiguration` — an in-process fake when the repository is a
+  narrow domain interface, otherwise a deterministic mock (a `JpaRepository` has too many methods to fake by hand):
+
+  ```java
+  @Bean
+  public InvoiceRepository invoiceRepository() {   // the only InvoiceRepository: none is created without a DataSource
+      final InvoiceRepository mock = mock(InvoiceRepository.class);
+      doAnswer(inv -> "inv-1".equals(inv.getArgument(0))
+              ? Optional.of(new Invoice("inv-1", "acme")) : Optional.empty())
+          .when(mock).findById(anyString());
+      return mock;
+  }
+  ```
+- `@EnableJpaAuditing` fails without JPA ("JPA metamodel must not be empty"): the `persistence` `AuditConfig` carries
+  `@Profile("!component-test")`. Any other configuration that needs the `EntityManager` gets the same profile guard.
+- Repository queries, mappings and migrations are proved against a real database in `*IT` tests (`integration-tests`).
 
 ## Test design rules
 
@@ -188,49 +221,12 @@ different mock set starts (and caches) a new context (slow);
 
 ## Authenticated paths
 
-If your service requires authentication and you want to **test the secured
-controller pipeline** (not bypass it via a permissive filter chain), use
-Spring Security's request post-processors instead of disabling security.
-This is a **separate security test, not a component test**: it runs
-**without** the `component-test` profile (so the production filter chain is
-active) and drives the controller through `MockMvc`. It is a `@WebMvcTest`
-slice, so no real downstream starts: the controller's collaborator is a
-`@MockitoBean` (slice tests are the left-hand column of the matrix above).
-The component-test rules (permissive chain, `TestRestTemplate` only) still
-apply to every `*ComponentTest` class.
-
-Test dependencies: `org.springframework.security:spring-security-test`
-(test scope, for `jwt()`), plus `spring-boot-starter-oauth2-resource-server`
-for a JWT resource server.
-
-```java
-// issuer-uri: application.yaml reads ${JWT_ISSUER_URI} with no default (permissions §7); without a value the
-// resource-server auto-configuration fails to evaluate its condition and the slice does not start
-@WebMvcTest(controllers = FooController.class,
-        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
-@Import(SecurityConfig.class)              // the production filter chain
-class FooSecurityTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean FooOperation fooOperation; // the controller's only collaborator
-    @MockitoBean JwtDecoder jwtDecoder;     // jwt() bypasses it; the resource-server config still needs the bean
-
-    @Test
-    void getFoo_noToken_returns401() throws Exception {
-        mvc.perform(get("/api/v1/foo/123"))
-           .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void getFoo_jwtWithRequiredScope_returns200() throws Exception {
-        mvc.perform(get("/api/v1/foo/123")
-                .with(jwt().jwt(b -> b.subject("alice")).authorities(new SimpleGrantedAuthority("SCOPE_read"))))
-           .andExpect(status().isOk());
-    }
-}
-```
-
-This proves the security configuration is wired correctly, not just the
-controller logic.
+To prove the **production** security chain (401 without a token, 200 with the right scope), write a separate
+`*SecurityTest` — a `@WebMvcTest` slice **without** the `component-test` profile that drives the controller through
+`MockMvc` with Spring Security's `jwt()` post-processor. It is not a component test; the component-test rules
+(permissive chain, `TestRestTemplate` only) still apply to every `*ComponentTest`. The full example, its test
+dependencies, and the beans the slice needs mocked (resource-server issuer, `JwtDecoder`, the `request-metrics`
+filter and interceptor collaborators) are in [`references/security-slice-test.md`](./references/security-slice-test.md).
 
 ## Response-body assertions — JsonPath
 

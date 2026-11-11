@@ -76,7 +76,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
       template)
    b. Application.java + package skeleton (code-structure)
    c. application.yaml (local-friendly defaults = `default` profile) plus the
-      profile files of spring-boot-conventions §2 (`test`, `k8s`, `prod`)
+      profile files of spring-boot-conventions §2 (`k8s`, `prod`), `application-local.yaml`
+      (local-dev-experience) and the test-only `src/test/resources/application-component-test.yaml`
+      (component-tests — the test profile is `component-test`, never `test`)
    d. Static analysis config (checkstyle.xml, spotbugs, ArchUnit base rule)
    e. Dockerfile (multi-stage) + .dockerignore
    f. Jenkinsfile, or the GitHub Actions workflows of

@@ -29,11 +29,14 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    problem+json.
 5. `ai-toolkit-python-build:python-persistence` — only if the endpoint reads or writes storage (repository behind a Protocol,
    one unit of work per use case).
-6. `ai-toolkit-python-ops:python-observability` — correlation ID flows through; one INFO log per request in the operation;
+6. `ai-toolkit-python-build:python-security` — whenever the project authenticates callers: scope dependency on the
+   route, object-level check in the use case.
+7. `ai-toolkit-python-build:python-external-client` — only if the endpoint calls a downstream HTTP API.
+8. `ai-toolkit-python-ops:python-observability` — correlation ID flows through; one INFO log per request in the operation;
    a metric only if the endpoint needs one (low-cardinality labels).
-7. `ai-toolkit-python-quality:python-unit-tests` — operation, service and rule objects with fakes at the boundary.
-8. `ai-toolkit-python-quality:python-integration-tests` — only when behaviour depends on real database/broker semantics.
-9. `ai-toolkit-python-quality:python-static-analysis` — ruff, `mypy --strict` and import-linter must stay green.
+9. `ai-toolkit-python-quality:python-unit-tests` — operation, service and rule objects with fakes at the boundary.
+10. `ai-toolkit-python-quality:python-integration-tests` — only when behaviour depends on real database/broker semantics.
+11. `ai-toolkit-python-quality:python-static-analysis` — ruff, `mypy --strict` and import-linter must stay green.
 
 ## Step-by-step procedure
 
@@ -42,7 +45,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    - HTTP method + resource path
    - Request body / path params / query params schema
    - Expected response shape and status codes
-   - Authorization rule, if the project has an authorization layer (who can call this?)
+   - Authorization rule, if the project has an authorization layer (who can call this? which scope?
+     which callers own which resources? — python-security decision gate)
 
 2. DESIGN the URL following python-fastapi-conventions §6. Surface conflicts
    with existing routes before writing code.

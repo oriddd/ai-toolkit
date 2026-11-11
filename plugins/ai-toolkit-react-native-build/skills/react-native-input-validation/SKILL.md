@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure, react-native-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -40,8 +40,11 @@ shared/validation/
 ## Dependencies
 
 ```json
-{ "dependencies": { "zod": "^4.0.0", "react-hook-form": "^7.55.0", "@hookform/resolvers": "^5.1.0" } }
+{ "dependencies": { "zod": "^4.0.0", "react-hook-form": "^7.55.0", "@hookform/resolvers": "^7.0.0" } }
 ```
+
+Type-checked together (2026-11-11) with zod 4.6, react-hook-form 7.92 and `@hookform/resolvers` 7.0 under the strict
+`tsconfig` of `react-native-code-structure`; `zodResolver` takes a zod 4 schema directly.
 
 ## 1. Field schemas, reusable and named
 

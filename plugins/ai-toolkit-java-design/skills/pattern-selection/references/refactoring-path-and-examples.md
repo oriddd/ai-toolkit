@@ -64,11 +64,15 @@ client/dep/
 ```java
 // 3 files, 250 LOC total
 @Component
-@RequiredArgsConstructor
 public class HealthCheckClient {
     private final RestClient restClient;
     private final HealthCheckProperties properties;
-    
+
+    public HealthCheckClient(@Qualifier("healthCheckRestClient") RestClient restClient, HealthCheckProperties properties) {
+        this.restClient = restClient;
+        this.properties = properties;
+    }
+
     public boolean isHealthy() {
         try {
             HealthResponse health = restClient.get().uri(properties.healthEndpoint())
@@ -81,8 +85,9 @@ public class HealthCheckClient {
 
     record HealthResponse(String status) {}
 }
-// The RestClient bean (HealthCheckClientConfig) sets connect and read timeouts
-// from HealthCheckProperties — never call a dependency without timeouts.
+// HealthCheckClientConfig declares @Bean("healthCheckRestClient") from RestClient.Builder.clone() with connect and read
+// timeouts from HealthCheckProperties — never call a dependency without timeouts, and never inject a per-dependency
+// RestClient by type alone.
 ```
 
 **Full 5-Layer** (Elasticsearch integration):
