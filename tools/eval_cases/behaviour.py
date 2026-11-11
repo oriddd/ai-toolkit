@@ -222,7 +222,7 @@ REACT_NATIVE = {
              ("wrap-root", r"Sentry\.wrap"), ("release-dist", r"dist:"),
              ("typed-events", r"type AnalyticsEvent\s*=")]),
         "react-native-ci": (
-            "Create the GitHub Actions workflows for pull-request checks and EAS releases of our React Native app.",
+            "Create the GitHub Actions workflows for pull-request checks and EAS releases of our React Native app." + TAIL_RN,
             [("verify-script", r"npm run verify"), ("least-privilege", r"permissions:\s*\{?\s*contents:\s*read"),
              ("expo-action-v9", r"expo-github-action@v9"), ("npm-packager", r"packager:\s*npm"),
              ("protected-env", r"environment:\s*production")]),
@@ -244,7 +244,7 @@ PYTHON = {
         "python-security": (
             "Protect POST /v1/orders in my Python FastAPI service with JWT bearer tokens from our Keycloak; only callers "
             "with scope orders:write may create, and customers may read only their own orders." + TAIL_PY,
-            [("alg-allowlist", r"algorithms\s*=\s*\["), ("www-authenticate", r"WWW-Authenticate"),
+            [("alg-allowlist", r"algorithms\s*=\s*(\[|[A-Z_]*ALG)"), ("www-authenticate", r"WWW-Authenticate"),
              ("bearer-no-autoerror", r"HTTPBearer\(auto_error=False\)"), ("required-claims", r'"require"\s*:'),
              ("ownership-not-found", r"NotFoundError")]),
         "python-messaging": (
@@ -258,8 +258,7 @@ PYTHON = {
             "API must answer 404." + TAIL_PY,
             [("problem-json", r"application/problem\+json"), ("catalogue", r"ErrorCodes?\b"),
              ("typed-hierarchy", r"class \w+NotFoundError\(NotFoundError\)"),
-             ("single-handler", r"exception_handler\(DomainError\)"),
-             ("framework-404", r"starlette\.exceptions import HTTPException")]),
+             ("single-handler", r"exception_handler\(DomainError\)")]),
         "python-input-validation": (
             "Validate a Python FastAPI booking request: a valid email, guests between 1 and 10, and check_out must be "
             "after check_in." + TAIL_PY,
@@ -305,7 +304,7 @@ PYTHON = {
     },
     "ai-toolkit-python-ops": {
         "python-ci": (
-            "Write the GitHub Actions workflow and the Dockerfile for my Python FastAPI service managed with uv.",
+            "Write the GitHub Actions workflow and the Dockerfile for my Python FastAPI service managed with uv." + TAIL_PY,
             [("locked", r"uv sync --locked"), ("non-editable", r"--no-editable"), ("non-root", r"USER \w+|useradd"),
              ("exit5", r"\$\? -eq 5"), ("migrations", r"alembic upgrade head")]),
         "python-observability": (

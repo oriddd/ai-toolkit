@@ -3,6 +3,7 @@ description: "applying `release-versioning` changes the answer — compare the w
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-workflow", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

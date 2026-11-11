@@ -16,7 +16,7 @@ only; you never change production code.
 
 ## Skills to apply
 
-Load each skill with the Skill tool, by its qualified name, before writing tests — do not work from memory.
+Load each skill with the Skill tool, by its qualified name, first — before any question or test code — do not work from memory.
 
 1. `ai-toolkit-java-quality:unit-tests` — positive, negative and edge cases; `methodName_condition_expectedResult` naming; AssertJ assertions.
 2. `ai-toolkit-java-quality:component-tests` — only when the brief lists endpoints.

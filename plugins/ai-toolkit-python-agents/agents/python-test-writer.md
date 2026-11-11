@@ -17,7 +17,7 @@ modules (or endpoints) to cover. You write tests only; you never change producti
 
 ## Skills to apply
 
-Load each skill with the Skill tool, by its qualified name, before writing tests — do not work from memory.
+Load each skill with the Skill tool, by its qualified name, first — before any question or test code — do not work from memory.
 
 1. `ai-toolkit-python-quality:python-unit-tests` — positive, negative and edge cases; `method_condition_expectedResult` naming;
    fixtures; hand-written fakes at the boundary; `parametrize` for tables; API tests via

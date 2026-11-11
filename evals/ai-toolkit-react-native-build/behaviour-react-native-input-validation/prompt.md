@@ -3,6 +3,7 @@ description: "applying `react-native-input-validation` changes the answer — co
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-react-native-build", "../../../plugins/ai-toolkit-react-native-design", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

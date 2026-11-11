@@ -3,6 +3,7 @@ description: "applying `python-external-client` changes the answer — compare t
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-python-build", "../../../plugins/ai-toolkit-python-design", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

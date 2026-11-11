@@ -3,6 +3,7 @@ description: "applying `python-static-analysis` changes the answer — compare t
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-python-quality", "../../../plugins/ai-toolkit-python-design", "../../../plugins/ai-toolkit-python-build", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

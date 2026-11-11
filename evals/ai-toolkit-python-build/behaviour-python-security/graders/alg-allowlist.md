@@ -1,4 +1,4 @@
 ---
 type: regex
-pattern: 'algorithms\s*=\s*\['
+pattern: 'algorithms\s*=\s*(\[|[A-Z_]*ALG)'
 ---

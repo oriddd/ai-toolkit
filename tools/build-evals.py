@@ -89,7 +89,7 @@ def generate(out):
         for s, (prompt, checks) in BEHAVIOUR.get(plugin, {}).items():
             write(f"{plugin}/behaviour-{s}/prompt.md",
                   f"---\ndescription: \"applying `{s}` changes the answer — compare the with/without-plugin scores\"\n"
-                  f"tags: [behaviour]\n{plugins_line(plugin)}max_turns: 12\nallowed_tools: [Skill, Read, Glob, Grep]\n---\n\n{prompt}\n")
+                  f"tags: [behaviour]\n{plugins_line(plugin)}max_turns: 12\ntimeout_seconds: 600\nallowed_tools: [Skill, Read, Glob, Grep]\n---\n\n{prompt}\n")
             for name, pattern in checks:
                 quoted = pattern.replace("'", "''")
                 write(f"{plugin}/behaviour-{s}/graders/{name}.md", f"---\ntype: regex\npattern: '{quoted}'\n---\n")

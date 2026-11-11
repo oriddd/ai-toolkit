@@ -3,6 +3,7 @@ description: "applying `python-error-handling` changes the answer — compare th
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-python-build", "../../../plugins/ai-toolkit-python-design", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

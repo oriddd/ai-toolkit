@@ -18,7 +18,7 @@ production code.
 
 ## Skills to apply
 
-Load each skill with the Skill tool, by its qualified name, before writing tests — do not work from memory.
+Load each skill with the Skill tool, by its qualified name, first — before any question or test code — do not work from memory.
 
 1. `ai-toolkit-react-native-quality:react-native-unit-tests` — behaviour-focused queries, MSW for network, fakes over mocks,
    positive, negative and edge cases.

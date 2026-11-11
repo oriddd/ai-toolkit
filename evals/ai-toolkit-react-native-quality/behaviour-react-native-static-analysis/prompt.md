@@ -3,6 +3,7 @@ description: "applying `react-native-static-analysis` changes the answer — com
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-react-native-quality", "../../../plugins/ai-toolkit-react-native-design", "../../../plugins/ai-toolkit-react-native-build", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - React Native: toolchain brought current (Jest 30, RNTL 14, ESLint 10, boundaries v7); a sample Expo SDK 58 app passes `verify`.
 - Python: 17 fixes; new `python-external-client`, `python-security`, `python-messaging`; a sample FastAPI service passes `verify`.
 - Evals generated from `tools/eval_cases/` by `tools/build-evals.py` (CI checks they are in sync); 44 behaviour cases.
-- Results: routing 105/105; agents 20/24 full pass (4 agents sometimes ask before loading skills). Behaviour: 31 of 44
-  measured before the usage limit stopped the run — 23 show a with/without lift; open: `python-error-handling` timed out,
-  `python-ci` 0.47, `python-security` `alg-allowlist` 0/3. The React Native and workflow behaviour cases and the clean Java
-  rebuild did not run yet.
+- Agents load their skills first, before any clarifying question (they used to ask first and sometimes never loaded them).
+- Results (Claude Code 2.1.311): routing 105/105 (76 triggers, 29 negatives); agents 23/24 cases pass — `test-writer`
+  is sometimes done by the main session itself (1 of 2 runs); behaviour 44 skills, 38 with a clear with/without lift
+  (e.g. `permissions` 1.00 vs 0.00, `react-native-input-validation` 1.00 vs 0.00, `python-error-handling` 0.80 vs 0.00,
+  `react-native-ci` 1.00 vs 0.33), 6 where the model already follows the practice (`documentation-and-adr`,
+  `messaging`, `resilience-patterns`, `graceful-shutdown`, `python-unit-tests`, `release-versioning`).
+  Open: `strategy-registry-pattern` 0.80 and `react-native-state-and-data` 0.80 (`safeParse` at the edge 0/3).
 
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per

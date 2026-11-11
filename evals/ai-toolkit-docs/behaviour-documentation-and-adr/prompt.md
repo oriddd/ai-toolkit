@@ -3,6 +3,7 @@ description: "applying `documentation-and-adr` changes the answer — compare th
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-docs", "../../../plugins/ai-toolkit-workflow", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

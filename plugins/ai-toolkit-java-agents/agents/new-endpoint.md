@@ -16,7 +16,7 @@ every file change needed to satisfy all guild non-negotiables.
 
 ## Skills to apply (in this order)
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 1. `ai-toolkit-java-design:api-design` — resource/verb/URL
