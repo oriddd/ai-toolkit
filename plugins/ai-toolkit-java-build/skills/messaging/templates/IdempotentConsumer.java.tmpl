@@ -42,6 +42,8 @@ public class IdempotentConsumer {
         return new String(header.value(), StandardCharsets.UTF_8);
     }
     /** INSERT ... ON CONFLICT DO NOTHING into the processed-events table; true if the row was inserted. */
+    @SuppressWarnings("UnusedVariable")
     private boolean tryRecord(String eventId) { /* TODO */ return true; }
+    @SuppressWarnings("UnusedVariable")
     private void processEvent(String payload) { /* TODO */ }
 }

@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -47,7 +48,9 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(Customizer.withDefaults())
                 .authenticationEntryPoint(problemHandler)
-                .accessDeniedHandler(problemHandler));
+                .accessDeniedHandler(problemHandler))
+            // IdP unreachable → 503 problem+json instead of the container's 500 (IdentityProviderUnavailableFilter)
+            .addFilterBefore(new IdentityProviderUnavailableFilter(problemHandler), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 }

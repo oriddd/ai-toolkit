@@ -107,6 +107,12 @@ spec:
               value: {{ "{{" }} .Values.logLevel | quote {{ "}}" }}
             - name: SPRING_PROFILES_ACTIVE
               value: {{ "{{" }} .Values.springProfilesActive | quote {{ "}}" }}
+            {{ "{{" }}- with .Values.jwt {{ "}}" }}
+            - name: JWT_ISSUER_URI
+              value: {{ "{{" }} required "jwt.issuerUri is required: the OAuth2 issuer URL of the identity provider" .issuerUri | quote {{ "}}" }}
+            - name: JWT_AUDIENCE
+              value: {{ "{{" }} .audience | quote {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
             {{ "{{" }}- with .Values.extraEnv {{ "}}" }}
             {{ "{{" }}- toYaml . | nindent 12 {{ "}}" }}
             {{ "{{" }}- end {{ "}}" }}

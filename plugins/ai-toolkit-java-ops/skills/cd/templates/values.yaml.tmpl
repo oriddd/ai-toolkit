@@ -34,6 +34,10 @@ credentials:
   existingSecret: ""  # preferred: a Secret managed by External Secrets / Sealed Secrets / SOPS
   values: {}          # dev/test only — rendered into <fullname>-credentials; never commit real credentials
 
+jwt:                   # auth = yes only (permissions §7): delete this block for a service without authentication
+  issuerUri: ""        # REQUIRED: the identity provider's issuer URL; helm template fails without it
+  audience: {{chartName}}   # JWT_AUDIENCE: tokens minted for other audiences are rejected
+
 resources:
   requests:
     memory: "{{resources.requests.memory}}"

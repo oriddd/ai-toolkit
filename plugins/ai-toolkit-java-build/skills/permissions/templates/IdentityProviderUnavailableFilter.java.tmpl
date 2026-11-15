@@ -1,0 +1,32 @@
+package {{basePackage}}.config;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * The lazily resolved JwtDecoder throws JwtDecoderInitializationException when the issuer's discovery document cannot
+ * be fetched. BearerTokenAuthenticationFilter only translates AuthenticationException, so without this filter the
+ * request ends as the container's default 500. Register it with new (not as a bean) before that filter.
+ */
+public class IdentityProviderUnavailableFilter extends OncePerRequestFilter {
+    private final ProblemDetailSecurityHandler problemHandler;
+
+    public IdentityProviderUnavailableFilter(ProblemDetailSecurityHandler problemHandler) {
+        this.problemHandler = problemHandler;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        try {
+            chain.doFilter(request, response);
+        } catch (JwtDecoderInitializationException e) {
+            problemHandler.identityProviderUnavailable(response, e);
+        }
+    }
+}

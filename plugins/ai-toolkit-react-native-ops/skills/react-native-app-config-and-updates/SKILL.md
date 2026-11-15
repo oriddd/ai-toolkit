@@ -110,7 +110,7 @@ Consequences (checked with `npx expo-updates runtimeversion:resolve --platform i
   `APP_VARIANT` as the build it targets; with the wrong one it publishes to a runtime no installed app has, and
   nothing happens, without an error.
 - Adding a native module, a config plugin or changing a plugin option changes the hash: that change needs a new
-  store build, not an update. Compare before publishing a hotfix: `eas fingerprint:compare` (build id vs local).
+  store build, not an update. The publish workflow in §3 compares before every update (`eas fingerprint:compare`, build id vs local).
 - Do not use `appVersion` as policy unless every native change bumps `version`; it relies on discipline, the
   fingerprint does not.
 
@@ -131,19 +131,34 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment: ${{ inputs.channel }}                     # production requires approval, as releases do
-    env: { APP_VARIANT: '${{ inputs.channel }}' }            # same variant as the build: §2
+    env:
+      APP_VARIANT: ${{ inputs.channel }}                   # same variant as the build: §2
+      CHANNEL: ${{ inputs.channel }}
+      MESSAGE: ${{ inputs.message }}                       # free text: reaches the shell only as a variable
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v9
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }
       - run: npm ci && npm run verify
-      - run: >
-          eas update --channel "${{ inputs.channel }}" --environment "${{ inputs.channel }}"
-          --message "${{ inputs.message }}" --non-interactive
+      - name: Native fingerprint matches the channel's builds
+        run: |
+          for platform in ios android; do
+            build_id=$(eas build:list --channel "$CHANNEL" --platform "$platform" --status finished --limit 1 --json --non-interactive | jq -r '.[0].id // empty')
+            [ -n "$build_id" ] || { echo "no finished $platform build on channel $CHANNEL"; exit 1; }
+            eas fingerprint:compare --build-id "$build_id" --environment "$CHANNEL" --json --non-interactive \
+              | jq -e '.fingerprint1.hash == .fingerprint2.hash' > /dev/null \
+              || { echo "native code differs from $platform build $build_id: ship a store build"; exit 1; }
+          done
+      - run: eas update --channel "$CHANNEL" --environment "$CHANNEL" --message "$MESSAGE" --non-interactive
 ```
 
+- The fingerprint step is the gate: `eas fingerprint:compare` only prints a verdict and exits 0 on a difference, so the
+  step reads its `--json` output and fails on a hash mismatch. It compares against the newest finished build per
+  platform on the channel; a differing hash means the update would reach no installed app, or only older builds.
+- Never put `${{ inputs.* }}` or `${{ github.event.* }}` inside a `run:` script: the text is pasted into the shell
+  before it runs. Pass it through `env:` and quote the variable, as above.
 - `--environment` is required from Expo SDK 55: it loads that EAS environment's variables for the bundle.
 - `eas update` bundles on the runner, so the job's `env` reaches `app.config.ts` (unlike a cloud `eas build`, which
   reads `eas.json` `env`).

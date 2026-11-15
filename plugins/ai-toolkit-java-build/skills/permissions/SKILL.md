@@ -9,7 +9,7 @@ applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, strategy-registry-pattern]
 ships_templates: true
 hitl: false
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -169,38 +169,11 @@ routing never depends on bean order.
 
 ### 6. Concrete strategies (generate only the ones the developer selected)
 
-- **`ScopeBasedPermissionsCheck`** – for `SERVICE_ACCOUNT`. Reads an
-  allow-list of OAuth2 scopes from configuration and checks the caller's
-  scopes obtained from `CallerContextResolver.grantedScopes()` (the resolver
-  strips the `SCOPE_` prefix that Spring Security adds) — it never reads
-  `SecurityContextHolder` itself.
-
-- **`ResourcePermissionsCheck`** – for `USER` / `EXTERNAL_SYSTEM`. Calls an
-  abstract `ResourceAuthorizationSource` SPI; this skill ships an
-  in-memory stub plus a `TODO` pointing the implementer at the
-  `external-client` skill to add the real back-end. Your own deployment
-  provides an implementation via a `@Primary @Bean`. The in-memory stub
-  lives in `src/test` only; the production default is a fail-closed
-  `DenyAllResourceAuthorizationSource`: `ResourcePermissionsCheck` injects an
-  `ObjectProvider<ResourceAuthorizationSource>` and resolves it with
-  `getIfAvailable(DenyAllResourceAuthorizationSource::new)`, so a service that
-  forgot the real implementation denies every request instead of trusting a
-  stub. Not `@ConditionalOnMissingBean` on a bean in your own `@Configuration`:
-  there it is evaluated before other configuration classes and scanned beans
-  may be registered, so it is unreliable (`spring-boot-conventions` §3).
-
-- **`NoOpPermissionsCheck`** – for `BASIC_AUTH`. Documented no-op for
-  trusted system callers. Always include this when `BASIC_AUTH` is in the
-  accepted set so the dispatcher does not throw `UNRECOGNIZED_CALLER_CONTEXT`.
-  It skips the **per-resource** check only: it must still verify that the
-  principal is in an explicit, configured allow-list of trusted basic-auth
-  users (or holds a dedicated role) and throw `ForbiddenException`
-  otherwise. Any no-op strategy needs an ADR, and `BASIC_AUTH` also needs
-  `httpBasic` configured in `SecurityConfig` (the shipped template is
-  JWT-only).
-
-Each is a `@Component` and is auto-collected by the handler via list
-injection – **never** add `if/else` on `CallerContext` in the handler.
+`ScopeBasedPermissionsCheck` (`SERVICE_ACCOUNT`, scope allow-list from configuration), `ResourcePermissionsCheck`
+(`USER` / `EXTERNAL_SYSTEM`, per-resource check through the fail-closed `ResourceAuthorizationSource` SPI) and
+`NoOpPermissionsCheck` (`BASIC_AUTH`, allow-list only, needs an ADR). Each is a `@Component` collected by list
+injection — **never** add `if/else` on `CallerContext` in the handler. Rules and wiring:
+[`references/concrete-strategies.md`](./references/concrete-strategies.md).
 
 ### 7. `application.yaml`
 
@@ -217,6 +190,16 @@ spring:
           issuer-uri: ${JWT_ISSUER_URI}
           audiences: ${JWT_AUDIENCE:{{artifactId}}}   # reject tokens minted for other services
 ```
+
+`JWT_ISSUER_URI` is required: without it the service does not start on the default profile, so list it (and
+`JWT_AUDIENCE`) wherever the service is configured — Helm `jwt.issuerUri` / `jwt.audience` (`cd`), the README, and
+`application-local.yaml` (the issuer URL is not a secret, so a local default is allowed, `spring-boot-conventions` §2):
+
+```yaml
+spring.security.oauth2.resourceserver.jwt.issuer-uri: http://localhost:8081/realms/dev
+```
+
+Tests set their own value (`component-tests` §3, `integration-tests`).
 
 Bind `permissions.*` with a `PermissionsProperties` `@ConfigurationProperties`
 record (`spring-boot-conventions` §1). Also add a `ConfigurationConstants`
@@ -235,6 +218,14 @@ with a factory method returning `ForbiddenException`:
 - `CALLER_HAS_NO_PERMISSIONS` → add `callerHasNoPermissions(resourceId)`
 - `SCOPES_NOT_FOUND` → add `scopesNotFound()`
 - `SCOPE_NOT_ALLOWED` → add `scopeNotAllowed(scope)`
+
+### 8a. Identity provider outage
+
+The resource server resolves the issuer lazily, on the first token. When the issuer cannot be reached,
+`JwtDecoderInitializationException` is thrown inside the filter chain, where neither the advice nor the entry point
+sees it, and the container answers `500`. `IdentityProviderUnavailableFilter` (before `BearerTokenAuthenticationFilter`)
+and `ProblemDetailSecurityHandler` turn it, and `AuthenticationServiceException` (JWKS fetch failure), into
+`503` problem+json with `Retry-After` and `ERR_UNAVAILABLE`; a bad token stays `401`.
 
 ### 9. Controller-advice mapping
 Map `ForbiddenException` → HTTP `403 FORBIDDEN` in the global
@@ -259,37 +250,9 @@ message. Run such checks in the operation, after this call. Lookups of other
 
 ## Tests (use the `unit-tests` skill)
 
-Required cases for `PermissionsHandlerTest`:
-
-1. Happy path – matching strategy → no exception.
-2. No matching strategy → `ForbiddenException`.
-3. Strategy throws → exception propagates with original message.
-4. Empty strategy list → `ForbiddenException`.
-5. `CallerContext` is `null` → `ForbiddenException` with `CALLER_CONTEXT_NOT_FOUND`.
-
-For each concrete strategy, cover:
-
-- `supportedContexts()` returns the expected list.
-- `verifyPermissions(...)` happy path.
-- Every thrown-exception branch (missing authorities, scope not allowed,
-  authorization source returns "no access", etc.).
-
-Strategies never read `SecurityContextHolder` (see Do / Don't) — stub the
-injected `CallerContextResolver` instead. Only the `SpringSecurityCallerContextResolver`
-test reads it: set a real context with `SecurityContextHolder.setContext(...)`
-(e.g. holding a `JwtAuthenticationToken`) and call
-`SecurityContextHolder.clearContext()` in `@AfterEach` — no static mocking.
-
-## Component test wiring
-In `ComponentTestConfiguration`, provide a `@Primary` mock `PermissionsHandler`
-whose behaviour branches on the input id so each component test can drive the
-forbidden / allowed paths deterministically (see the `component-tests` skill).
-
-That mock bypasses the resolver, registry and strategies, so also keep at
-least one end-to-end security test (e.g. `FooSecurityTest`) that uses the
-**real** `PermissionsHandler`, fakes only the `ResourceAuthorizationSource`,
-and authenticates with a real-shaped JWT (MockMvc `jwt()` post-processor from
-`spring-security-test`) for an allowed and a forbidden caller.
+Required cases for `PermissionsHandlerTest` (happy path, no matching strategy, strategy throws, empty strategy list,
+`null` context), per-strategy cases, the resolver test and the component-test wiring — plus one end-to-end security
+test with the **real** `PermissionsHandler`: [`references/testing.md`](./references/testing.md).
 
 ## Validation
 
@@ -329,3 +292,4 @@ maps the exception to a status code.
 - [`PermissionsCheckStrategy.java.tmpl`](./templates/PermissionsCheckStrategy.java.tmpl) — The strategy SPI.
 - [`SecurityConfig.java.tmpl`](./templates/SecurityConfig.java.tmpl) — Spring Security baseline for the service.
 - [`ProblemDetailSecurityHandler.java.tmpl`](./templates/ProblemDetailSecurityHandler.java.tmpl) — 401 / 403 from the filter chain as ProblemDetail (`security-hardening` §10).
+- [`IdentityProviderUnavailableFilter.java.tmpl`](./templates/IdentityProviderUnavailableFilter.java.tmpl) — IdP unreachable → 503 problem+json (§8a).

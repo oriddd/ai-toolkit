@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-code-structure, python-persistence, python-error-handling]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -131,10 +131,27 @@ async def publish_batch(self) -> int:
   event (they compare an aggregate version and ignore an older one).
 - A publish failure rolls the transaction back and the rows stay unpublished; the next batch retries them.
   A crash after publishing but before commit publishes again: that is the at-least-once contract.
-- `run_relay(relay, stop, idle_seconds)` loops until a `stop` event is set, logs failures with
+- `run_relay` loops until `stop` is set, beats its heartbeat once per iteration, logs failures with
   `logger.exception` and keeps going, and sleeps only when a batch was empty (a standby replica's batch is empty).
-  Run it as a lifespan task or a separate worker process; set `stop` on shutdown and await the task so an in-flight
-  batch finishes (`python-graceful-shutdown`).
+  Run it as a lifespan task (no heartbeat) or in the worker process (`python-graceful-shutdown` §5, which passes
+  `Heartbeat("relay")` so the exec liveness probe covers the relay as well as the consumer). Set `stop` on shutdown
+  and await the task so an in-flight batch finishes:
+```python
+async def run_relay(
+    relay: OutboxRelay, stop: asyncio.Event, idle_seconds: float, heartbeat: Heartbeat | None = None
+) -> None:
+    while not stop.is_set():
+        if heartbeat:
+            heartbeat.beat()
+        try:
+            published = await relay.publish_batch()
+        except Exception:
+            logger.exception("outbox relay batch failed")
+            published = 0
+        if published == 0:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), idle_seconds)
+```
 - The producer is idempotent and waits for all replicas:
   `AIOKafkaProducer(bootstrap_servers=..., enable_idempotence=True, acks="all")`, started and stopped in the
   lifespan; publish with `send_and_wait` so the relay marks only what the broker acknowledged.

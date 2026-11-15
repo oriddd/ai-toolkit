@@ -309,3 +309,16 @@ UNNAMED = {
          "the payment service stubbed. The API is internal and needs no authorization."),
     ],
 }
+
+# A rule from the agent's own skills that the written file must show (checked in the subagent's Write/Edit input).
+AGENT_RULE = {
+    "new-endpoint": r"void [a-z]\w*_\w+_\w+\(",
+    "new-feature": r"void [a-z]\w*_\w+_\w+\(",
+    "test-writer": r"void [a-z]\w*_\w+_\w+\(",
+    "python-new-endpoint": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-new-feature": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-test-writer": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-refactor": r"BaseSettings",
+    "react-native-new-feature": r"accessibilityRole",
+    "react-native-new-screen": r"accessibilityRole",
+}

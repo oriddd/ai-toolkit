@@ -62,8 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
       - run: npm run verify
@@ -88,8 +88,8 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --ignore-scripts
       - run: npm audit --omit=dev --audit-level=high   # advisory: not a required check; triage failures weekly
@@ -115,10 +115,10 @@ jobs:
     if: github.event.label.name == 'preview'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v9
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }   # eas-version = the eas-cli pin
       - run: npm ci
       - run: eas build --profile preview --platform all --non-interactive --no-wait
@@ -152,10 +152,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production        # manual approval gate
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v9
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }
       - run: npm ci && npm run verify
       - run: eas build --profile production --platform all --non-interactive --auto-submit
@@ -194,7 +194,7 @@ profile and the publish workflow: `react-native-app-config-and-updates`.
 ## 6. Secrets and hygiene
 
 - Store tokens, keystores and certificates in GitHub Secrets/Environments; scope per environment.
-- Least privilege: every workflow declares `permissions:` (`contents: read` unless a job needs more, scoped per job); pin third-party actions to a major version or SHA, and tools such as `eas-cli` to an exact version, never `latest`.
+- Least privilege: every workflow declares `permissions:` (`contents: read` unless a job needs more, scoped per job); pin every action to a full commit SHA with the version in a trailing comment (a moved tag cannot swap code in a job that holds `EXPO_TOKEN`), and tools such as `eas-cli` to an exact version, never `latest`.
 - Cache `~/.npm` via `setup-node`; cache Gradle/CocoaPods only on self-hosted native builds.
 - Upload test reports, Maestro artefacts and source maps (to Sentry) as artifacts of the run.
 

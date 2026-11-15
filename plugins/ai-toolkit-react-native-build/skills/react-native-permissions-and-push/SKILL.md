@@ -102,6 +102,12 @@ export async function ensurePermission(
 
 ```ts
 // features/notifications/hooks/registerForPush.ts
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import { ensurePermission, type PermissionOutcome } from '@shared/permissions/ensurePermission';
+
 export type PushResult = { outcome: PermissionOutcome | 'unsupported'; token: string | null };
 
 export async function registerForPush(): Promise<PushResult> {
@@ -124,6 +130,16 @@ export async function registerForPush(): Promise<PushResult> {
 
 ```ts
 // features/notifications/hooks/usePushRegistration.ts
+import { useEffect, useMemo } from 'react';
+import { Platform } from 'react-native';
+import { useMutation } from '@tanstack/react-query';
+import * as Notifications from 'expo-notifications';
+import { useServices } from '@shared/services/ServicesContext';
+import { createDevicesApi } from '../api/devicesApi';
+import { registerForPush } from './registerForPush';
+
+const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+
 export function usePushRegistration() {
   const { http } = useServices();
   const devicesApi = useMemo(() => createDevicesApi(http), [http]);   // api/devicesApi.ts: PUT /devices/push-token

@@ -9,8 +9,8 @@ applies_to: [rest, monolith]
 depends_on: [unit-tests]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Component Tests Skill
@@ -146,6 +146,20 @@ the canonical template.
   `application.yaml` *replaces* the main one (same resource name), so every
   property the test file omits (e.g. `${kafka.topics…}` placeholders) is
   missing and the context fails to start.
+- With auth = yes (`permissions`), `application.yaml` reads `${JWT_ISSUER_URI}` with no default, and the
+  `component-test` profile does not read the environment. Without a value for it every `@SpringBootTest` dies with
+  `PlaceholderResolutionException`. The resource server never contacts the issuer at startup, so any URL will do:
+
+  ```yaml
+  spring:
+    security:
+      oauth2:
+        resourceserver:
+          jwt:
+            issuer-uri: https://issuer.example.test
+  ```
+
+  Add `audiences: test-audience` beside it if `application.yaml` also reads `${JWT_AUDIENCE}` without a default.
 - When the service has `persistence` (JPA / Flyway), the component test still runs without a database: see §3b.
 - Place binary fixtures under
   `src/test/resources/<descriptive-folder>/`. Load them via a single
@@ -242,45 +256,10 @@ To prove the **production** security chain (401 without a token, 200 with the ri
 dependencies, and the beans the slice needs mocked (resource-server issuer, `JwtDecoder`, the `request-metrics`
 filter and interceptor collaborators) are in [`references/security-slice-test.md`](./references/security-slice-test.md).
 
-## Response-body assertions — JsonPath
+## Response-body assertions and golden files
 
-For JSON responses, prefer JsonPath assertions over deserializing the body
-into a DTO that mirrors the contract (which double-counts the test):
-
-```java
-mvc.perform(get("/api/v1/foo/123"))
-   .andExpect(status().isOk())
-   .andExpect(jsonPath("$.id").value("123"))
-   .andExpect(jsonPath("$.items.length()").value(3))
-   .andExpect(jsonPath("$.items[*].status", everyItem(equalTo("READY"))));
-```
-
-For `TestRestTemplate` (no `MockMvc`), request the body as a `String`
-(`restTemplate.exchange(url, GET, HttpEntity.EMPTY, String.class)`) and
-assert with AssertJ + JsonPath (`com.jayway.jsonpath`, in `spring-boot-starter-test`):
-
-```java
-assertThat(response.getBody()).isNotNull();
-DocumentContext json = JsonPath.parse(response.getBody());
-assertThat(json.<String>read("$.id")).isEqualTo("123");
-```
-
-## Snapshot / golden-file pattern
-
-When the response is a large stable JSON / XML document (e.g. an export
-endpoint), assert against a **golden file** in
-`src/test/resources/__snapshots__/` rather than inlining the expected text:
-
-```java
-String actual   = response.getBody();
-String expected = TestsResourcesHolder.getInstance().readString("__snapshots__/foo-export-happy.json");
-JSONAssert.assertEquals(expected, actual, JSONCompareMode.LENIENT);
-```
-
-`readString` is a small helper on the `TestsResourcesHolder` from the Layout
-(read the classpath resource as UTF-8). There is no built-in update switch:
-update a snapshot intentionally by overwriting the file with the new
-response, then review the diff in the PR. Snapshots make contract drift visible.
+Assert JSON with JsonPath (never a DTO that mirrors the contract) and keep large stable documents as golden files in
+`src/test/resources/__snapshots__/`. Examples: [`references/response-assertions.md`](./references/response-assertions.md).
 
 ## Resetting state between tests
 

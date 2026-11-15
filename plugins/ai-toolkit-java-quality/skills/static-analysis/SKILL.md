@@ -92,7 +92,7 @@ on objective violations.
           </path>
         </annotationProcessorPaths>
         <compilerArgs>
-          <!-- Error Prone on JDK 17+/21 also needs the --add-exports / --add-opens flags from the note below -->
+          <!-- Error Prone on JDK 17+/21 also needs the add-exports and add-opens flags from the note below -->
           <arg>-XDcompilePolicy=simple</arg>
           <arg>--should-stop=ifError=FLOW</arg>   <!-- required by Error Prone 2.36+ -->
           <arg>-XDaddTypeAnnotationsToSymbol=true</arg>   <!-- required by recent Error Prone on JDK 21 -->

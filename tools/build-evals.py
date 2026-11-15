@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 from eval_cases.agents import (  # noqa: E402
-    AGENT_OUTPUT, AGENT_SKILLS, AGENTS, FIXTURES, NO_DELEGATE, UNNAMED, UNRELATED_AGENT_PROMPT)
+    AGENT_OUTPUT, AGENT_RULE, AGENT_SKILLS, AGENTS, FIXTURES, NO_DELEGATE, UNNAMED, UNRELATED_AGENT_PROMPT)
 from eval_cases.behaviour import BEHAVIOUR  # noqa: E402
 from eval_cases.triggers import NEAR_MISS, OTHER_STACK, TRIGGERS, UNRELATED  # noqa: E402
 
@@ -55,9 +55,16 @@ def in_subagent(core):
 def output_grader(agent):
     kind, path = AGENT_OUTPUT[agent]
     if kind == "report":
-        return "---\ntype: regex\ntarget: trace\npattern: '" + ('"type":"tool_result"[^\\n]*' + path).replace("'", "''") + "'\n---\n"
+        return "---\ntype: regex\ntarget: trace\npattern: '" + ('"type":"tool_result"[^\\n]*Subagent hand-back[^\\n]*' + path).replace("'", "''") + "'\n---\n"
     else:
         core = "(?:File created successfully at: [^\\x22]*" + path + "|The file [^\\x22]*" + path + " has been updated)"
+    return "---\ntype: regex\ntarget: trace\npattern: '" + in_subagent(core).replace("'", "''") + "'\n---\n"
+
+
+def rule_grader(agent):
+    path = AGENT_OUTPUT[agent][1]
+    core = ('"name":"(?:Write|Edit)","input":\\{"file_path":"[^"]*' + path + '[^"]*",[^\\n]{0,80}?"(?:content|new_string)":"'
+            + '(?:[^"\\\\]|\\\\.)*' + AGENT_RULE[agent])
     return "---\ntype: regex\ntarget: trace\npattern: '" + in_subagent(core).replace("'", "''") + "'\n---\n"
 
 
@@ -132,12 +139,14 @@ def generate(out):
                            **{f"agent-loads-{sk}": f"---\ntype: regex\ntarget: trace\npattern: '{subagent_skill_re([sk])}'\n---\n"
                               for sk in AGENT_SKILLS[agent]},
                            "agent-output": output_grader(agent),
+                           **({"agent-rule": rule_grader(agent)} if agent in AGENT_RULE else {}),
                        }, writes=True)
         for case, fx, agent, prompt in UNNAMED.get(plugin, []):
             agent_case(plugin, case, fx, prompt,
                        f"the main session picks `{agent}` for a matching task without being told its name", {
                            "agent-delegated": f"---\ntype: tool_used\ntool: Agent\ninput_match: '{agent_re([agent])}'\n---\n",
                            "agent-output": output_grader(agent),
+                           **({"agent-rule": rule_grader(agent)} if agent in AGENT_RULE else {}),
                        }, writes=True)
         if plugin != "ai-toolkit-docs":
             agent_case(plugin, "no-delegate-unrelated", fixture, UNRELATED_AGENT_PROMPT,

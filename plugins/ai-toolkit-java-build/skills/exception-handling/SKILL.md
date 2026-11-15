@@ -9,7 +9,7 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure]
 ships_templates: true
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -151,61 +151,23 @@ throw new BadRequestException(ExceptionMessages.ERR_BAD_REQUEST,
 
 ### 3. `@RestControllerAdvice` (vanilla Spring Boot 3)
 
-```java
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+One `GlobalExceptionHandler` extending `ResponseEntityExceptionHandler`: a handler per domain exception, a
+`build(status, e)` helper, a `503` handler that sets `Retry-After`, and a catch-all that rethrows Spring Security's
+`AccessDeniedException` / `AuthenticationException`. The core is in
+[`references/advice-example.md`](./references/advice-example.md); the shipped template is the full version.
 
-    @ExceptionHandler(BadRequestException.class)
-    public ProblemDetail onBadRequest(final BadRequestException e) {
-        return build(HttpStatus.BAD_REQUEST, e);
-    }
+### 3a. Optional parts of the template
 
-    @ExceptionHandler(ForbiddenException.class)
-    public ProblemDetail onForbidden(final ForbiddenException e) {
-        return build(HttpStatus.FORBIDDEN, e);
-    }
+Lines of the template tagged `[validation]` need `spring-boot-starter-validation`, `[security]` need Spring Security
+(`permissions`, create-repo auth = yes) and `[persistence]` need `spring-tx` (any
+persistence starter). Blocks are wrapped in `// [tag:begin]` … `// [tag:end]`. For every tag whose dependency the
+service lacks, run once (literal tag, no shell variable) and then `./mvnw spotless:apply`:
 
-    @ExceptionHandler(NotFoundException.class)
-    public ProblemDetail onNotFound(final NotFoundException e) {
-        return build(HttpStatus.NOT_FOUND, e);
-    }
-
-    @ExceptionHandler(UnavailableException.class)          // 503 + Retry-After (the exception's retryAfter, else 30 s)
-    public ResponseEntity<ProblemDetail> onUnavailable(final UnavailableException e) {
-        final String seconds = String.valueOf(e.getRetryAfter().map(Duration::toSeconds).orElse(30L));
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .header(HttpHeaders.RETRY_AFTER, seconds)
-                .body(build(HttpStatus.SERVICE_UNAVAILABLE, e));
-    }
-
-    @ExceptionHandler(BaseDomainException.class)
-    public ProblemDetail onDomain(final BaseDomainException e) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, e);
-    }
-
-    @ExceptionHandler(Exception.class)                     // catch-all for bugs
-    public ProblemDetail onUnexpected(final Exception e) throws Exception {
-        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
-            throw e;                                       // let Spring Security answer 401 / 403
-        }
-        log.error("Unhandled exception", e);
-        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
-    }
-
-    private ProblemDetail build(final HttpStatus status, final BaseDomainException e) {
-        final boolean hideDetail = status.is5xxServerError() && status != HttpStatus.SERVICE_UNAVAILABLE;
-        if (hideDetail) {
-            log.error("Domain failure [{}]", e.getErrorCode(), e);   // cause is logged, never returned
-        }
-        final ProblemDetail pd = ProblemDetail.forStatus(status);
-        pd.setTitle(status.getReasonPhrase());
-        pd.setDetail(hideDetail ? "Internal server error" : e.getMessage());
-        pd.setProperty("errorCode", e.getErrorCode());
-        pd.setProperty("timestamp", Instant.now().toString());
-        return pd;
-    }
-}
+```sh
+sed -e '/\[security:begin\]/,/\[security:end\]/d' -e '/\[security\]/d' GlobalExceptionHandler.java > g.tmp && mv g.tmp GlobalExceptionHandler.java
 ```
+
+Keep the tagged lines when the dependency is present. A tagged import of an absent package does not compile.
 
 Rules:
 - **Extend `ResponseEntityExceptionHandler`** so Spring's built-in handlers

@@ -8,22 +8,22 @@ import {{basePackage}}.exception.TooManyRequestsException;
 import {{basePackage}}.exception.UnavailableException;
 import {{basePackage}}.exception.UnsupportedApiVersionException;
 import {{basePackage}}.exception.constants.ExceptionMessages;
-import jakarta.validation.ConstraintViolationException;
-import jakarta.validation.ValidationException;
+import jakarta.validation.ConstraintViolationException;   // [validation]
+import jakarta.validation.ValidationException;   // [validation]
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;   // [persistence]
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;   // [security]
+import org.springframework.security.core.AuthenticationException;   // [security]
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,9 +32,8 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 /**
- * Needs spring-security on the classpath (the permissions skill adds it) for the AccessDeniedException /
- * AuthenticationException rethrow, and spring-tx (the persistence starters bring it) for
- * OptimisticLockingFailureException — in a service without a database, drop that handler and its import.
+ * Optional parts carry a bracketed tag: validation needs spring-boot-starter-validation, security needs spring-security,
+ * persistence needs spring-tx. A service without that dependency removes them (exception-handling SKILL.md §3a).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -64,7 +63,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Any other domain exception (the bare base type) is an unexpected server-side failure. */
     @ExceptionHandler(BaseDomainException.class)
     public ProblemDetail onDomain(BaseDomainException e) { return build(HttpStatus.INTERNAL_SERVER_ERROR, e); }
-    /** @Valid @RequestBody failures: Jakarta constraints on the DTO and Spring Validators bound with @InitBinder. */
+    /** Failures of a {@code @Valid @RequestBody}: Jakarta constraints on the DTO and Spring Validators bound with @InitBinder. */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers,
             HttpStatusCode status, WebRequest request) {
@@ -87,6 +86,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .toList();
         return handleExceptionInternal(e, validationProblem(errors), headers, status, request);
     }
+    // [validation:begin]
     /**
      * Constraints checked through the @Validated AOP proxy: a bean outside the web layer, or a controller implementing an
      * openapi-generator interface (the generated interface carries @Validated, openapi-first-codegen).
@@ -112,6 +112,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
         return ResponseEntity.internalServerError().body(pd);
     }
+    // [validation:end]
+    // [persistence:begin]
     /** A concurrent update hit a stale @Version (persistence skill) — the client must re-read and retry, so 409, not 500. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ProblemDetail onOptimisticLock(OptimisticLockingFailureException e) {
@@ -119,12 +121,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("errorCode", ExceptionMessages.ERR_CONFLICT);
         return pd;
     }
+    // [persistence:end]
     @ExceptionHandler(Exception.class)
     public ProblemDetail onUnexpected(Exception e) throws Exception {
-        // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.
-        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
-            throw e;
-        }
+        // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.   // [security]
+        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {   // [security]
+            throw e;   // [security]
+        }   // [security]
         log.error("Unhandled exception", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");

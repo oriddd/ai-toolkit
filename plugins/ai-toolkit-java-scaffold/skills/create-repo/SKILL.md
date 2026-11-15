@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -113,16 +113,12 @@ Execute the following skills in order. Each one is documented in its own
    conventions for the first endpoints.
 3b. **`input-validation`** → `validation/` package and `ValidationConfig` for
    the first request types.
-4. **`exception-handling`** → produces the unchecked domain exception
-   hierarchy in `{{basePackage}}.exception` (`BaseDomainException extends
-   RuntimeException` with `errorCode`; `BadRequestException` 400,
-   `ForbiddenException` 403, `NotFoundException` 404,
-   `UnsupportedApiVersionException` 406, `ConflictException` 409,
-   `TooManyRequestsException` 429, `UnavailableException` 503,
-   `DependencyException` 500), the `ExceptionMessages` catalogue in
-   `exception.constants`, and the `@RestControllerAdvice`
-   `GlobalExceptionHandler` in `exception.handler`, extending
-   `ResponseEntityExceptionHandler`.
+4. **`exception-handling`** → the unchecked domain exception hierarchy in `{{basePackage}}.exception`
+   (`BaseDomainException` with `errorCode`, one subclass per HTTP status), the `ExceptionMessages` catalogue in
+   `exception.constants` and the `@RestControllerAdvice` `GlobalExceptionHandler` in `exception.handler`, extending
+   `ResponseEntityExceptionHandler`. Then remove the template's tagged parts the service cannot compile
+   (`exception-handling` §3a): `[security]` when auth = no, `[persistence]` when no SQL dependency is selected in
+   #16, `[validation]` only if `input-validation` (step 3b) is skipped.
 5. **`permissions`** *(if Phase 1 #9 = yes)* → fills in the `permission/`
    package with `PermissionsHandler`, `PermissionsCheckStrategy` and the
    concrete strategies for the selected `CallerContext` values.
@@ -165,6 +161,7 @@ Execute the following skills in order. Each one is documented in its own
    (#15), `resources.*` (#12), `autoscaling.maxReplicas` (#13). The `ci`
    Dockerfile also uses `runAsUser` / `runAsGroup` (#15) and
    `extraSystemPackages` (#17); the Jenkinsfile uses `registryCredentialsId` and `nvdApiKeyCredentialsId` (#19).
+   Keep the `values.yaml` `jwt` block only when #9 = yes (`jwt.issuerUri` is required, `permissions` §7).
 9. **`unit-tests`** → for every class produced in the previous steps,
    generate a meaningful `*Test.java` next to it. The `ArchitectureTest`
    (step 2) and the PIT / Jacoco gates (`ci` pom, step 1) already exist —
@@ -177,13 +174,12 @@ Execute the following skills in order. Each one is documented in its own
     With Phase 1 #9 = yes, also generate `ApplicationContextTest`: `@SpringBootTest` in the **default** profile with
     `@MockitoBean JwtDecoder` and `spring.security.oauth2.resourceserver.jwt.issuer-uri` set in `properties` — the
     component tests exclude `SecurityConfig`, so this is the only test that boots the production security chain.
+    With #9 = yes, `application-component-test.yaml` also sets `jwt.issuer-uri` (`component-tests` §3).
 11. **`integration-tests`** *(if any external dependency was added)* →
     produces `*IT.java` Testcontainer / WireMock tests under
     `@Tag("integration")` (Failsafe is already in the `ci` pom).
-12. **`sdk-publishing`** *(only if the developer answered "this repo is a
-    reusable library")* → adds the `META-INF/spring/...AutoConfiguration.imports`
-    file, the `additional-spring-configuration-metadata.json`, and the
-    `ApplicationContextRunner`-based slice tests.
+12. **`sdk-publishing`** *(library only)* and steps 15–17 (`release-versioning`, `documentation-and-adr`,
+    `context-maintenance`): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
 12a. **`static-analysis`** → Spotless, SpotBugs (+ the starter
     `spotbugs-exclude.xml`), Error Prone / NullAway, `checkstyle.xml`, and
     `.mvn/jvm.config`.
@@ -193,11 +189,7 @@ Execute the following skills in order. Each one is documented in its own
     (Phase 6) if there are unresolved `FAIL`s.
 14. **`local-dev-experience`** → docker-compose for the Phase 1 #16
     dependencies, Makefile, pre-commit hooks; dev settings in
-    `application-local.yaml` (the `local` profile).
-15. **`release-versioning`** → Conventional Commits + release automation.
-16. **`documentation-and-adr`** → ADR-0001 under `docs/adr/`, `docs/ARCHITECTURE.md`.
-17. **`context-maintenance`** → the `context/` folder.
-
+    `application-local.yaml` (the `local` profile), including a local `jwt.issuer-uri` when #9 = yes.
 ## Phase 4 – Common project infrastructure
 
 Always create the repo-root files — `README.md`, `.gitignore`, `renovate.json`, `.editorconfig`, `CODEOWNERS`, the Maven
@@ -215,8 +207,9 @@ Run, in order, and surface output to the user:
    architecture tests, Failsafe ITs, and the Jacoco, PIT, SpotBugs, Checkstyle
    and Error Prone gates — the same build CI runs. (ITs need Docker; if it is
    not available, report them as not verified rather than skipping silently.)
-3. `helm lint helm-chart` – verify the chart is valid (services only).
-4. `helm template helm-chart` – verify the manifests render (services only).
+3. `helm lint --strict helm-chart` – verify the chart is valid (services only).
+4. `helm template helm-chart --set jwt.issuerUri=https://issuer.example.test` – verify the manifests render
+   (services only; omit `--set` when auth = no).
 
 If any step fails, **stop and report** – do not try to silently patch.
 

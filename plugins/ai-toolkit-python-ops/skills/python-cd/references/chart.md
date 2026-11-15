@@ -1,8 +1,9 @@
 # python-cd — the complete chart
 
-Back to [`SKILL.md`](../SKILL.md). Every file of `helm-chart/`, verbatim; it passes `helm lint --strict` and
-`helm template` as written. Replace `my-service` in `Chart.yaml`, `values.yaml` and the commands (`my-service-worker`,
-`my_service.liveness`) with the project's names; change nothing else without a reason.
+Back to [`SKILL.md`](../SKILL.md). Every file of `helm-chart/`, verbatim; with `forwardedAllowIps` set it passes
+`helm lint --strict` and `helm template` as written (`helm lint` does not enforce the `required` value; only
+`helm template` fails without it). Replace `my-service` in `Chart.yaml`, `values.yaml` and the commands
+(`my-service-worker`, `my_service.liveness`) with the project's names; change nothing else without a reason.
 
 ## `Chart.yaml`
 
@@ -58,6 +59,7 @@ worker:
   drainSeconds: 20
   terminationGracePeriodSeconds: 40
   heartbeatMaxAgeSeconds: 60
+  metricsPort: 9090
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 512Mi }
@@ -69,6 +71,9 @@ migrations:
 
 metrics:
   serviceMonitor:
+    enabled: true
+    interval: 30s
+  podMonitor:
     enabled: true
     interval: 30s
 
@@ -163,7 +168,7 @@ spec:
     metadata:
       labels:
         {{- include "app.labels" . | nindent 8 }}
-        {{- include "app.selector" $sel | nindent 8 }}
+        app.kubernetes.io/component: {{ $sel.component }}
     spec:
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       automountServiceAccountToken: false
@@ -234,7 +239,7 @@ spec:
     metadata:
       labels:
         {{- include "app.labels" . | nindent 8 }}
-        {{- include "app.selector" $sel | nindent 8 }}
+        app.kubernetes.io/component: {{ $sel.component }}
     spec:
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       automountServiceAccountToken: false
@@ -257,6 +262,11 @@ spec:
               value: /tmp/heartbeat
             - name: HEARTBEAT_MAX_AGE_SECONDS
               value: {{ .Values.worker.heartbeatMaxAgeSeconds | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.worker.metricsPort | quote }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.worker.metricsPort }}
           envFrom:
             - secretRef:
                 name: {{ .Values.existingSecret }}
@@ -417,6 +427,25 @@ spec:
     - port: http
       path: /metrics/
       interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}
+```
+
+## `templates/podmonitor.yaml`
+
+```yaml
+{{- if and .Values.worker.enabled .Values.metrics.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "app.fullname" . }}-worker
+  labels: {{- include "app.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "app.selector" (dict "root" . "component" "worker") | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
 {{- end }}
 ```
 

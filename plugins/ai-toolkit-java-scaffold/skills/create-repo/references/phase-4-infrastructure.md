@@ -19,7 +19,8 @@ Always create these files at the repo root:
 - **`lombok.config`** – `lombok.addLombokGeneratedAnnotation = true`, so Jacoco and PIT skip Lombok-generated code.
 - **`src/test/resources/application-component-test.yaml`** – only the
   test-friendly overrides for the `component-test` profile (in-memory
-  clients, dummy credentials). Never name it `application.yaml`: a test
+  clients, dummy credentials; with auth = yes `spring.security.oauth2.resourceserver.jwt.issuer-uri:
+  https://issuer.example.test`, or every component test fails on the unresolved `${JWT_ISSUER_URI}`). Never name it `application.yaml`: a test
   `application.yaml` replaces the main one instead of adding to it
   (`component-tests` §3).
 

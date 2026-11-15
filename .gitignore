@@ -21,4 +21,4 @@ typescript-*
 
 
 # claude plugin eval output
-evals/results/
+evals/**/results/

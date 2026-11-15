@@ -83,10 +83,11 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    e. Dockerfile (multi-stage) + .dockerignore
    f. Jenkinsfile, or the GitHub Actions workflows of
       `ai-toolkit-java-ops:github-actions-ci` (`build.yml`, `image.yml`, `release.yml`)
-   g. Helm chart (templates/, values.yaml)
+   g. Helm chart (templates/, values.yaml; the `jwt` block only when auth = yes)
    h. docker-compose.yml + Makefile
    i. Exception hierarchy (`exception/BaseDomainException`, unchecked) +
-      `exception/handler/GlobalExceptionHandler`
+      `exception/handler/GlobalExceptionHandler`, minus the template parts the service cannot compile
+      (`exception-handling` §3a: `[security]` when auth = no, `[persistence]` without a database)
    j. ObservabilityConfig (MDC filter, tracing, metrics)
    k. Graceful-shutdown config
    l. context/ templates (architecture, code-standards, dependencies,

@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -174,6 +174,10 @@ Label with the route **template** (`/v1/orders/{order_id}`), never the raw path,
 error message: unbounded labels exhaust memory. Domain metrics (`orders_created_total`) are recorded
 by a small recorder class injected into the service, not by `Counter.inc()` scattered through logic.
 Under multi-process servers set `PROMETHEUS_MULTIPROC_DIR` and use `MultiProcessCollector`.
+
+A worker process has no ASGI app: it calls `prometheus_client.start_http_server(settings.metrics_port)` once at
+start (`python-graceful-shutdown` §5) and records its own collectors (records handled, dead-lettered, outbox rows
+unpublished, last-success timestamp); the chart's PodMonitor scrapes that port (`python-cd` §5).
 
 ## 5. What to measure
 Rate, errors and duration per route (RED), dependency call latency and failures, queue depth for

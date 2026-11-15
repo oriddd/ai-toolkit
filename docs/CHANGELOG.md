@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-15
+
 ### Independent review fix round (2026-11-15)
 Three independent reviewers rated `main` 7/10 (Java 7, Python 8, React Native 6.5). Every HIGH and MEDIUM finding was
 verified against the files and fixed, each change proven by a build, type-check or run.
@@ -57,6 +59,22 @@ verified against the files and fixed, each change proven by a build, type-check 
     per key skill; Spring Boot 3.5's end of OSS support (2026-06-30) is stated in README and `create-repo`; the
     pre-push hook works without the private blocklist; CI actions bumped with Dependabot; `check-versions.sh` counts
     `plugin.json` description/dependency changes.
+- **Final review (Java 7.5, Python 7.5, React Native 7.5, repo 7.5), every finding fixed with a before/after proof:**
+  - Java: the static-analysis pom block is well-formed XML (a `--` inside a comment made Maven reject it); generated
+    component tests set an issuer URI; `application-local.yaml`, the README and the Helm chart carry `JWT_ISSUER_URI` /
+    `JWT_AUDIENCE`; `GlobalExceptionHandler` has tagged `[validation]` / `[security]` / `[persistence]` blocks with a
+    tested strip recipe, so no-auth and no-DB scaffolds compile; an unreachable identity provider returns 503
+    problem+json (new `IdentityProviderUnavailableFilter`), not a 500; the templates compile warning-free under
+    Error Prone; `golden-path` #6 says an adapter is its port's client.
+  - Python: `python-cd` pod labels no longer duplicate `app.kubernetes.io/name|instance` (strict YAML parsers rejected
+    them); only `helm template` enforces the required `forwardedAllowIps`, not `helm lint`; `run_worker` exits non-zero
+    when the relay or consumer crashes (it used to wait for SIGTERM forever); the relay beats a heartbeat; the worker
+    serves `/metrics` with a PodMonitor.
+  - React Native: workflow inputs go through `env`, not into the shell; actions are SHA-pinned; OTA publish is gated on
+    `eas fingerprint:compare`; the push-registration snippet compiles.
+  - Repo: eval results are never tracked (`evals/**/results/` ignored); `run-evals.sh all` runs the agent cases with
+    Write/Edit and a scaffold; the review-agent grader is tied to the Agent result; agent graders check a skill rule in
+    the written file; the validator fails when `marketplace.json` and the latest CHANGELOG release disagree.
 - **Deliberate corrections of original rules** (substance kept, mechanism changed): `external-client` (`.block()` +
   `exchangeToMono` → `RestClient` `exchange`; same single non-2xx mapping and synchronous API) and the strategy registry
   (indexed by `getSupported<X>()` instead of iterating `canHandle`; same routing, add-a-strategy-never-touch-the-handler).

@@ -252,6 +252,8 @@ claude plugin eval . --eval-dir evals --case 'trigger-persistence' --runs 1 --ab
 The case files are generated: edit the prompts and graders in `tools/eval_cases/` (`triggers.py`, `behaviour.py`,
 `agents.py`) and run `python3 tools/build-evals.py`; CI runs it with `--check`. A behaviour grader must check a rule the model does not follow without the skill — if the without-plugin arm passes it too, it measures nothing. Grade what a skill forbids with a third tuple field, `"not_contains"`, and match the usage (`@TimeLimiter\s*\(`), not the bare name, which a correct answer may mention to warn against it. `tools/validate-skills.sh` fails when a skill has no trigger case, the case does not load the skill's plugin, or an
 agent has no agent case. Add
-the trigger case in the same PR as the skill. Evals cost API credits, so CI does not run them: run them before a
+the trigger case in the same PR as the skill. **What the evals do not cover.** The commit guard and the routing hooks are tested by `tools/test-hooks.sh` (about 250 cases), not by evals. `scaffold-repo` is interactive and main-session only, so it has a negative case (never run as a subagent) but no positive one. Behaviour cases grade text answers in the reply, so a grader such as `Deciders:` can pass on a mention; agent cases grade that the agent wrote a file with one skill rule in it, not that every rule was followed. Treat the evals as a regression net, not proof of completeness.
+
+Evals cost API credits, so CI does not run them: run them before a
 release and after any change to a skill's `description`, and record the pass rate in `docs/CHANGELOG.md`.
 

@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-ci, python-graceful-shutdown]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -36,6 +36,7 @@ helm-chart/
     ├── hpa.yaml                    # api only
     ├── pdb.yaml                    # api, only when it runs more than one replica
     ├── servicemonitor.yaml         # scrapes /metrics/ on the api
+    ├── podmonitor.yaml             # scrapes /metrics on the worker's metrics port (§5)
     └── networkpolicy.yaml          # api: ingress controller, monitoring, same namespace
 ```
 
@@ -64,7 +65,7 @@ otel: { endpoint: "" }                            # empty = tracing off
 - Non-secret settings are rendered inline into each pod (`app.env` helper), not into a chart ConfigMap: the
   migration hook runs before chart resources exist and needs them too.
 - `FORWARDED_ALLOW_IPS` lets uvicorn's `--proxy-headers` (`python-ci` §3) trust `X-Forwarded-*` only from the
-  ingress; the render fails without it (`python-security` §4).
+  ingress; `helm template` fails without it (`python-security` §4).
 - OTel: `OTEL_SERVICE_NAME` (`<release>-api` / `-worker`), `OTEL_EXPORTER_OTLP_ENDPOINT` only when set, and
   `OTEL_RESOURCE_ATTRIBUTES` with pod name, namespace and version. The tracing settings read `OTEL_SERVICE_NAME` and
   `OTEL_EXPORTER_OTLP_ENDPOINT` for `configure_tracing` (`python-observability` §3): an explicit `service.name` in
@@ -120,7 +121,7 @@ spec:
 | | api | worker |
 | --- | --- | --- |
 | command | image `CMD` (uvicorn, `--proxy-headers`) | `["my-service-worker"]` |
-| Service, HPA, PDB, ServiceMonitor | yes | no |
+| Service, HPA, PDB, ServiceMonitor | yes | no (a PodMonitor scrapes its `metrics` port) |
 | liveness | `httpGet /health/live` | `exec ["python", "-m", "my_service.liveness"]` (heartbeat age) |
 | readiness | `httpGet /health/ready` | none (no traffic to gate) |
 | startup | `httpGet /health/live`, up to 60 s | `initialDelaySeconds: 30` on liveness |
@@ -132,15 +133,18 @@ spec:
   worker `40 > 20 drain + close`. Change a number there and here together, never one side.
 - Worker liveness is the heartbeat probe of `python-graceful-shutdown` §5 (`HEARTBEAT_DIR=/tmp/heartbeat`,
   `HEARTBEAT_MAX_AGE_SECONDS`); keep the max age above the slowest record with retries.
+- The worker serves `prometheus_client` metrics on `METRICS_PORT` (`worker.metricsPort`, 9090) through
+  `start_http_server` (`python-graceful-shutdown` §5): a named container port the PodMonitor scrapes.
 - Workers scale by `replicas` up to the topic's partition count; no CPU HPA (an idle consumer burns no CPU while
-  lag grows). Scale on lag with KEDA if needed.
+  lag grows). Scale on the lag the worker exports (`python-observability` §4) with KEDA if needed.
 - The api's liveness probe never checks dependencies: a database outage must not restart every pod.
 
 ## 5. Scaling, disruption, metrics and network
 - HPA (`autoscaling/v2`) on CPU for the api, `minReplicas: 2`; the Deployment omits `replicas` when the HPA owns it.
 - PDB `minAvailable: 1`, rendered only when the api runs more than one replica (a PDB on one replica blocks drains).
 - ServiceMonitor scrapes `path: /metrics/` (the mounted app answers `/metrics` with a 307,
-  `python-fastapi-conventions` §7). Without the Prometheus Operator set `metrics.serviceMonitor.enabled=false`.
+  `python-fastapi-conventions` §7). The worker has no Service: a PodMonitor scrapes `/metrics` on its `metrics`
+  port. Without the Prometheus Operator set `metrics.serviceMonitor.enabled=false` and `metrics.podMonitor.enabled=false`.
 - NetworkPolicy on the api pods: traffic only from the ingress controller's namespace, the monitoring namespace
   and pods of the same namespace. A NetworkPolicy cannot filter by path, so `/metrics` and `/docs` also stay off
   the Ingress rules (route only `/v1/...`).
@@ -151,7 +155,9 @@ helm lint --strict helm-chart --set forwardedAllowIps=10.0.0.0/8
 helm template my-service helm-chart -n orders --set forwardedAllowIps=10.0.0.0/8 > /tmp/rendered.yaml
 kubectl apply --dry-run=server -f /tmp/rendered.yaml   # only against a dev cluster you are allowed to use
 ```
-Render with the values of every environment in CI; a missing `required` value fails the build, not the deploy.
+`helm lint` does not evaluate `required` (it exits 0 without `forwardedAllowIps`); only `helm template` fails on a
+missing value. Run `helm template` with the values file of every environment in CI, so a missing `required` value
+fails the build, not the deploy.
 
 ## Do / Don't
 - ✅ One image, three entrypoints: uvicorn, `my-service-worker`, `alembic upgrade head`.
@@ -163,6 +169,9 @@ Render with the values of every environment in CI; a missing `required` value fa
 - ❌ A readiness probe or a Service on the worker; dependency checks in any liveness probe.
 - ❌ `runAsUser: 0`, a writable root filesystem, or added capabilities.
 - ❌ Secret values in `values.yaml` or the chart.
+- ❌ Including both `app.labels` and `app.selector` in a pod template: both emit `name` and `instance`, so every pod
+  would carry duplicate YAML keys. Pod labels are `app.labels` plus one `component` line; the selector helper is for
+  `matchLabels` and Service selectors only.
 
 ## Cross-references
 - [`python-ci`](../python-ci/SKILL.md) — the image, its `CMD` and the uid the chart runs as.

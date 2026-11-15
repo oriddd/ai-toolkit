@@ -237,7 +237,7 @@ REACT_NATIVE = {
         "react-native-ci": (
             "Create the GitHub Actions workflows for pull-request checks and EAS releases of our React Native app." + TAIL_RN,
             [("verify-script", r"npm run verify"), ("least-privilege", r"permissions:\s*\{?\s*contents:\s*read"),
-             ("expo-action-v9", r"expo-github-action@v9"), ("npm-packager", r"packager:\s*npm"),
+             ("expo-action-pinned", r"expo-github-action@[0-9a-f]{40}"), ("npm-packager", r"packager:\s*npm"),
              ("protected-env", r"environment:\s*production")]),
     },
 }

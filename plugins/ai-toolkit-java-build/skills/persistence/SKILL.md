@@ -129,8 +129,8 @@ Rules:
   and a primitive version it falls back to the id check, treats the entity as existing, runs `merge()` (an extra SELECT) and never fills `createdAt` / `createdBy`.
 - **`@Version`** on every aggregate root. Concurrent updates fail with
   `OptimisticLockingFailureException` — caught by the
-  `@RestControllerAdvice` and mapped to `409 Conflict` — add an `@ExceptionHandler(OptimisticLockingFailureException.class)` returning `409`; the
-  catch-all handler would otherwise turn it into a `500`.
+  `@RestControllerAdvice` and mapped to `409 Conflict` — the `exception-handling` template ships that handler (tag `[persistence]`, keep it); without it the
+  catch-all handler would turn the failure into a `500`.
 - **Enums stored as `STRING`**, never ordinal (renaming breaks history).
 - **JPA auditing** (`@EnableJpaAuditing` + `AuditorAware<String>`) fills
   `createdAt/Updated/By` automatically. The `AuditorAware` bean

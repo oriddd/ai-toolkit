@@ -68,7 +68,10 @@ producing code must validate the diff against this list before returning.
    message (`exception-handling`).
 5. **Authorization** goes through `PermissionsHandler`, never inline
    `if (principal.isAdmin)` (`permissions`).
-6. **Outbound HTTP** goes through the `client/<dep>/` sub-package (see #23) —
+6. **Outbound HTTP** goes through the `client/<dep>/` sub-package for a business
+   downstream (see #23), or through `adapter/<capability>/<vendor>/` when the
+   downstream is a technology capability behind a `spi/` port (#20): the adapter
+   is that port's client and uses the same transport classes —
    never raw `WebClient` / `RestClient` calls in a service.
    **Pattern complexity must match integration scale** (`external-client` §0):
    - Simple CRUD (1-4 endpoints) → Simple Wrapper pattern

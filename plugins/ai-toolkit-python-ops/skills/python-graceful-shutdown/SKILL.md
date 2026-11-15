@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-ci]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -118,21 +118,33 @@ async def run_worker(settings: AppSettings) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)       # PID 1: without a handler SIGTERM is ignored
+    start_http_server(settings.metrics_port)         # prometheus_client: /metrics for the PodMonitor (`python-cd` §5)
     async with worker_resources(settings) as resources:   # engine, producer, consumer; closed on exit
-        relay = asyncio.create_task(run_relay(resources.relay, stop, settings.relay_idle_seconds))
+        relay = asyncio.create_task(
+            run_relay(resources.relay, stop, settings.relay_idle_seconds, Heartbeat("relay")))
         consumer = asyncio.create_task(resources.consumer_loop.run(stop))
-        await stop.wait()
-        done, pending = await asyncio.wait({relay, consumer}, timeout=settings.drain_seconds)
+        loops = {relay, consumer}
+        stopper = asyncio.create_task(stop.wait())
+        await asyncio.wait({stopper, *loops}, return_when=asyncio.FIRST_COMPLETED)
+        stop.set()                                   # SIGTERM, or a loop ended first: stop the other one too
+        stopper.cancel()
+        done, pending = await asyncio.wait(loops, timeout=settings.drain_seconds)
         for task in pending:
             task.cancel()                            # idle consumer waiting for a record: nothing in flight
         await asyncio.gather(*pending, return_exceptions=True)
         for task in done:
-            task.result()                            # a crashed loop fails the process, not silently
+            task.result()                            # a loop that crashed re-raises: the process exits non-zero
 
 def main() -> None:
     asyncio.run(run_worker(AppSettings()))
 ```
 
+- Waiting on the loops as well as on `stop` is what makes a crash visible: `await stop.wait()` alone never notices a
+  loop task that died, so the pod would sit idle, still beating the other loop's heartbeat, until someone restarts
+  it. When a loop ends first the other one drains, `task.result()` re-raises, `asyncio.run` exits non-zero and the
+  kubelet restarts the container.
+- `start_http_server(settings.metrics_port)` serves the worker's `prometheus_client` registry (consumer and relay
+  lag, DLT count, `python-observability` §4) on a plain port the PodMonitor scrapes; it needs no ASGI app.
 - The consumer loop polls with `getmany(timeout_ms=1000, max_records=1)` and checks `stop` after each record is
   processed and committed (`python-messaging` §5), so it never stops between the side effect and the offset commit,
   and an idle worker exits within one poll instead of waiting out `drain_seconds`. Only a handler still running
@@ -141,7 +153,8 @@ def main() -> None:
   the group, so its partitions move to another replica at once instead of after the session timeout.
 - Worker budget: `terminationGracePeriodSeconds > drain_seconds + resource close`. A worker has no Service, so
   no readiness probe and no `preStop`.
-- Liveness without an HTTP server: each loop (consumer, relay) calls `Heartbeat(<loop>).beat()` once per iteration,
+- Liveness without an HTTP server: each loop (consumer, relay) calls `Heartbeat(<loop>).beat()` once per iteration
+  (`run_relay` takes the `Heartbeat` as its fourth argument, `python-messaging` §3),
   which touches `/tmp/heartbeat/<loop>` (an `emptyDir`, so it works with a read-only root filesystem). A stdlib-only
   module checks the ages; an exec probe runs it, so a hung or deadlocked loop restarts the pod:
 
@@ -173,7 +186,8 @@ if __name__ == "__main__":
 - Unit: the lifespan run through `LifespanManager` (`asgi-lifespan`) with fakes recording the close order —
   relay, then clients, then engine; the consumer loop with `stop` already set returns after one committed record.
 - Unit: `run_worker`'s drain with fake loops — the in-flight record finishes and is committed, an idle consumer
-  returns within one poll (nothing is cancelled); `liveness.main` exits non-zero for a stale heartbeat file.
+  returns within one poll (nothing is cancelled), and a loop that raises makes `run_worker` raise after the other
+  loop has stopped; `liveness.main` exits non-zero for a stale heartbeat file.
 - Smoke, once per service: start uvicorn with the production flags, send a slow request, send `SIGTERM`; the
   request completes with `200`, a new connection is refused, the lifespan shutdown logs after the request.
 
@@ -182,6 +196,7 @@ if __name__ == "__main__":
 - ✅ `preStop` sleep on every pod behind a Service; the budget written down next to the Deployment.
 - ✅ One `AsyncExitStack` in the lifespan; background tasks stopped through an event and awaited.
 - ✅ Workers install `SIGTERM`/`SIGINT` handlers and stop between records, after the commit.
+- ✅ `run_worker` waits on its loops as well as on `stop`, so a crashed loop fails the process.
 - ✅ Worker loops beat a heartbeat file each iteration; an exec liveness probe checks its age.
 - ❌ Shell-form `CMD`, or a wrapper script that does not `exec` the server.
 - ❌ uvicorn without `--timeout-graceful-shutdown`: the lifespan shutdown never runs on a stuck request.
