@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-Set up automated releases for our Spring Boot service's GitHub repository: semantic versions derived from the commits, a generated CHANGELOG, and the image tag equal to the version. Show the code in your reply. Do not create files.
+Set up automated releases for our Spring Boot service's GitHub repository: semantic versions derived from the commits, a generated CHANGELOG, and the image tag and Helm chart appVersion equal to the version. Show the code in your reply. Do not create files.

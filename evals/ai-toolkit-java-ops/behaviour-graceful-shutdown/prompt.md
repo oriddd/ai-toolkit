@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-During Kubernetes rolling updates our Spring Boot 3 pods drop in-flight requests and @Async tasks. Show the application and Kubernetes configuration that fixes it.
+During Kubernetes rolling updates our Spring Boot 3.5 pods drop in-flight HTTP requests and @Async tasks, and the Kafka listener in the same service sometimes stops mid-batch. The pod spec has terminationGracePeriodSeconds: 30. Show the application and Kubernetes configuration that fixes it.

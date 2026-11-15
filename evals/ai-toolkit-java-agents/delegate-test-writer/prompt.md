@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Agent, Skill, Read, Glob, Grep]
 ---
 
-Use the test-writer agent: The production code is done. Write the JUnit tests for the existing OrderService and OrderController classes. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.
+Use the test-writer agent: The production code is done. Write the JUnit tests for the existing OrderService and OrderController classes. OrderService also POSTs to the payment service through a RestTemplate it creates itself; do not change production code — write characterisation tests through the HTTP API with the payment service stubbed, and report the seam you used. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.

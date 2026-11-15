@@ -90,9 +90,10 @@ def generate(out):
             write(f"{plugin}/behaviour-{s}/prompt.md",
                   f"---\ndescription: \"applying `{s}` changes the answer — compare the with/without-plugin scores\"\n"
                   f"tags: [behaviour]\n{plugins_line(plugin)}max_turns: 12\ntimeout_seconds: 600\nallowed_tools: [Skill, Read, Glob, Grep]\n---\n\n{prompt}\n")
-            for name, pattern in checks:
+            for name, pattern, *match in checks:
                 quoted = pattern.replace("'", "''")
-                write(f"{plugin}/behaviour-{s}/graders/{name}.md", f"---\ntype: regex\npattern: '{quoted}'\n---\n")
+                mode = f"match: {match[0]}\n" if match else ""
+                write(f"{plugin}/behaviour-{s}/graders/{name}.md", f"---\ntype: regex\npattern: '{quoted}'\n{mode}---\n")
             write(f"{plugin}/behaviour-{s}/graders/skill-loaded.md",
                   f"---\ntype: tool_used\ntool: Skill\ninput_match: '{skill_re([s])}'\n---\n")
 

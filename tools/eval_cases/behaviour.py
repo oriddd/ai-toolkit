@@ -73,9 +73,10 @@ MORE = {
             "When an order is created in my Spring Boot 3 order service, publish an OrderPlaced event to Kafka; the "
             "shipping service consumes it. Make sure no event is lost if the database commit succeeds, and that "
             "redelivered events are not processed twice." + TAIL,
-            [("outbox", r"[Oo]utbox"), ("event-record", r"record\s+OrderPlaced"),
-             ("idempotent-consumer", r"[Pp]rocessed_?[Ee]vents?|ProcessedEvent|existsBy\w*EventId|eventId"),
-             ("dead-letter", r"DeadLetterPublishingRecoverer|\.DLT|-dlt|dead-letter"), ("transactional", r"@Transactional")]),
+            [("occurred-at", r"occurredAt"), ("event-id-header", r"[\x22\x27]event-id[\x22\x27]"),
+             ("string-payload", r"ConsumerRecord<String,\s*String>|value-deserializer:\s*\S*StringDeserializer"),
+             ("single-relay", r"@SchedulerLock|ShedLock"), ("non-retryable", r"exclude\s*=\s*\{"),
+             ("ack-after-commit", r"\.acknowledge\(\)")]),
         "permissions": (
             "In my Spring Boot 3 API, a document may be deleted only by its owner (an end user) or by an admin service "
             "account; any other caller gets 403. Implement this authorization." + TAIL,
@@ -85,8 +86,11 @@ MORE = {
         "resilience-patterns": (
             "My Spring Boot 3 service calls the pricing service synchronously; when pricing is slow our threads pile up "
             "and the whole service stalls. Protect this call." + TAIL,
-            [("circuit-breaker", r"@CircuitBreaker|CircuitBreaker"), ("bulkhead", r"@Bulkhead|Bulkhead"),
-             ("timeout", r"@TimeLimiter|timeout-duration|[Tt]imeout"), ("fallback", r"fallbackMethod")]),
+            [("aop-starter", r"spring-boot-starter-aop|spring-boot-starter-aspectj"), ("bom", r"resilience4j-bom"),
+             ("semaphore-no-wait", r"max-?[wW]ait-?[dD]uration:\s*0\b"),
+             ("client-read-timeout", r"[rR]eadTimeout\(|read-timeout:|ReadTimeout\("),
+             ("fallback-throws", r"(?:Throwable|Exception)\s+\w+\)\s*\{[^}]*?\bthrow\b"),
+             ("no-sync-time-limiter", r"@TimeLimiter\s*\(", "not_contains")]),
     },
     "ai-toolkit-java-design": {
         "api-design": (
@@ -118,11 +122,14 @@ MORE = {
             [("filter", r"OncePerRequestFilter"), ("recorder", r"MetricsRecorder"), ("tag-constants", r"MonitoringConstants"),
              ("skip-actuator", r"shouldNotFilter"), ("finally", r"finally\s*\{")]),
         "graceful-shutdown": (
-            "During Kubernetes rolling updates our Spring Boot 3 pods drop in-flight requests and @Async tasks. Show the "
-            "application and Kubernetes configuration that fixes it.",
-            [("graceful", r"shutdown:\s*graceful|server\.shutdown=graceful"), ("phase-timeout", r"timeout-per-shutdown-phase"),
-             ("grace-period", r"terminationGracePeriodSeconds"), ("pre-stop", r"preStop"),
-             ("executor-drain", r"await-termination|setWaitForTasksToCompleteOnShutdown|awaitTermination")]),
+            "During Kubernetes rolling updates our Spring Boot 3.5 pods drop in-flight HTTP requests and @Async tasks, and "
+            "the Kafka listener in the same service sometimes stops mid-batch. The pod spec has "
+            "terminationGracePeriodSeconds: 30. Show the application and Kubernetes configuration that fixes it.",
+            [("native-sleep", r"preStop:\s*\n\s*sleep:"), ("kafka-container-timeout", r"setShutdownTimeout\("),
+             ("budgeted-grace", r"terminationGracePeriodSeconds:\s*(?:8[5-9]|9\d|[1-9]\d{2,})\b"),
+             ("budget-sum", r"\d+(?:\s*s)?\s*\+\s*[A-Za-z ]{0,25}\d+(?:\s*s)?\s*\+\s*[A-Za-z ]{0,25}\d+"),
+             ("per-phase", r"(?:[Ee]ach|EACH|[Pp]er|[Ee]very)\s+(?:waiting\s+|lifecycle\s+|shutdown\s+)*phase"),
+             ("no-invented-property", r"listener\.shutdown-timeout\s*[=:]|listener:\s*\n\s*shutdown-timeout:", "not_contains")]),
     },
     "ai-toolkit-java-quality": {
         "component-tests": (
@@ -145,16 +152,20 @@ MORE = {
              ("testing", r"## Testing"), ("names-test", r"PaymentClientRetryTest")]),
         "release-versioning": (
             "Set up automated releases for our Spring Boot service's GitHub repository: semantic versions derived from "
-            "the commits, a generated CHANGELOG, and the image tag equal to the version." + TAIL,
-            [("release-tool", r"release-please|semantic-release"), ("conventional-commits", r"[Cc]onventional [Cc]ommits"),
-             ("changelog", r"CHANGELOG"), ("tag-equals-version", r"v?\$\{\{?\s*[\w.]*version|tag[\s\S]{0,40}version")]),
+            "the commits, a generated CHANGELOG, and the image tag and Helm chart appVersion equal to the version." + TAIL,
+            [("manifest-config", r"release-please-config\.json|\.release-please-manifest\.json"),
+             ("non-default-token", r"token:\s*[\x22\x27]?\$\{\{\s*secrets\.(?!GITHUB_TOKEN\b)\w+"),
+             ("sha-pinned", r"uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40}"), ("chart-via-bot", r"extra-files|--app-version"),
+             ("commit-lint", r"commitlint")]),
     },
     "ai-toolkit-docs": {
         "documentation-and-adr": (
-            "We decided to move our order events from RabbitMQ to Kafka. Write the Architecture Decision Record for the "
-            "repository and say where the file goes. Show it in your reply; do not create files.",
-            [("adr-path", r"docs/adr/\d{4}-[a-z0-9-]+\.md"), ("status", r"## Status|Status:"),
-             ("context", r"## Context"), ("decision", r"## Decision"), ("consequences", r"## Consequences")]),
+            "Our repository already has ADRs 0001 to 0004; ADR 0003 chose RabbitMQ for order events. We have now decided "
+            "to move order events to Kafka. Write the Architecture Decision Record, say where the file goes, and say what "
+            "changes in the existing ADRs. Show it in your reply; do not create files.",
+            [("adr-path", r"docs/adr/0005-[a-z0-9-]+\.md"), ("title", r"#\s*ADR-0005\s+—"),
+             ("status-bullet", r"\*\s*Status:\s*(?:PROPOSED|ACCEPTED)"), ("supersedes", r"SUPERSEDED by ADR-0005"),
+             ("deciders", r"Deciders:")]),
     },
 }
 
@@ -291,8 +302,10 @@ PYTHON = {
             "        if amount < 0:\n            raise ValueError(\"amount must not be negative\")\n"
             "        tier = await self._tiers.tier_of(customer_id)\n"
             "        return amount * {Tier.GOLD: Decimal(\"0.10\"), Tier.SILVER: Decimal(\"0.05\")}.get(tier, Decimal(0))\n```",
-            [("naming", r"def test_[a-z]\w*_[a-z][A-Za-z0-9]*_[a-z][A-Za-z0-9]*\("), ("fake", r"class Fake\w+"),
-             ("parametrize", r"pytest\.mark\.parametrize"), ("typed", r"-> None:"), ("raises", r"pytest\.raises")]),
+            [("camel-naming", r"def test_[a-z][A-Za-z0-9]*_[a-z]+[A-Z][A-Za-z0-9]*_[a-z]+[A-Z][A-Za-z0-9]*\("),
+             ("stateful-fake", r"class Fake\w+[\s\S]{0,400}?self\.\w+:\s*(?:list|dict)\["),
+             ("parametrize-ids", r"ids\s*=\s*\["), ("no-asyncio-marker", r"@pytest\.mark\.asyncio", "not_contains"),
+             ("no-mocks", r"AsyncMock|MagicMock|mock\.patch|\bpatch\(", "not_contains")]),
         "python-integration-tests": (
             "Integration-test my Python SqlOrderRepository (SQLAlchemy async) against a real PostgreSQL." + TAIL_PY,
             [("community-module", r"testcontainers\.(community\.)?postgres"), ("savepoint", r"create_savepoint|begin_nested"),

@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-We decided to move our order events from RabbitMQ to Kafka. Write the Architecture Decision Record for the repository and say where the file goes. Show it in your reply; do not create files.
+Our repository already has ADRs 0001 to 0004; ADR 0003 chose RabbitMQ for order events. We have now decided to move order events to Kafka. Write the Architecture Decision Record, say where the file goes, and say what changes in the existing ADRs. Show it in your reply; do not create files.

@@ -14,12 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python: 17 fixes; new `python-external-client`, `python-security`, `python-messaging`; a sample FastAPI service passes `verify`.
 - Evals generated from `tools/eval_cases/` by `tools/build-evals.py` (CI checks they are in sync); 44 behaviour cases.
 - Agents load their skills first, before any clarifying question (they used to ask first and sometimes never loaded them).
-- Results (Claude Code 2.1.311): routing 105/105 (76 triggers, 29 negatives); agents 23/24 cases pass — `test-writer`
-  is sometimes done by the main session itself (1 of 2 runs); behaviour 44 skills, 38 with a clear with/without lift
-  (e.g. `permissions` 1.00 vs 0.00, `react-native-input-validation` 1.00 vs 0.00, `python-error-handling` 0.80 vs 0.00,
-  `react-native-ci` 1.00 vs 0.33), 6 where the model already follows the practice (`documentation-and-adr`,
-  `messaging`, `resilience-patterns`, `graceful-shutdown`, `python-unit-tests`, `release-versioning`).
+- Results (Claude Code 2.1.311): routing 105/105 (76 triggers, 29 negatives); agents 24/24 cases pass; behaviour
+  44 skills, all with a with/without lift (e.g. `permissions` 1.00 vs 0.00, `react-native-input-validation` 1.00 vs
+  0.00, `python-error-handling` 0.80 vs 0.00, `react-native-ci` 1.00 vs 0.33).
   Open: `strategy-registry-pattern` 0.80 and `react-native-state-and-data` 0.80 (`safeParse` at the edge 0/3).
+- Behaviour graders for `documentation-and-adr`, `messaging`, `resilience-patterns`, `graceful-shutdown`,
+  `python-unit-tests` and `release-versioning` now check the skill's own rules instead of practices the model already
+  follows (lift 0.00 → +0.80, +0.73, +0.60, +0.56, +0.33, +0.17). Regex graders can assert absence
+  (`match: not_contains`, a third tuple field in `tools/eval_cases/behaviour.py`).
+- The `test-writer` eval prompt now describes the fixture's hand-built `RestTemplate`; without it the main session
+  rightly stopped to ask instead of delegating (now 2/2 graded runs delegate and load `unit-tests`).
 - Clean Java rebuild (a fresh agent follows create-repo and the skills literally: REST + JWT + JPA/Flyway + Kafka
   outbox + metrics + health): BUILD SUCCESS — 154 tests, JaCoCo 85/75 per class, PIT 93 %, Spotless, Checkstyle,
   SpotBugs, Error Prone/NullAway clean, Helm lint strict. It needed 4 workarounds (the previous audit needed 9); all
