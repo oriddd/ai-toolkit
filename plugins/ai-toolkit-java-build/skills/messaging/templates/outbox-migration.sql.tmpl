@@ -2,6 +2,7 @@
 -- Matches OutboxEntity.java.tmpl and the processed-events dedupe table of the idempotent consumer (SKILL.md §3, §4).
 CREATE TABLE outbox (
     id              uuid         PRIMARY KEY,
+    version         bigint       NOT NULL,
     aggregate_type  varchar(100) NOT NULL,
     aggregate_id    varchar(100) NOT NULL,
     event_type      varchar(200) NOT NULL,
@@ -19,3 +20,6 @@ CREATE TABLE processed_events (
     event_id     varchar(64) PRIMARY KEY,   -- INSERT ... ON CONFLICT (event_id) DO NOTHING
     processed_at timestamptz NOT NULL DEFAULT now()
 );
+-- retention job deletes rows older than the longest possible redelivery (topic retention + DLT redrive window);
+-- deleting sooner lets a late redelivery be processed twice
+CREATE INDEX ix_processed_events_processed_at ON processed_events (processed_at);

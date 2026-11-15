@@ -8,8 +8,8 @@ applies_to: [rest, monolith]
 depends_on: [permissions]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Security Hardening Skill
@@ -41,8 +41,8 @@ boundary.
 | A06 Vulnerable & Outdated Components | Renovate + `dependency-check-maven` in CI; fail build on CVSS ≥ 7.0. |
 | A07 Identification & Authentication | OAuth2 resource server, JWT validated with JWK Set rotation; never long-lived bearer tokens. |
 | A08 Software & Data Integrity Failures | Cosign-signed container images; SBOM published; CI verifies signatures. |
-| A09 Security Logging & Monitoring | Auth failures emit a `security.auth.failure` metric + structured log (`event=AUTH_FAILED`) — alerted in `observability`. |
-| A10 SSRF | Outbound HTTP clients have an **allow-list** of hosts; `WebClient` filter rejects others. |
+| A09 Security Logging & Monitoring | Auth failures emit a `security.auth.failure` metric + structured log (`event=AUTH_FAILED`) — alerted in `observability`. The `permissions` `ProblemDetailSecurityHandler` template does both (§10). |
+| A10 SSRF | Outbound HTTP clients have an **allow-list** of hosts; a client interceptor rejects others (`RestClient`: §10; a `WebClient` uses the same check in an `ExchangeFilterFunction`). |
 
 ## 3. CORS
 
@@ -163,6 +163,62 @@ Every action that mutates state emits:
 `actor` is the pseudonymous subject id (the token's `sub`), never a username or e-mail (`data-privacy`).
 Either as a structured log line consumed by SIEM, or as an event onto an
 `audit` Kafka topic.
+
+## 10. Filter-chain errors and outbound allow-list
+
+**401 / 403 bodies.** Spring Security answers an unauthenticated or forbidden request inside the filter chain, before
+the `@RestControllerAdvice` runs, so by default the body is empty — not the ProblemDetail every error must carry
+(`exception-handling`). Register the `permissions` template
+[`ProblemDetailSecurityHandler`](../permissions/templates/ProblemDetailSecurityHandler.java.tmpl) on the resource
+server (`oauth2ResourceServer(o -> o.jwt(...).authenticationEntryPoint(h).accessDeniedHandler(h))`, as the
+`SecurityConfig` template does): it keeps the `WWW-Authenticate: Bearer` header, writes an
+`application/problem+json` body with `errorCode`, never echoes the exception message, and records the A09
+`security.auth.failure` counter (tag `reason`) and `event=AUTH_FAILED` log line.
+
+**SSRF allow-list (A10).** One `RestClientCustomizer` applies the check to Boot's `RestClient.Builder`, so every
+client built from it (`external-client` clones that builder) refuses unlisted hosts before a connection is opened:
+
+```java
+/** SSRF guard (security-hardening A10): an outbound call to a host outside the configured allow-list is never sent. */
+public class OutboundHostAllowList implements ClientHttpRequestInterceptor {
+    private final Set<String> allowedHosts;
+
+    public OutboundHostAllowList(Set<String> allowedHosts) {
+        this.allowedHosts = allowedHosts.stream().map(h -> h.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
+            throws IOException {
+        String host = request.getURI().getHost();
+        if (host == null || !allowedHosts.contains(host.toLowerCase(Locale.ROOT))) {
+            throw new IllegalStateException("Outbound host is not in security.outbound.allowed-hosts: " + host);
+        }
+        return execution.execute(request, body);
+    }
+}
+
+@Configuration(proxyBeanMethods = false)
+public class OutboundHttpConfig {
+
+    @ConfigurationProperties(prefix = "security.outbound")
+    public record OutboundProperties(Set<String> allowedHosts) {}
+
+    @Bean
+    RestClientCustomizer outboundHostAllowList(OutboundProperties props) {
+        return builder -> builder.requestInterceptor(new OutboundHostAllowList(props.allowedHosts()));
+    }
+}
+```
+
+```yaml
+security:
+  outbound:
+    allowed-hosts: ${OUTBOUND_ALLOWED_HOSTS}   # comma list, no default — an empty list blocks every outbound call
+```
+
+List every downstream host the service calls, including the ones only a readiness indicator probes
+(`health-indicator` builds its client from the same builder).
 
 ## Do / Don't
 

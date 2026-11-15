@@ -7,8 +7,8 @@ applies_to: [rest, monolith]
 depends_on: [observability, external-client, pluggable-architecture]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Rate Limiting Skill
@@ -44,11 +44,13 @@ resilience4j:
 ### 2b. Local Rate Limiting with Bucket4j
 
 ```xml
-<!-- Bucket4j is not managed by the Spring Boot BOM: pin the version -->
+<!-- Bucket4j is not managed by the Spring Boot BOM: pin the version (8.22.0 verified on Boot 3.5) -->
+<properties><bucket4j.version>8.22.0</bucket4j.version></properties>
+
 <dependency>
     <groupId>com.bucket4j</groupId>
     <artifactId>bucket4j_jdk17-core</artifactId>
-    <version><current></version>
+    <version>${bucket4j.version}</version>
 </dependency>
 ```
 
@@ -81,7 +83,8 @@ return new RateLimitDecision(probe.isConsumed(),
         TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
 ```
 
-The caller (a filter or the operation) turns a refusal into the domain exception:
+The caller — the operation, or a `HandlerInterceptor` for a per-route limit — turns a refusal into the domain
+exception. Both run inside the `DispatcherServlet`, so the `@RestControllerAdvice` answers 429 + `Retry-After`:
 
 ```java
 RateLimitDecision decision = rateLimiter.tryConsume(clientKey);
@@ -91,6 +94,19 @@ if (!decision.allowed()) {
     throw ExceptionMessages.rateLimitExceeded(decision.retryAfterSeconds());
 }
 ```
+**Never throw it from a servlet `Filter`.** A filter runs before the `DispatcherServlet`; the advice never sees the
+exception and the client gets Boot's `500` error page without `Retry-After`. If the limit must sit in a filter (e.g.
+ahead of authentication), hand the exception to the advice instead of throwing it:
+
+```java
+// injected: @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver
+if (!decision.allowed()) {
+    resolver.resolveException(request, response, null, ExceptionMessages.rateLimitExceeded(decision.retryAfterSeconds()));
+    return;                                       // do not call chain.doFilter
+}
+chain.doFilter(request, response);
+```
+
 In-memory buckets are per instance; use the distributed variant below when the limit must hold across pods.
 
 ## 3. Distributed Rate Limiting (Multi-Node)
@@ -98,7 +114,7 @@ In-memory buckets are per instance; use the distributed variant below when the l
 When running multiple instances, use **Redis + Bucket4j** to have a shared counter. This prevents a client from getting N times the limit by hitting N different pods.
 
 Add a second `RateLimiterPort` adapter (`adapter/ratelimit/redis/`) selected by
-`platform.ratelimit.provider: redis`. It uses `com.bucket4j:bucket4j_jdk17-lettuce` (version `<current>`) and a
+`platform.ratelimit.provider: redis`. It uses `com.bucket4j:bucket4j_jdk17-lettuce` (`${bucket4j.version}`, the same release as core) and a
 Lettuce-based `ProxyManager` (`LettuceBasedProxyManager`): `proxyManager.getProxy(clientKey, () -> configuration)`
 returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. Check the
 builder API of the Bucket4j version you pin — it changed across 8.x releases. Prove both adapters with one

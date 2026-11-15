@@ -42,12 +42,12 @@ injects a routing table at session start.
 | **Structure a new project / module** | `python-code-structure`, `python-fastapi-conventions` | `react-native-code-structure`, `react-native-state-and-data` |
 | **Handle errors** | `python-error-handling` | `react-native-error-handling` |
 | **Validate input** | `python-input-validation` | `react-native-input-validation` |
-| **Persist data / secure the app** | `python-persistence`, `python-security` | `react-native-security` |
+| **Persist data / secure the app** | `python-persistence`, `python-security` | `react-native-security`, `react-native-permissions-and-push` |
 | **Call an external API** | `python-external-client`, `python-error-handling` | — |
 | **Process or publish events** | `python-messaging`, `python-persistence`, `python-integration-tests` | — |
 | **Write tests** | `python-unit-tests`, `python-integration-tests` | `react-native-unit-tests`, `react-native-e2e-tests` |
 | **Lint / typing / static analysis** | `python-static-analysis` | `react-native-static-analysis` |
-| **CI and release** | `python-ci`, `python-graceful-shutdown` | `react-native-ci` |
+| **CI and release** | `python-ci`, `python-cd`, `python-graceful-shutdown` | `react-native-ci`, `react-native-app-config-and-updates` |
 | **Logs, traces, crashes** | `python-observability` | `react-native-observability` |
 
 | Any language | Skills |

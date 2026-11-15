@@ -6,4 +6,4 @@ max_turns: 4
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-In two sentences, what is the difference between a unit test and an integration test?
+In one sentence, what does this Java method return for x = 3? `int sq(int x) { return x * x; }`

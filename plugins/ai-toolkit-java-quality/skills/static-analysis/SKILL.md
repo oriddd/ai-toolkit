@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Static Analysis Skill
@@ -37,10 +37,10 @@ on objective violations.
     <plugin>
       <groupId>com.diffplug.spotless</groupId>
       <artifactId>spotless-maven-plugin</artifactId>
-      <version>2.43.0</version>
+      <version>3.11.0</version>
       <configuration>
         <java>
-          <googleJavaFormat><version>1.22.0</version><style>AOSP</style></googleJavaFormat>
+          <googleJavaFormat><version>2.0.0</version><style>AOSP</style></googleJavaFormat>
           <removeUnusedImports/>
           <importOrder><order>java,javax,jakarta,org,com,</order></importOrder>
         </java>
@@ -114,12 +114,12 @@ on objective violations.
     <plugin>
       <groupId>org.apache.maven.plugins</groupId>
       <artifactId>maven-checkstyle-plugin</artifactId>
-      <version>3.4.0</version>
+      <version>3.6.0</version>
       <dependencies>
         <dependency>
           <groupId>com.puppycrawl.tools</groupId>
           <artifactId>checkstyle</artifactId>
-          <version>10.17.0</version>
+          <version>14.4.0</version>
         </dependency>
       </dependencies>
       <configuration>

@@ -9,7 +9,7 @@ applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-state-and-data]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -52,19 +52,23 @@ export type ErrorCode =
   | 'BAD_REQUEST' | 'RATE_LIMITED' | 'EMAIL_TAKEN' | 'SERVER' | 'UNKNOWN';   // EMAIL_TAKEN: from a server code, §3
 
 export class AppError extends Error {
+  override name = 'AppError';
   constructor(readonly code: ErrorCode, readonly retryable: boolean, options?: { cause?: unknown }) {
     super(code, options);
-    this.name = new.target.name;
   }
 }
-export class NetworkError extends AppError { constructor(cause?: unknown) { super('NETWORK_OFFLINE', true, { cause }); } }
-export class UnauthorizedError extends AppError { constructor() { super('UNAUTHORIZED', false); } }
-export class NotFoundError extends AppError { constructor() { super('NOT_FOUND', false); } }
-export class ServerError extends AppError { constructor(readonly status: number) { super('SERVER', true); } }
+export class NetworkError extends AppError { override name = 'NetworkError'; constructor(cause?: unknown) { super('NETWORK_OFFLINE', true, { cause }); } }
+export class UnauthorizedError extends AppError { override name = 'UnauthorizedError'; constructor() { super('UNAUTHORIZED', false); } }
+export class NotFoundError extends AppError { override name = 'NotFoundError'; constructor() { super('NOT_FOUND', false); } }
+export class ServerError extends AppError { override name = 'ServerError'; constructor(readonly status: number) { super('SERVER', true); } }
 export type FieldErrors = Record<string, string>;        // form field path -> server error code
-export class ValidationError extends AppError { constructor(readonly fieldErrors: FieldErrors) { super('VALIDATION_FAILED', false); } }
+export class ValidationError extends AppError { override name = 'ValidationError'; constructor(readonly fieldErrors: FieldErrors) { super('VALIDATION_FAILED', false); } }
 export const isAppError = (e: unknown): e is AppError => e instanceof AppError;
 ```
+
+Each class sets its `name` as a string literal: the release bundle's minifier renames classes (Metro's terser config
+turns `new.target.name` / `constructor.name` into `''` or `c`), so a derived name breaks crash grouping. Group and
+branch on `code`, never on `name`.
 
 Add a subclass only when callers branch on it; otherwise a new `ErrorCode` is enough. Every 4xx the API documents gets its own code (by status, or by the problem `code` in §3), so nothing expected lands in `UNKNOWN` and is reported as a bug.
 

@@ -9,8 +9,8 @@ applies_to: [rest]
 depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -114,7 +114,32 @@ Every non-2xx body is RFC 9457 `application/problem+json` produced by the handle
 - Version in the path prefix (`/v1`); breaking change means `/v2`, never a silent change.
 - Verbs: `GET` safe, `PUT` full replace (idempotent), `PATCH` partial, `DELETE` idempotent, `POST` create (201 + `Location`).
 - Sub-resources at most two levels deep; filters are query parameters.
-- Long work returns `202 Accepted` with a status resource.
+- Long work returns `202 Accepted` with a status resource (6b).
+
+## 6b. Long-running work: 202 and a job resource
+Anything that can outlast a normal request (exports, bulk imports, slow downstream calls) is a job, not a request:
+
+```python
+@router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=ExportJobResponse)
+async def start_export(
+    body: StartExportRequest,
+    jobs: Annotated[ExportJobs, Depends(get_export_jobs)],
+    response: Response,
+) -> ExportJobResponse:
+    job = await jobs.start(body)                       # job row + its event in one unit of work
+    response.headers["Location"] = f"{router.prefix}/jobs/{job.id}"
+    response.headers["Retry-After"] = "5"
+    return job                                         # {"id": ..., "status": "pending", "result_url": null}
+```
+
+- `jobs.start` stores the job (`pending`) and an outbox event in the same unit of work (`python-messaging` §2); a
+  worker runs it and moves it to `running`, then `succeeded` (with `result_url`) or `failed` (with a problem detail).
+- `GET /v1/exports/jobs/{id}` returns the job, with `Retry-After` while it is `pending`/`running`; an unknown or
+  foreign id is the service's not-found error → 404 (`python-error-handling`, `python-security` §2).
+- Accept an `Idempotency-Key` header on the `POST` when clients retry, so a retry returns the same job.
+- Expire finished jobs and their results on a schedule; fail jobs stuck in `running` past a deadline.
+- ❌ `BackgroundTasks` or `asyncio.create_task` for this work: it runs in the API process and is lost on the next
+  deploy (`python-graceful-shutdown` §3).
 
 ## 7. Lifespan, not startup events
 Create and close shared resources (DB engine, HTTP clients) in one `lifespan`, attach to `app.state`.
@@ -165,6 +190,19 @@ async def ready(engine: Annotated[AsyncEngine, Depends(get_engine)], response: R
 ```
 
 Health routes are the only routes without an authentication dependency (see `python-security`).
+
+## 8. Run it locally
+A `compose.yaml` at the repo root starts only the dependencies (PostgreSQL, and Kafka if the service uses
+`python-messaging`) with the same variable names as production; the service itself runs from the venv with reload:
+
+```sh
+docker compose up -d --wait                        # db (and broker) with health checks
+uv run alembic upgrade head
+uv run uvicorn my_service.main:create_app --factory --reload
+```
+
+Commit `.env.example` (no secrets) and keep `.env` out of git; tests never need compose (`python-integration-tests`
+starts its own containers).
 
 ## Do / Don't
 - ✅ `async def` routes only when everything awaited inside is async; otherwise `def` (runs in the threadpool).

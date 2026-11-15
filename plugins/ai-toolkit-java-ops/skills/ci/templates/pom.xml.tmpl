@@ -20,8 +20,9 @@
         <skipTests>false</skipTests>
         <!-- Not managed by the Spring Boot parent: keep current (Java 25 bytecode needs 0.8.14+); let Renovate bump it -->
         <jacoco.version>0.8.16</jacoco.version>
-        <pitest.version>1.20.0</pitest.version>
+        <pitest.version>1.30.2</pitest.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
+        <archunit.version>1.4.1</archunit.version>
     </properties>
 
     <dependencies>
@@ -34,6 +35,8 @@
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
         <dependency><groupId>org.jspecify</groupId><artifactId>jspecify</artifactId><version>1.0.0</version></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+        <!-- code-structure always generates ArchitectureTest; not managed by the Spring Boot parent -->
+        <dependency><groupId>com.tngtech.archunit</groupId><artifactId>archunit-junit5</artifactId><version>${archunit.version}</version><scope>test</scope></dependency>
         <!-- ADDITIONAL DEPENDENCIES GO HERE -->
     </dependencies>
 
@@ -119,8 +122,6 @@
                     <mutationThreshold>75</mutationThreshold>
                     <!-- a fresh skeleton has no mutable logic yet -->
                     <failWhenNoMutations>false</failWhenNoMutations>
-                    <!-- incremental analysis: unchanged classes reuse the previous result -->
-                    <withHistory>true</withHistory>
                 </configuration>
                 <executions>
                     <execution><id>pit</id><phase>verify</phase><goals><goal>mutationCoverage</goal></goals></execution>

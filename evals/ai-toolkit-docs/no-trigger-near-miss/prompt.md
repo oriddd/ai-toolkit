@@ -6,4 +6,4 @@ max_turns: 4
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-In two sentences, summarise what this paragraph says: "The invoice service exposes a REST API and stores invoices in PostgreSQL." Do not create files.
+Translate this sentence into French and reply with the translation only: "The invoice service stores invoices in PostgreSQL."

@@ -27,6 +27,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 4. `ai-toolkit-react-native-build:react-native-error-handling` — errors mapped to `AppError` in one place, message catalogue,
    error boundary / inline error state.
 5. `ai-toolkit-react-native-build:react-native-security` — only if the screen handles tokens, deep links or sensitive data.
+   `ai-toolkit-react-native-build:react-native-permissions-and-push` — only if the screen needs a device permission or push.
 6. `ai-toolkit-react-native-ops:react-native-observability` — screen-view analytics via the analytics interface, no PII.
 7. `ai-toolkit-react-native-quality:react-native-unit-tests` — component, hook, schema and mapper tests.
 8. `ai-toolkit-react-native-quality:react-native-e2e-tests` — only if the screen is on a critical user journey; add stable test IDs.
@@ -55,7 +56,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    b. Feature api function + query-key factory entry + query/mutation hook.
    c. Validation schema (zod) + message catalogue entries, if the screen has input.
    d. Screen-level hook holding the logic; the screen component only renders.
-   e. Screen component — loading, empty, error and success states; test IDs on
+   e. Screen component — calls the hooks (after parsing params, in a screens-layer
+      inner component) and passes data to pure `components/` that never call
+      data hooks; loading, empty, error and success states; test IDs on
       interactive elements.
    f. AppError mapping / catalogue entry if a new error case is introduced.
    g. Analytics screen-view event through the analytics interface, if required.

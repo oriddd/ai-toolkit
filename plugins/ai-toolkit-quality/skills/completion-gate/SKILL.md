@@ -120,5 +120,8 @@ available to you, apply the check 5 standards inline and say so in the table.
 
 ## Cross-references
 
+`git-commit-conventions`, `parallel-delegation` and `release-versioning` come from `ai-toolkit-workflow`; `context-maintenance`
+from `ai-toolkit-docs`. Every language set installs both; with this plugin alone, apply their rules from the description here.
+
 `code-hygiene`, `sonar-quality-gate`, `parallel-delegation`, `context-maintenance`, `git-commit-conventions` (when asked to
 commit), and per language its static-analysis, unit-test and review skills (Java `static-analysis`, `unit-tests`, `quality-review`, `golden-path`; `python-static-analysis`, `python-unit-tests`; `react-native-static-analysis`, `react-native-unit-tests`).

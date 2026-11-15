@@ -9,8 +9,8 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure, pluggable-architecture]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Feature Flags Skill
@@ -29,6 +29,13 @@ Feature flags allow you to merge code to `main` and deploy to production without
 Implement flags behind a dedicated `FeatureTogglePort` (the port named in `pluggable-architecture`; its adapter wraps local config or a remote client library):
 
 ```java
+// spi/featureflag/ — vendor-free port; the context carries what per-user / per-tenant targeting needs
+public interface FeatureTogglePort {
+    boolean isEnabled(String flagKey);                        // global flag (release, ops)
+    boolean isEnabled(String flagKey, FlagContext context);   // targeted flag (experiment, permission)
+}
+public record FlagContext(String subjectId, Map<String, String> attributes) {}
+
 // flag keys are constants (or an enum) — never inline string literals
 public final class FeatureFlags {
     public static final String ENABLE_INVOICE_PRICING_V2 = "enable-invoice-pricing-v2";
@@ -71,8 +78,9 @@ or new use case; the code below the edge has no flag checks:
 
 ```java
 @GetMapping("/{id}/price")
-public ResponseEntity<PriceResponse> price(@PathVariable String id) {
-    var operation = features.isEnabled(FeatureFlags.ENABLE_INVOICE_PRICING_V2)
+public ResponseEntity<PriceResponse> price(@PathVariable String id, @AuthenticationPrincipal Jwt caller) {
+    var context = new FlagContext(caller.getSubject(), Map.of());   // targeting: the opaque subject id, never PII
+    var operation = features.isEnabled(FeatureFlags.ENABLE_INVOICE_PRICING_V2, context)
             ? pricingV2Operation : pricingOperation;          // both implement the same PricingUseCase
     return ResponseEntity.ok(operation.execute(id));
 }
@@ -107,7 +115,9 @@ Test both states of the flag:
 
 ## Do / Don't
 
-✅ Move the toggle check as close to the business logic as possible.
+✅ Check each flag at exactly **one** decision point: the edge (§2c) when the whole request path changes, otherwise
+the single decision inside the use case, as close to the business logic as possible (§2) — never the same flag in
+several layers.
 ✅ Use meaningful names (e.g., `enable-invoice-batch-v2`).
 ✅ Add a default value (usually `false`) in case the provider is unreachable.
 ❌ Never use nested feature flags.

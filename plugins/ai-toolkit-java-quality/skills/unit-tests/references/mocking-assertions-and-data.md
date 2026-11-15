@@ -20,12 +20,12 @@ Part of the [`unit-tests`](../SKILL.md) skill. Section numbers and headings are 
 
 ## Static / context mocking
 
-When the code under test calls a static method (e.g.
-`SecurityContextHolder.getContext()`, `FilenameUtils.getExtension(...)`):
+When the code under test calls a static method of a library you cannot inject (e.g.
+`FilenameUtils.getExtension(...)` on a path that only exists in production):
 
 ```java
-try (MockedStatic<SecurityContextHolder> ctx = mockStatic(SecurityContextHolder.class)) {
-    ctx.when(SecurityContextHolder::getContext).thenReturn(mockSecurityContext);
+try (MockedStatic<FilenameUtils> files = mockStatic(FilenameUtils.class)) {
+    files.when(() -> FilenameUtils.getExtension("report")).thenReturn("pdf");
     // …act + assert…
 }
 ```
@@ -34,7 +34,11 @@ Rules:
 - **`try-with-resources` inside the test method** — never a class field, or
   the static stub leaks between tests and breaks parallel execution.
 - One `MockedStatic` per class being statically stubbed.
-- Reference: a `PermissionsHandlerTest` (illustrative name — see the `permissions` skill).
+- Prefer removing the static: inject a `Clock` / `IdGenerator` / small wrapper bean (`testable-code-principles`).
+- **`SecurityContextHolder` is not mocked statically.** Code that reads it (only the `CallerContextResolver` and the
+  auditor in `permission/`) is tested with a real context — `SecurityContextHolder.setContext(...)` holding e.g. a
+  `JwtAuthenticationToken`, and `SecurityContextHolder.clearContext()` in `@AfterEach` (`permissions` "Tests").
+  Everything else stubs the injected `CallerContextResolver` (see the `PermissionsHandlerTest` in `permissions`).
 
 ## Testing `@PostConstruct` / heavy startup logic
 

@@ -28,7 +28,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 3. `ai-toolkit-java-build:exception-handling` —
    domain exception for non-2xx from the Client.
 4. `ai-toolkit-java-ops:health-indicator` — readiness
-   probe for the new dependency.
+   indicator for the new dependency; it joins the `readiness` group only for a hard dependency (its question 8),
+   never `liveness`.
 5. `ai-toolkit-java-build:resilience-patterns` —
    circuit breaker + retry on the `*Client`.
 6. `ai-toolkit-java-ops:observability` — W3C trace context (`traceparent`)
@@ -55,7 +56,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    `ai-toolkit-java-agents:new-metric` procedure, or tell the developer to run that agent afterwards)
 9. Query and response complexity — filters / DSL, nested transformations (`ai-toolkit-java-build:external-client` §0)
 10. Readiness probe (`ai-toolkit-java-ops:health-indicator`): the downstream's readiness endpoint, expected success
-    status code and probe interval
+    status code and probe interval, and whether the service can work at all while it is down (its question 8 — only a
+    hard dependency joins the `readiness` group)
 ```
 
 Ask all of these in one round, before generating anything.
@@ -90,7 +92,7 @@ client/<dep>/
     response/<Dep>ResponseVerifier.java
 
 Every pattern:
-health/indicator/<Dep>HealthIndicator.java
+health/indicator/<Dep>HealthIndicator.java   (in the readiness group only for a hard dependency — item 10)
 application.yaml additions
 ```
 
@@ -158,7 +160,7 @@ diff, including untracked files.
 - [ ] Constants (the Constants file in Full 5-Layer) hold all remote field names / endpoint paths.
 - [ ] Base URL and timeouts bound through the `*Properties` `@ConfigurationProperties` record.
 - [ ] Circuit breaker + retry wired in `*Client` via Resilience4j.
-- [ ] Readiness `HealthIndicator` added.
+- [ ] Readiness `HealthIndicator` added; in the `readiness` group only for a hard dependency (item 10), never in `liveness`.
 - [ ] `application.yaml` keys added with `${ENV_VAR:default}` placeholders.
 - [ ] Unit tests cover every layer; WireMock integration test covers
       happy path + 5xx error path.

@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-Write the git commit message for this change and show it in your reply (do not run git): I renamed UserService.getUser to fetchUser because it now calls the remote profile API, and updated the three call sites.
+Write the git commit message for this change and show it in your reply (do not run git): in our published Java client SDK I renamed the public method UserService.getUser to fetchUser, since it now calls the remote profile API, and updated the three call sites inside the SDK.

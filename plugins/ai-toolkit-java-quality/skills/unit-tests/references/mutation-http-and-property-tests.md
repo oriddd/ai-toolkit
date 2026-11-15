@@ -13,7 +13,7 @@ seeded bugs. PIT is **required** (guild #12: mutation score ≥ 75 %); the `ci` 
 <plugin>
     <groupId>org.pitest</groupId>
     <artifactId>pitest-maven</artifactId>
-    <version>1.20.0</version>   <!-- 1.16 + junit5-plugin 1.2.1 fail on JUnit 5.12 (Boot 3.5) -->
+    <version>1.30.2</version>   <!-- 1.16 + junit5-plugin 1.2.1 fail on JUnit 5.12 (Boot 3.5) -->
     <dependencies>
         <!-- without this PIT finds no JUnit 5 tests and the mutation gate silently measures nothing -->
         <dependency>
@@ -37,7 +37,6 @@ seeded bugs. PIT is **required** (guild #12: mutation score ≥ 75 %); the `ci` 
         </excludedTestClasses>
         <mutationThreshold>75</mutationThreshold>
         <failWhenNoMutations>false</failWhenNoMutations>   <!-- a fresh skeleton has nothing to mutate -->
-        <withHistory>true</withHistory>                    <!-- incremental: unchanged classes reuse the last result -->
     </configuration>
 </plugin>
 ```
@@ -158,8 +157,8 @@ at the minimal input that breaks the property.
 
 Illustrative class names — map each to the matching test in your repo:
 
-- Strategy pattern: `PermissionsHandlerTest` – shows `MockedStatic`,
-  list-injection, multiple branch tests.
+- Strategy pattern: `PermissionsHandlerTest` – shows a stubbed `CallerContextResolver` (no static
+  mocking), list-injection, multiple branch tests.
 - Service with collaborators: `FooServiceTest` – shows record-based
   parameterised exception provider, `clearInvocations`, propagation checks.
 - Operation orchestration: `FooOperationTest` – shows

@@ -82,7 +82,9 @@ public enum LayoutType {
 ```
 
 `ExceptionMessages.invalidField` returns the `BadRequestException` of `exception-handling` (400). With
-openapi-first, declare `layout` as an enum parameter in `api.yaml` instead, so the generated code rejects unknown values.
+openapi-first, declare `layout` as a `$ref` enum in `api.yaml` instead (an inline `enum:` is generated as a plain
+`String` that accepts anything) and set the generator's `configPackage` inside the scan (`openapi-first-codegen` §1, §2),
+so an unknown value is rejected before the handler runs.
 
 ### `LayoutResolver`
 

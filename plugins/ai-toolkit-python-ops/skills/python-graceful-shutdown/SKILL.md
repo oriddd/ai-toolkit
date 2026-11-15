@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-ci]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -25,9 +25,10 @@ connection resets, duplicate events or a pod that always waits out its whole gra
 ```
 src/my_service/
 ├── main.py                 # create_app(): the lifespan closes tasks, clients and pools on shutdown (§4)
-└── worker.py               # main(): the worker process — outbox relay and consumers, stops on SIGTERM (§5)
+├── worker.py               # main(): the worker process — outbox relay and consumers, stops on SIGTERM (§5)
+└── liveness.py             # heartbeat files + the worker's exec liveness probe (§5)
 Dockerfile                  # exec-form CMD with --timeout-graceful-shutdown (`python-ci` §3)
-deploy/                     # api and worker Deployments: preStop, terminationGracePeriodSeconds (§3)
+deploy/                     # api and worker Deployments: preStop, terminationGracePeriodSeconds (§3, `python-cd`)
 ```
 
 ## 1. What uvicorn does on SIGTERM
@@ -132,19 +133,47 @@ def main() -> None:
     asyncio.run(run_worker(AppSettings()))
 ```
 
-- The consumer loop checks `stop` after each record is processed and committed (`python-messaging` §5), so it
-  never stops between the side effect and the offset commit. A consumer still waiting for the next record is
-  cancelled after `drain_seconds`; a record cancelled mid-handler rolls back and is redelivered, which the
-  idempotent consumer absorbs.
+- The consumer loop polls with `getmany(timeout_ms=1000, max_records=1)` and checks `stop` after each record is
+  processed and committed (`python-messaging` §5), so it never stops between the side effect and the offset commit,
+  and an idle worker exits within one poll instead of waiting out `drain_seconds`. Only a handler still running
+  after `drain_seconds` is cancelled; its record rolls back and is redelivered, which the idempotent consumer absorbs.
 - `worker_resources` is an `asynccontextmanager` over an `AsyncExitStack`: closing the aiokafka consumer leaves
   the group, so its partitions move to another replica at once instead of after the session timeout.
 - Worker budget: `terminationGracePeriodSeconds > drain_seconds + resource close`. A worker has no Service, so
   no readiness probe and no `preStop`.
+- Liveness without an HTTP server: each loop (consumer, relay) calls `Heartbeat(<loop>).beat()` once per iteration,
+  which touches `/tmp/heartbeat/<loop>` (an `emptyDir`, so it works with a read-only root filesystem). A stdlib-only
+  module checks the ages; an exec probe runs it, so a hung or deadlocked loop restarts the pod:
+
+```python
+HEARTBEAT_DIR = Path(os.environ.get("HEARTBEAT_DIR", "/tmp/heartbeat"))  # noqa: S108  (an emptyDir mount)
+MAX_AGE_SECONDS = float(os.environ.get("HEARTBEAT_MAX_AGE_SECONDS", "60"))
+
+class Heartbeat:                                     # my_service/liveness.py: imports nothing heavy
+    def __init__(self, loop_name: str) -> None:
+        self._path = HEARTBEAT_DIR / loop_name
+
+    def beat(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.touch()
+
+def main() -> None:                                  # livenessProbe: exec ["python", "-m", "my_service.liveness"]
+    now = time.time()
+    stale = [p.name for p in HEARTBEAT_DIR.glob("*") if now - p.stat().st_mtime > MAX_AGE_SECONDS]
+    sys.exit(f"stale loops: {stale}" if stale else 0)
+
+if __name__ == "__main__":
+    main()
+```
+
+  `MAX_AGE_SECONDS` must exceed the slowest record's handling with all its retries, plus the poll timeout; set the
+  probe's `timeoutSeconds` and `failureThreshold` so one slow record does not restart the pod.
 
 ## 6. Testing
 - Unit: the lifespan run through `LifespanManager` (`asgi-lifespan`) with fakes recording the close order —
   relay, then clients, then engine; the consumer loop with `stop` already set returns after one committed record.
-- Unit: `run_worker`'s drain with fake loops — the in-flight record finishes, an idle consumer is cancelled.
+- Unit: `run_worker`'s drain with fake loops — the in-flight record finishes and is committed, an idle consumer
+  returns within one poll (nothing is cancelled); `liveness.main` exits non-zero for a stale heartbeat file.
 - Smoke, once per service: start uvicorn with the production flags, send a slow request, send `SIGTERM`; the
   request completes with `200`, a new connection is refused, the lifespan shutdown logs after the request.
 
@@ -153,6 +182,7 @@ def main() -> None:
 - ✅ `preStop` sleep on every pod behind a Service; the budget written down next to the Deployment.
 - ✅ One `AsyncExitStack` in the lifespan; background tasks stopped through an event and awaited.
 - ✅ Workers install `SIGTERM`/`SIGINT` handlers and stop between records, after the commit.
+- ✅ Worker loops beat a heartbeat file each iteration; an exec liveness probe checks its age.
 - ❌ Shell-form `CMD`, or a wrapper script that does not `exec` the server.
 - ❌ uvicorn without `--timeout-graceful-shutdown`: the lifespan shutdown never runs on a stuck request.
 - ❌ Failing liveness during shutdown; restarting a pod that is draining.
@@ -161,6 +191,7 @@ def main() -> None:
 
 ## Cross-references
 - [`python-ci`](../python-ci/SKILL.md) — the Dockerfile and its exec-form `CMD`.
+- [`python-cd`](../python-cd/SKILL.md) — the Helm chart that carries this budget, the probes and the worker Deployment.
 - [`python-observability`](../python-observability/SKILL.md) — logs and metrics around shutdown.
 - `python-fastapi-conventions` — the lifespan and the health endpoints.
 - `python-messaging` — the outbox relay and consumer loop that take the `stop` event.

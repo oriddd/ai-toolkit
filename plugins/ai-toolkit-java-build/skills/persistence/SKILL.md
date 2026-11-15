@@ -10,7 +10,7 @@ depends_on: [code-structure, pluggable-architecture]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Persistence Skill
@@ -44,7 +44,9 @@ src/main/resources/
 Also put the metamodel generator on the compiler's processor path, with its transitive JAXB jars (on the plain classpath
 `spring-boot-starter-test` wins the `jakarta.xml.bind-api` mediation as `test` scope and compilation fails with
 `NoClassDefFoundError: jakarta/xml/bind/JAXBException`). Explicit processor paths switch off classpath discovery, so
-list Lombok too:
+this is **one merged list** with the `static-analysis` processors (Error Prone, NullAway — same versions as there),
+Lombok and the configuration processor (`spring-boot-conventions` §1); a second list or a dropped entry silently
+disables that processor:
 
 ```xml
 <plugin>
@@ -52,9 +54,13 @@ list Lombok too:
     <artifactId>maven-compiler-plugin</artifactId>
     <configuration>
         <annotationProcessorPaths>
+            <path><groupId>com.google.errorprone</groupId><artifactId>error_prone_core</artifactId><version>2.52.0</version></path>
+            <path><groupId>com.uber.nullaway</groupId><artifactId>nullaway</artifactId><version>0.14.3</version></path>
             <path><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>${lombok.version}</version></path>
             <path><groupId>org.hibernate.orm</groupId><artifactId>hibernate-jpamodelgen</artifactId><version>${hibernate.version}</version></path>
+            <path><groupId>org.springframework.boot</groupId><artifactId>spring-boot-configuration-processor</artifactId></path>
         </annotationProcessorPaths>
+        <!-- compilerArgs (-Xplugin:ErrorProne …) unchanged from static-analysis -->
     </configuration>
 </plugin>
 ```

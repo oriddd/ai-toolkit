@@ -16,8 +16,9 @@ foo-service:
 Bind the block with one `FooProperties` `@ConfigurationProperties` record
 (`spring-boot-conventions` §1; shown in §6) — never `@Value`. Mirror every key as a constant in
 `constant/ConfigurationConstants` (one constant per prefix, used by
-`@ConfigurationProperties`; `spring-boot-conventions` §1). Add liveness/readiness probes for this dependency (see
-`health-indicator`).
+`@ConfigurationProperties`; `spring-boot-conventions` §1). Add a health indicator for this dependency
+(`health-indicator`) and put it in the **readiness** group only if the service cannot work without it (its question
+8); never in liveness — a downstream outage must take the pod out of the Service, not restart it.
 
 ## 10. Resilience — Resilience4j
 
@@ -26,7 +27,7 @@ Bind the block with one `FooProperties` `@ConfigurationProperties` record
 <dependency>
     <groupId>io.github.resilience4j</groupId>
     <artifactId>resilience4j-bom</artifactId>
-    <version><current></version>
+    <version>${resilience4j.version}</version>   <!-- <properties>: resilience4j.version = 2.4.0, verified on Boot 3.5 -->
     <type>pom</type>
     <scope>import</scope>
 </dependency>

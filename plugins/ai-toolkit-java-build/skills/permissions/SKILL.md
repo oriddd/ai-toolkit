@@ -9,7 +9,7 @@ applies_to: [rest, monolith]
 depends_on: [code-structure, exception-handling, strategy-registry-pattern]
 ships_templates: true
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -65,8 +65,10 @@ authorization back-end** — those are plug-points:
 ## Files to generate
 
 ### 1. Dependencies
-- `org.springframework.boot:spring-boot-starter-security` (or
-  `spring-boot-starter-oauth2-resource-server` if validating OAuth2 tokens).
+- `org.springframework.boot:spring-boot-starter-oauth2-resource-server` — required: the `SecurityConfig` template
+  validates JWTs (`oauth2ResourceServer().jwt()`), and with `spring-boot-starter-security` alone the context fails
+  at startup (`NoClassDefFoundError: BearerTokenResolver`). Plain `spring-boot-starter-security` only for a
+  service without OAuth2 tokens (e.g. HTTP Basic only).
 
 ### 2. `CallerContext` (enum)
 
@@ -248,11 +250,12 @@ permissionsHandler.handle(resourceId);
 ```
 
 This must be the **first** call after parameter validation. Validation
-that runs before it must stay **syntactic** (format, length, required):
-a validator that loads the resource (e.g. checks a product's type) runs
-before authorization, so it must not reveal whether the resource exists or
-echo its attributes in the 400 — move such checks after this call, or
-return the same generic message for "missing" and "wrong type".
+of the id being authorized must stay **syntactic** (format, length, required):
+a validator that loads that resource (existence, a product's type) runs before
+authorization, and answering 400 for missing / ineligible ids while eligible
+ones reach the 403 tells any caller which ids exist — even with one generic
+message. Run such checks in the operation, after this call. Lookups of other
+*referenced* ids in the request stay in the validation layer.
 
 ## Tests (use the `unit-tests` skill)
 
@@ -325,3 +328,4 @@ maps the exception to a status code.
 - [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl) — Routes a `CallerContext` to its strategy.
 - [`PermissionsCheckStrategy.java.tmpl`](./templates/PermissionsCheckStrategy.java.tmpl) — The strategy SPI.
 - [`SecurityConfig.java.tmpl`](./templates/SecurityConfig.java.tmpl) — Spring Security baseline for the service.
+- [`ProblemDetailSecurityHandler.java.tmpl`](./templates/ProblemDetailSecurityHandler.java.tmpl) — 401 / 403 from the filter chain as ProblemDetail (`security-hardening` §10).

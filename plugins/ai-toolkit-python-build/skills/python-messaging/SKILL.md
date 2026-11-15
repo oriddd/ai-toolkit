@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-code-structure, python-persistence, python-error-handling]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -163,19 +163,26 @@ external API cannot be rolled back, so that API must be idempotent itself (pass 
 ## 5. Consumer loop: bounded retries, dead letter, then commit
 ```python
 async def run(self, stop: asyncio.Event) -> None:
-    async for record in self._source:                       # AIOKafkaConsumer(enable_auto_commit=False)
-        await self._process(record)                         # retries max_attempts, then dead-letters
-        await self._source.commit()                         # commit the offset only after the outcome is durable
-        if stop.is_set():                                   # SIGTERM: stop between records (`python-graceful-shutdown`)
-            return
+    while not stop.is_set():                                # SIGTERM: stop between records (`python-graceful-shutdown`)
+        self._heartbeat.beat()                              # worker liveness (`python-graceful-shutdown` §5)
+        batch = await self._source.getmany(timeout_ms=1000, max_records=1)  # AIOKafkaConsumer(enable_auto_commit=False)
+        for records in batch.values():
+            for record in records:
+                await self._process(record)                 # retries max_attempts, then dead-letters
+                await self._source.commit()                 # commit the offset only after the outcome is durable
 ```
+- Poll with a timeout, never `async for record in consumer`: an idle `async for` never returns to check `stop`, so
+  every shutdown waits out the whole drain budget and the loop cannot report that it is alive. `max_records=1`
+  keeps `commit()` (the consumed position) from covering a fetched record that is not processed yet; aiokafka still
+  prefetches in the background.
 - Read `event_id` from the record headers; a missing or malformed id goes straight to the dead-letter topic.
 - Retry a failing handler a few times in-process, then publish the original value and headers plus `dlt_reason`
   to `<topic>.dlt` and move on: one poison message must not block the partition.
 - `enable_auto_commit=False`; offsets are committed after processing or dead-lettering, never before.
 - Bind `event_id` into structlog contextvars per record (`python-observability` §2).
 - The loop depends on Protocols (`CommittingSource`, `MessageHandler`, `EventPublisher`), so it is unit-tested
-  with fakes: success, retry-then-success, always-failing (dead-lettered and committed), missing id.
+  with fakes: success, retry-then-success, always-failing (dead-lettered and committed), missing id, and `stop` set
+  while idle (returns within one poll).
 
 ## 6. Testing
 - Unit: the use case writes the expected event to `InMemoryOutbox`; the consumer loop with fakes.
@@ -194,6 +201,7 @@ async def run(self, stop: asyncio.Event) -> None:
 - ❌ `await producer.send(...)` inside the use case or before `commit()`.
 - ❌ Consumers that assume exactly-once delivery, or deduplicate in memory.
 - ❌ Auto-commit of offsets; infinite in-process retries on one record.
+- ❌ `async for record in consumer` in a worker: it cannot notice `stop` or beat its liveness heartbeat while idle.
 - ❌ ORM rows, `datetime.now()` or personal data in event payloads.
 - ❌ Several relays publishing concurrently with only `SKIP LOCKED`: one aggregate's events leave out of order.
 

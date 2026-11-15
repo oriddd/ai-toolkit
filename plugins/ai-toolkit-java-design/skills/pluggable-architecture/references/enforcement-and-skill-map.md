@@ -43,7 +43,7 @@ you apply one of these, expose its technology as a port + adapters:
 | --- | --- | --- |
 | `persistence` | `RepositoryPort` / dialect-isolated repositories — a Spring Data repository interface is the accepted port (see "Accepted facades" in the SKILL) | any relational dialect, any document store |
 | `observability` | `MetricsPort`, `TracingPort` — Micrometer `MeterRegistry` / Observation API is the accepted facade; use it directly | any scrape-based or push-based backend (a Micrometer registry) |
-| `messaging` | `EventPublisherPort`, `EventConsumerPort` | any broker / streaming platform |
+| `messaging` | the outbox (`outbox.append(event)`) is the publishing port; listeners in `messaging/consumer/` delegate to broker-free handlers — Spring Kafka / AMQP in `messaging/` is an accepted adapter location (see "Accepted facades" in the SKILL); a separate `EventPublisherPort` only when one service must publish to several broker types | any broker / streaming platform |
 | `external-client` | `<Domain>ClientPort` | HTTP, gRPC, file, in-process fake |
 | `rate-limiting` | `RateLimiterPort` | local in-memory, distributed |
 | `data-privacy` | `EncryptionPort`, `KeyProviderPort` | any KMS / vault / local key |

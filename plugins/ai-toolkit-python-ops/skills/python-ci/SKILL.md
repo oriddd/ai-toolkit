@@ -9,7 +9,7 @@ applies_to: [rest, worker, cli, library]
 depends_on: [python-static-analysis, python-unit-tests]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -23,6 +23,7 @@ When bootstrapping a Python repository, or when the pipeline or container image 
 
 ```
 .github/workflows/ci.yml
+.github/workflows/audit.yml     # pip-audit: weekly and on lock-file changes (§4)
 Dockerfile
 .dockerignore
 pyproject.toml + uv.lock        # lock file is committed; CI installs with --locked (fails on drift)
@@ -144,8 +145,12 @@ USER app
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live')"]
 # exec form: uvicorn is PID 1 and receives SIGTERM; the timeout must fit the pod's grace period
-CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "20"]
+CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "20"]
 ```
+
+`--proxy-headers` trusts `X-Forwarded-For`/`-Proto` only from the addresses in `FORWARDED_ALLOW_IPS` (uvicorn reads
+the variable; unset means `127.0.0.1` only). The ingress CIDR differs per cluster, so the Deployment sets it
+(`python-cd`), never the image, and never to `*` (`python-security` §4).
 
 The image's Python, `requires-python`, ruff's `target-version` and mypy's `python_version` name the same version
 (3.14 by default; 3.12 and 3.13 are security-only upstream but still supported here). `uv sync` installs the project
@@ -170,7 +175,31 @@ Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic 
 - Pin uv to one exact version in both places (`setup-uv` `version:` and the `ghcr.io/astral-sh/uv:<tag>` image) and bump them together.
   `<uv-version>` and `<commit-sha>` above are placeholders: pin the latest stable release when you generate the file (never copy an old example pin), and let Renovate/Dependabot bump them.
 - Pin the base image by major.minor (digest for release builds).
-- Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` (or Dependabot/Renovate) as a scheduled job for vulnerable dependencies.
+- Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` as a scheduled job and on every `uv.lock` change (`.github/workflows/audit.yml`, below); Dependabot/Renovate keep the lock current but do not replace the audit.
+
+```yaml
+name: audit
+on:
+  schedule:
+    - cron: "0 5 * * 1"        # weekly: new advisories appear without any change to the repo
+  pull_request:
+    paths: [uv.lock, pyproject.toml]
+  push:
+    branches: [main]
+    paths: [uv.lock, pyproject.toml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in ci.yml
+        with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
+      - run: uv sync --locked
+      - run: uv run pip-audit         # audits the locked environment; the project itself is skipped (not on PyPI)
+```
 - No secrets in images or build args; they arrive at runtime from the environment.
 
 ## Do / Don't

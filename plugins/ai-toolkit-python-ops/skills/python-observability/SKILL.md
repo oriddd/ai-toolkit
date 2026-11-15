@@ -9,8 +9,8 @@ applies_to: [rest, worker]
 depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -71,6 +71,7 @@ def configure_logging(level: str = "INFO") -> None:
         foreign_pre_chain=SHARED,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.format_exc_info,        # else stdlib tracebacks render as "<traceback object>"
             structlog.processors.JSONRenderer(),
         ],
     ))
@@ -128,7 +129,9 @@ def configure_tracing(service_name: str, otlp_endpoint: str, app: FastAPI) -> No
 ```
 Auto-instrumentation covers inbound requests and outbound `httpx`; add manual spans only around
 meaningful domain steps: `with tracer.start_as_current_span("checkout.charge"):`. Configure the
-exporter endpoint from settings and make tracing a no-op when it is unset (tests, local).
+exporter endpoint from settings (read the standard `OTEL_EXPORTER_OTLP_ENDPOINT` variable, which the chart sets,
+`python-cd`) and make tracing a no-op when it is unset (tests, local). `Resource.create` also merges
+`OTEL_RESOURCE_ATTRIBUTES` (pod, namespace, version).
 
 ## 4. Metrics with prometheus-client
 Expose `/metrics`; keep label sets small and bounded. Never expose `/metrics` publicly without authentication or a network policy.
@@ -189,3 +192,4 @@ workers, and one SLI per user-facing promise (e.g. 99% of `POST /v1/orders` unde
 - `python-fastapi-conventions` — where middleware is registered in `create_app()`.
 - `python-error-handling` — the single place unexpected errors are logged.
 - `python-ci` — container health checks and image setup.
+- [`python-cd`](../python-cd/SKILL.md) — the ServiceMonitor, NetworkPolicy and OTel environment of the deployment.

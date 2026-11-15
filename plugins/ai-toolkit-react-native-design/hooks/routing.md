@@ -13,9 +13,11 @@ stale copies).
 | Throwing / mapping / displaying errors | `react-native-error-handling` (b) |
 | Form or any input rule | `react-native-input-validation` (b) |
 | Tokens, storage, deep links, logging | `react-native-security` (b) |
+| Camera / location / other permissions, push notifications | `react-native-permissions-and-push` (b) |
 | New or changed test | `react-native-unit-tests` (q) (+ `react-native-e2e-tests` (q) for flows) |
 | Lint / tsc / hooks config | `react-native-static-analysis` (q) |
 | Pipeline, builds, releases | `react-native-ci` (o) |
+| app.config / environments, OTA updates (EAS Update), feature flags | `react-native-app-config-and-updates` (o) |
 | Crash reporting, analytics, logs | `react-native-observability` (o) |
 
 **React Native gates**

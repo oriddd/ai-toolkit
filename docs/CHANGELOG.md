@@ -37,9 +37,33 @@ verified against the files and fixed, each change proven by a build, type-check 
 - **Evals:** behaviour cases for all 10 language-neutral skills (were 4); agent cases grant Write/Edit and grade the
   agent's output (the file it must write, or `file:line` in a review), plus a case that does not name the agent;
   near-miss negatives for the neutral plugins. CI also runs weekly so freshness fails before it fails a PR.
+- **Second re-review (Java 6.5, Python 8, React Native 7.5, repo 7), every finding fixed with a before/after proof:**
+  - Java: scaffolded services start again — `HttpCacheProperties` is conditional like its config (any non-http cache
+    provider failed to boot) and `spring-boot-starter-oauth2-resource-server` is required with auth (startup
+    `NoClassDefFoundError`); `create-repo` generates a default-profile context-load test. `golden-path` #20/#22/#23 agree
+    with the skills (Spring Kafka/AMQP are accepted facades; no class-level `@Validated` on Boot 3.2+; `RestClient`
+    `exchange`). New `ProblemDetailSecurityHandler` (401/403 as problem+json, `security.auth.failure` metric); SSRF
+    host allow-list interceptor; rate limits never thrown from a filter; `$ref` enums with a scanned converter package;
+    readiness only for hard dependencies; `sdk-publishing` on `RestClient`; existence checks on the authorized id run
+    after authorization; `OutboxEntity` versioned and `Clock`-driven; Spotless 3.11, google-java-format 2.0,
+    Checkstyle 14.4, PIT 1.30.2 (`withHistory` removed), archunit-junit5 in the ci pom.
+  - Python: new `python-cd` (Helm chart: api + worker, migration hook Job, hardened pods, HPA/PDB, ServiceMonitor,
+    NetworkPolicy); stdlib tracebacks rendered in JSON logs; worker heartbeat liveness and immediate idle shutdown;
+    `--proxy-headers` with a required `FORWARDED_ALLOW_IPS`; scheduled `pip-audit`; 202 job resource; local run.
+  - React Native: new `react-native-app-config-and-updates` and `react-native-permissions-and-push`; the detail screen
+    obeys its own boundaries; server field-error codes map to messages; signup goes through the feature `api/`; error
+    class names survive minification.
+  - Repo: agent evals are granted Write/Edit (`run-evals.sh agents`) and grade a successful subagent write, one grader
+    per key skill; Spring Boot 3.5's end of OSS support (2026-06-30) is stated in README and `create-repo`; the
+    pre-push hook works without the private blocklist; CI actions bumped with Dependabot; `check-versions.sh` counts
+    `plugin.json` description/dependency changes.
 - **Deliberate corrections of original rules** (substance kept, mechanism changed): `external-client` (`.block()` +
   `exchangeToMono` → `RestClient` `exchange`; same single non-2xx mapping and synchronous API) and the strategy registry
   (indexed by `getSupported<X>()` instead of iterating `canHandle`; same routing, add-a-strategy-never-touch-the-handler).
+  Also corrected, each with a failing-then-passing proof: `permissions` requires the resource-server starter; downstream
+  probes are readiness-only; `new-kafka-consumer` dedupes on the `event-id` header in the same transaction (no Redis
+  store); `sdk-publishing` uses `RestClient`; the inline-enum "redundant validator" example uses a `$ref` enum;
+  `feature-flags` keeps "close to the business logic" as one decision point per flag.
 
 ## [2.3.0] - 2026-11-11
 

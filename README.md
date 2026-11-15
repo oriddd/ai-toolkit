@@ -44,9 +44,9 @@ The Java skills' examples and templates use Lombok (`@Slf4j`, `@RequiredArgsCons
 **Spring Boot 3.5 is a deliberate baseline, not an oversight.** Boot 4 is out, but the Java skills, templates and
 evals are built and tested on 3.5, and moving them is a reviewed migration of its own (Jackson 3, modular starters,
 removed APIs), not a version bump. Until that review lands, `create-repo` generates 3.5 and accepts 4.x only as an
-explicit opt-in. Open-source support for 3.5 is time-limited — check
-[the support window](https://spring.io/projects/spring-boot#support) and plan the upgrade, or use commercial
-support, before it matters to you.
+explicit opt-in. **Open-source support for 3.5 ended on 2026-06-30** ([support window](https://spring.io/projects/spring-boot#support)):
+new 3.5 patches need commercial support. Use the 3.5 baseline knowingly, with commercial support or a planned Boot 4 move;
+`create-repo` says so when it asks for the Boot version.
 Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see
 [`docs/AUTHORING.md` §9](./docs/AUTHORING.md#9-freshness-policy).
 
@@ -101,7 +101,8 @@ setup/   client setup notes
 See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) and [`docs/AUTHORING.md`](./docs/AUTHORING.md). Before a PR:
 
 ```bash
-bash tools/validate-skills.sh && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh
-# maintainers, before a release: bash prepare-for-publish.sh   (needs a local .publication-blocklist)
+bash tools/validate-skills.sh && python3 tools/build-indexes.py --check && python3 tools/build-evals.py --check \
+  && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh && bash tools/check-versions.sh
+# maintainers, before a release: bash prepare-for-publish.sh   (confidential-term checks need a local .publication-blocklist)
 # or run it on every push: pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
 ```

@@ -9,7 +9,7 @@ applies_to: [mobile]
 depends_on: []
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -172,11 +172,20 @@ feature's schema before use; never cast them:
 export function OrderDetailScreen() {
   const params = orderRouteParams.safeParse(useLocalSearchParams());
   if (!params.success) return <NotFoundState />;
-  return <OrderDetail id={params.data.id} />;            // a component with its own useOrder(id) hook
+  return <OrderDetailContent id={params.data.id} />;
+}
+
+function OrderDetailContent({ id }: { id: OrderId }) {   // same file, screens layer: hooks cannot follow an early return
+  const { order, error, refetch } = useOrder(id);        // react-native-state-and-data §4
+  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (!order) return <LoadingState />;
+  return <OrderDetail order={order} />;                  // components/OrderDetail.tsx: pure render, props only
 }
 ```
 
-Route params carry ids, not whole objects; the detail screen reads its data through its own hook.
+Route params carry ids, not whole objects; the detail screen reads its data through its own hook and passes it down.
+The data hook is called in the screens layer, never inside a component (`components -> hooks` fails the boundaries
+rule in `react-native-static-analysis`).
 
 ## 4b. Typed navigation (React Navigation, reference)
 

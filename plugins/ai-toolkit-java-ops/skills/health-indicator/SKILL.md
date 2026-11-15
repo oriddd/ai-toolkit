@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [cd, observability]
 ships_templates: true
 hitl: true
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -227,8 +227,8 @@ Print:
 ## Do / Don't
 
 ✅ Always extend `AbstractReadinessIndicator`; never re-implement HTTP polling.
-✅ Always register the indicator in the `readiness` group – otherwise the pod
-will be marked Ready even when the dependency is down.
+✅ Always register the indicator of a hard dependency (question 8 = yes) in the `readiness` group – otherwise the
+pod will be marked Ready even when the dependency is down. A soft dependency (8 = no) stays out of every probe group.
 ✅ Cache the result (the indicator is called on every probe – avoid hammering
 the downstream). `AbstractReadinessIndicator` caches for `cacheSeconds`; Spring's
 `management.endpoint.health.cache.time-to-live` does not apply to the probe group paths, so don't rely on it.

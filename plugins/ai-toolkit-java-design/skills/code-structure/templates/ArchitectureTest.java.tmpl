@@ -49,7 +49,8 @@ class ArchitectureTest {
     static final ArchRule noCycles =
         // one slice per top-level package, but messaging/consumer and messaging/producer apart:
         // consumer -> handler/service -> producer is the normal flow, not a cycle
-        slices().matching("{{basePackage}}.(messaging.*|*)..").should().beFreeOfCycles();
+        slices().matching("{{basePackage}}.(messaging.*|*)..").should().beFreeOfCycles()
+            .allowEmptyShould(true);   // a fresh skeleton has only the application class, so there are no slices yet
     @ArchTest
     static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")

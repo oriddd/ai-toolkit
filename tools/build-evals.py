@@ -55,7 +55,7 @@ def in_subagent(core):
 def output_grader(agent):
     kind, path = AGENT_OUTPUT[agent]
     if kind == "report":
-        core = '"type":"text","text":"(?:[^"\\\\]|\\\\.)*' + path
+        return "---\ntype: regex\ntarget: trace\npattern: '" + ('"type":"tool_result"[^\\n]*' + path).replace("'", "''") + "'\n---\n"
     else:
         core = "(?:File created successfully at: [^\\x22]*" + path + "|The file [^\\x22]*" + path + " has been updated)"
     return "---\ntype: regex\ntarget: trace\npattern: '" + in_subagent(core).replace("'", "''") + "'\n---\n"
@@ -118,8 +118,8 @@ def generate(out):
         write(f"{plugin}/{case}/case.yaml", f'schema_version: "1.1"\nname: {case}\ncontext:\n  scaffold_script: fixture.sh\n')
         write(f"{plugin}/{case}/fixture.sh", FIXTURES[fixture], 0o755)
         write(f"{plugin}/{case}/prompt.md",
-              f'---\ndescription: "{description}"\ntags: [agent]\n{plugins_line(plugin)}max_turns: {30 if writes else 8}\n'
-              f"timeout_seconds: {1200 if writes else 600}\n"
+              f'---\ndescription: "{description}"\ntags: [agent]\n{plugins_line(plugin)}max_turns: {40 if writes else 8}\n'
+              f"timeout_seconds: {2400 if writes else 600}\n"
               f"allowed_tools: [Agent, Skill, Read, Glob, Grep{', Write, Edit' if writes else ''}]\n---\n\n{prompt}\n")
         for name, body in graders.items():
             write(f"{plugin}/{case}/graders/{name}.md", body)

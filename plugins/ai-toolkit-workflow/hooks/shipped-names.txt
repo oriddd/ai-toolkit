@@ -54,6 +54,7 @@ skill:persistence
 skill:pluggable-architecture
 skill:pr-description
 skill:project-types
+skill:python-cd
 skill:python-ci
 skill:python-code-structure
 skill:python-error-handling
@@ -70,12 +71,14 @@ skill:python-static-analysis
 skill:python-unit-tests
 skill:quality-review
 skill:rate-limiting
+skill:react-native-app-config-and-updates
 skill:react-native-ci
 skill:react-native-code-structure
 skill:react-native-e2e-tests
 skill:react-native-error-handling
 skill:react-native-input-validation
 skill:react-native-observability
+skill:react-native-permissions-and-push
 skill:react-native-security
 skill:react-native-state-and-data
 skill:react-native-static-analysis

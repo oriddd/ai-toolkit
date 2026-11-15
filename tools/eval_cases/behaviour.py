@@ -45,11 +45,12 @@ BEHAVIOUR = {
     },
     "ai-toolkit-workflow": {
         "git-commit-conventions": (
-            "Write the git commit message for this change and show it in your reply (do not run git): I renamed "
-            "UserService.getUser to fetchUser because it now calls the remote profile API, and updated the three call sites.",
-            [("conventional-type", r"\b(refactor|feat)(\([\w-]+\))?!?: [a-z]"),
-             ("imperative-subject", r"(refactor|feat)(\([\w-]+\))?!?: (rename|fetch|use|call|switch)"),
-             ("body-explains-why", r"(because|remote|profile API|so that|now calls)")]),
+            "Write the git commit message for this change and show it in your reply (do not run git): in our published "
+            "Java client SDK I renamed the public method UserService.getUser to fetchUser, since it now calls the remote "
+            "profile API, and updated the three call sites inside the SDK.",
+            [("breaking-marker", r"\b(?:refactor|feat|fix)(?:\([\w-]+\))?!:"), ("breaking-footer", r"BREAKING CHANGE:"),
+             ("migration-in-footer", r"BREAKING CHANGE:[^\n]*(?:fetchUser|getUser)"),
+             ("subject-limits", r"(?:^|\n)(?:refactor|feat|fix)(?:\([\w-]+\))?!?: [^\n]{0,55}[A-Za-z0-9`)]\n")]),
     },
 }
 
@@ -324,7 +325,15 @@ PYTHON = {
             [("graceful-timeout", r"--timeout-graceful-shutdown"), ("native-prestop-sleep", r"preStop:\s*\n\s*sleep:"),
              ("exit-stack", r"AsyncExitStack"), ("signal-handler", r"add_signal_handler\("),
              ("bounded-drain", r"asyncio\.wait\([^)]*timeout\s*="),
-             ("no-shell-cmd", r"\nCMD\s+uvicorn", "not_contains")]),
+             ("no-shell-cmd", r"\nCMD\s+uvicorn", "not_contains"), ("poll-not-async-for", r"getmany\(")]),
+        "python-cd": (
+            "Write the Helm chart (values.yaml and templates) to deploy my Python FastAPI service, its Kafka worker "
+            "process and its Alembic migrations to Kubernetes." + TAIL_PY,
+            [("migration-hook", r"helm\.sh/hook:\s*[\x22\x27]?pre-install,\s*pre-upgrade"),
+             ("forwarded-ips", r"FORWARDED_ALLOW_IPS"), ("no-sa-token", r"automountServiceAccountToken:\s*false"),
+             ("metrics-trailing-slash", r"path:\s*[\x22\x27]?/metrics/"),
+             ("worker-liveness", r"exec:\s*\n\s*command:[^\n]*(?:heartbeat|liveness)|HEARTBEAT"),
+             ("no-wildcard-proxy", r"forwarded-allow-ips[= ][\x22\x27]?\*|FORWARDED_ALLOW_IPS[\s\S]{0,40}value:\s*[\x22\x27]\*", "not_contains")]),
         "python-ci": (
             "Write the GitHub Actions workflow and the Dockerfile for my Python FastAPI service managed with uv." + TAIL_PY,
             [("locked", r"uv sync --locked"), ("non-editable", r"--no-editable"), ("non-root", r"USER \w+|useradd"),
@@ -409,4 +418,27 @@ NEUTRAL_DOCS = {
 }
 
 for _plugin, _cases in NEUTRAL_DOCS.items():
+    BEHAVIOUR.setdefault(_plugin, {}).update(_cases)
+
+REACT_NATIVE_2 = {
+    "ai-toolkit-react-native-ops": {
+        "react-native-app-config-and-updates": (
+            "Set up app.config.ts with dev/preview/production variants and a GitHub Actions workflow that publishes EAS "
+            "updates for our Expo SDK 58 React Native app." + TAIL_RN,
+            [("app-variant", r"process\.env\.APP_VARIANT"), ("fingerprint", r"policy:\s*[\x22\x27]fingerprint"),
+             ("update-environment", r"eas update[\s\S]{0,200}--environment"), ("expo-doctor", r"expo-doctor"),
+             ("no-auto", r"eas update --auto", "not_contains")]),
+    },
+    "ai-toolkit-react-native-build": {
+        "react-native-permissions-and-push": (
+            "Add push notification registration and a 'scan receipt' camera button to our Expo React Native app, and "
+            "show how the backend sends the push." + TAIL_RN,
+            [("can-ask-again", r"canAskAgain"), ("open-settings", r"openSettings\("),
+             ("channel", r"setNotificationChannelAsync\("), ("project-id", r"getExpoPushTokenAsync\(\{\s*projectId"),
+             ("receipts", r"getReceipts|getPushNotificationReceiptsAsync"),
+             ("no-deprecated-alert", r"shouldShowAlert:", "not_contains")]),
+    },
+}
+
+for _plugin, _cases in REACT_NATIVE_2.items():
     BEHAVIOUR.setdefault(_plugin, {}).update(_cases)

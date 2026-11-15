@@ -9,8 +9,8 @@ applies_to: [library]
 depends_on: [release-versioning, static-analysis]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # SDK Publishing Skill
@@ -63,8 +63,8 @@ foo-spring-boot-autoconfigure/      # all the code below
     </dependency>
     <dependency>
         <groupId>org.springframework</groupId>
-        <artifactId>spring-webflux</artifactId>
-        <optional>true</optional>        <!-- WebClient: compiles FooClientImpl; @ConditionalOnClass(WebClient.class) backs off without it -->
+        <artifactId>spring-web</artifactId>
+        <optional>true</optional>        <!-- RestClient: compiles FooClientImpl; @ConditionalOnClass(RestClient.class) backs off without it -->
     </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -111,23 +111,26 @@ version. If you also use Lombok, list it in `annotationProcessorPaths` too.
 > (`org.springframework.boot.health.contributor`); depend on that instead of `spring-boot-actuator` there.
 
 Never package `spring-boot-starter-web` (or any starter) as a transitive
-dependency — the consumer chooses their own web stack.
+dependency — the consumer chooses their own web stack. Build the client on `RestClient` (`spring-web`), the
+catalogue's client (`external-client`): every servlet service has it. A library built on `WebClient` guarded by
+`@ConditionalOnClass(WebClient.class)` silently registers **nothing** in a servlet service, which has no
+`spring-webflux`. Only a library for reactive consumers uses `WebClient`.
 
 ## Auto-configuration
 
 ```java
 @AutoConfiguration
-@ConditionalOnClass(WebClient.class)
+@ConditionalOnClass(RestClient.class)
 @EnableConfigurationProperties(FooProperties.class)
 public class FooAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public FooClient fooClient(WebClient.Builder builder, FooProperties props) {
-        return new FooClientImpl(builder.baseUrl(props.baseUrl()).build(), props);
+    public FooClient fooClient(RestClient.Builder builder, FooProperties props) {   // Boot's builder: prototype, observed
+        return new FooClientImpl(builder.baseUrl(props.baseUrl()).build());
     }
 
-    // Optional integration in a nested class: the outer class is only guarded by WebClient, so a bean method returning an actuator type
+    // Optional integration in a nested class: the outer class is only guarded by RestClient, so a bean method returning an actuator type
     // directly in it would fail with NoClassDefFoundError when actuator is not on the consumer's classpath.
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(HealthIndicator.class)
@@ -182,7 +185,7 @@ module {{basePackage}} {
     requires spring.context;
     requires spring.boot;
     requires spring.boot.autoconfigure;
-    requires static spring.webflux;          // WebClient (optional dependency)
+    requires static spring.web;              // RestClient (optional dependency)
     requires static spring.boot.actuator;    // HealthIndicator (optional dependency)
     exports {{basePackage}}.api;
     exports {{basePackage}}.autoconfigure;
@@ -257,16 +260,16 @@ in `test` scope).
 The library ships with its own tests:
 
 - **Unit tests** for every API class.
-- **Auto-configuration tests** with `ApplicationContextRunner` (not `@SpringBootTest`, and not a slice: it starts
-  a minimal context with only the configurations you list):
+- **Auto-configuration tests** with `ApplicationContextRunner` / `WebApplicationContextRunner` (not `@SpringBootTest`,
+  and not a slice: it starts a minimal context with only the configurations you list):
 
 ```java
-// WebClientAutoConfiguration supplies the WebClient.Builder bean fooClient needs; actuator (optional dependency above)
+// RestClientAutoConfiguration supplies the RestClient.Builder bean fooClient needs; actuator (optional dependency above)
 // must be on the test classpath for the HealthConfiguration branch.
 @Test
-void fooAutoConfiguration_webClientPresent_registersBeans() {
-    new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
+void fooAutoConfiguration_servletService_registersBeans() {
+    new WebApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(RestClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withPropertyValues("foo.dependency.base-url=http://x")
         .run(ctx -> {
             assertThat(ctx).hasSingleBean(FooClient.class);
@@ -276,8 +279,8 @@ void fooAutoConfiguration_webClientPresent_registersBeans() {
 
 @Test
 void fooAutoConfiguration_consumerDefinesFooClient_backsOff() {
-    new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(WebClientAutoConfiguration.class, FooAutoConfiguration.class))
+    new WebApplicationContextRunner()
+        .withConfiguration(AutoConfigurations.of(RestClientAutoConfiguration.class, FooAutoConfiguration.class))
         .withUserConfiguration(CustomConfig.class)
         .withPropertyValues("foo.dependency.base-url=http://x")
         .run(ctx -> {

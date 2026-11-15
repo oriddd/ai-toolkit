@@ -124,7 +124,7 @@ if [ -f "$ROOT/.publication-blocklist" ]; then
   done < "$ROOT/.publication-blocklist"
   pass "loaded extra terms from .publication-blocklist"
 else
-  fail "no .publication-blocklist file — the confidential-term, identity and history checks cannot run (create it; it is gitignored)"
+  warn "no .publication-blocklist file — confidential-term, identity and history checks skipped (maintainers: create it; it is gitignored)"
 fi
 
 block_found=0

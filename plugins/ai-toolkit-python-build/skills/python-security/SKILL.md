@@ -158,8 +158,9 @@ if settings.cors_origins:                                   # only for browser c
 
 - `cors_origins: list[str] = []` in `AppSettings`; pydantic-settings reads a list from JSON
   (`CORS_ORIGINS='["https://shop.example.com"]'`). A service called only by other services adds no CORS at all.
-- Run uvicorn behind the ingress with `--proxy-headers --forwarded-allow-ips=<ingress CIDR>` so client IPs and
-  the scheme are right; never `--forwarded-allow-ips='*'` on a pod reachable directly.
+- Run uvicorn behind the ingress with `--proxy-headers --forwarded-allow-ips=<ingress CIDR>` (or the
+  `FORWARDED_ALLOW_IPS` variable the Deployment sets, `python-cd`) so client IPs and the scheme are right; never
+  `--forwarded-allow-ips='*'` on a pod reachable directly.
 - Security headers (`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`) are set once, at the ingress.
 - Keep `/metrics` and `/docs` off the public ingress (`python-observability` §4).
 
@@ -173,7 +174,7 @@ if settings.cors_origins:                                   # only for browser c
   fast hash.
 
 ## 6. Dependency audit
-Run `uv run pip-audit` in a scheduled CI job and on every lock-file change (`python-ci` §4); fix by upgrading,
+Run `uv run pip-audit` in a scheduled CI job and on every lock-file change (`python-ci` §4, `audit.yml`); fix by upgrading,
 or ignore one advisory with `--ignore-vuln <ID>` plus a ticket. Renovate/Dependabot keeps `uv.lock` current.
 
 ## Do / Don't

@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -41,7 +41,7 @@ single round if your tool supports it.
 | 4 | Spring Boot `server.servlet.context-path` (e.g. `/foo-service`)? | `contextPath` |
 | 5 | Container port (default `8800`)? | `appPort` |
 | 6 | Codeowner email for CI notifications? | `codeowner` |
-| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** is an explicit opt-in only: warn that the skills are tested on 3.5 and their examples need porting (Jackson 3, modular starters); 3.5's OSS support window is on spring.io. Reject anything older than 3.5. | `springBootVersion` |
+| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** is an explicit opt-in only: warn that the skills are tested on 3.5 and their examples need porting (Jackson 3, modular starters); tell the developer 3.5's free OSS support ended 2026-06-30 (patches need commercial support). Reject anything older than 3.5. | `springBootVersion` |
 | 8 | Target Kubernetes image registry (default `your-registry.example.com/<org>`)? | `imageRegistry` |
 | 9a | Is this a **deployable service** or a **reusable library / SDK** (`project-types` Type D)? | `projectKind` (`service` / `library`) |
 
@@ -91,7 +91,8 @@ Execute the following skills in order. Each one is documented in its own
    template already carries Lombok (`<optional>true</optional>`, needed by
    `@Slf4j` / `@RequiredArgsConstructor` in the generated code), the Jacoco
    `check` gate (85 % line / 75 % branch per class), Failsafe and PIT (≥ 75 %).
-   Add `spring-boot-starter-security` only when Phase 1 #9 = yes.
+   Add `spring-boot-starter-oauth2-resource-server` only when Phase 1 #9 = yes — not `spring-boot-starter-security`
+   alone: the `permissions` `SecurityConfig` validates JWTs and fails startup without it (`permissions` §1).
    **Library (`projectKind = library`, Type D):** produce only `pom.xml`
    (no `Jenkinsfile` image stages, no `Dockerfile`), and remove the
    `spring-boot-maven-plugin` repackage — a fat jar is not usable as a
@@ -173,6 +174,9 @@ Execute the following skills in order. Each one is documented in its own
     `ComponentTestConfiguration` (and any opt-out `@TestConfiguration`s for
     heavy `@PostConstruct` beans) with deterministic fakes for every
     collaborator added in the previous steps.
+    With Phase 1 #9 = yes, also generate `ApplicationContextTest`: `@SpringBootTest` in the **default** profile with
+    `@MockitoBean JwtDecoder` and `spring.security.oauth2.resourceserver.jwt.issuer-uri` set in `properties` — the
+    component tests exclude `SecurityConfig`, so this is the only test that boots the production security chain.
 11. **`integration-tests`** *(if any external dependency was added)* →
     produces `*IT.java` Testcontainer / WireMock tests under
     `@Tag("integration")` (Failsafe is already in the `ci` pom).
@@ -196,32 +200,10 @@ Execute the following skills in order. Each one is documented in its own
 
 ## Phase 4 – Common project infrastructure
 
-Always create these files at the repo root:
-
-- **`README.md`** – use [`templates/README.md.tmpl`](./templates/README.md.tmpl);
-  populate the title, service description, build/run sections.
-- **`.gitignore`** – use [`templates/gitignore.tmpl`](./templates/gitignore.tmpl).
-- **`renovate.json`** – `{"extends":["config:recommended"]}` (`config:base` is the old name).
-- **`.editorconfig`** – use [`templates/editorconfig.tmpl`](./templates/editorconfig.tmpl).
-- **`CODEOWNERS`** (`.github/CODEOWNERS`) – single line: `* <codeowner>`.
-- **Maven wrapper** – run `mvn -N wrapper:wrapper` so `./mvnw` and
-  `.mvn/wrapper/` exist (the `.gitignore` already keeps the wrapper jar).
-- **Logging** – structured JSON comes from `observability` (step 7a); write a `logback-spring.xml`
-  only if it needs encoder options, never a second, minimal one here.
-- **`lombok.config`** – `lombok.addLombokGeneratedAnnotation = true`, so Jacoco and PIT skip Lombok-generated code.
-- **`src/test/resources/application-component-test.yaml`** – only the
-  test-friendly overrides for the `component-test` profile (in-memory
-  clients, dummy credentials). Never name it `application.yaml`: a test
-  `application.yaml` replaces the main one instead of adding to it
-  (`component-tests` §3).
-
-Profiles (`spring-boot-conventions`): no profile = defaults in
-`application.yaml`; `local` = `application-local.yaml` (local-dev-experience);
-`component-test` = test-only overrides; `k8s` / `prod` = set by the Helm chart
-through `springProfilesActive` (`cd`).
-- **`postman/`** – empty placeholder collection
-  `{{repoName}}.postman_collection.json` with one example request hitting
-  `{{contextPath}}/actuator/health`.
+Always create the repo-root files — `README.md`, `.gitignore`, `renovate.json`, `.editorconfig`, `CODEOWNERS`, the Maven
+wrapper, `lombok.config`, `src/test/resources/application-component-test.yaml`, the profile set and the `postman/`
+placeholder — exactly as listed in [`references/phase-4-infrastructure.md`](./references/phase-4-infrastructure.md)
+(load it now; it is required, not optional).
 
 ## Phase 5 – Validate
 

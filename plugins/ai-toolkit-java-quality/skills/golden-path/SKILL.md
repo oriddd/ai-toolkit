@@ -114,7 +114,9 @@ producing code must validate the diff against this list before returning.
     `adapter/<capability>/<vendor>/`; selection/composition is config-driven in
     `config/` with a `@ConditionalOnMissingBean` safe default. No vendor
     type leaks into `spi/`, `service/`, `operation/`, or `controller/`
-    (`pluggable-architecture`, ArchUnit-enforced).
+    (`pluggable-architecture`, ArchUnit-enforced). Accepted facades are used
+    directly, not wrapped: Spring Data repositories, Micrometer, and Spring
+    Kafka / AMQP listeners and templates in `messaging/`.
 21. **Every adapter passes the shared port TCK.** Each port has one
     abstract contract test; every adapter (including the composite)
     subclasses it and passes identical assertions, and a build check fails
@@ -123,8 +125,9 @@ producing code must validate the diff against this list before returning.
 22. **Input validation lives in the validation layer — never inline.**
     Parameter/field rules use Jakarta `@Constraint` + `ConstraintValidator`;
     object/cross-field rules use Spring `Validator` + `@InitBinder`.
-    Domain rule logic is extracted into `rule/` beans. The controller class
-    carries `@Validated`; never write `if (x == null) throw new
+    Domain rule logic is extracted into `rule/` beans. On Boot 3.2+ the
+    controller carries no class-level `@Validated` (built-in method
+    validation; class-level only below 3.2); never write `if (x == null) throw new
     BadRequestException(...)` in a controller, operation, or service
     (`input-validation`).
 23. **Every external downstream is wrapped in a `client/<dep>/` sub-package.**
@@ -137,8 +140,9 @@ producing code must validate the diff against this list before returning.
     in Full 5-Layer, `<Dep>Client` in Simple Wrapper and Lite; `WebClient`,
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
-    exception inside it. In the Full 5-Layer pattern, `exchangeToMono` +
-    `handleResponse` handles all non-2xx, and filter map, request building,
+    exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
+    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).
 24. **Domain endpoint metrics use the Filter → Recorder → Parser pattern.**

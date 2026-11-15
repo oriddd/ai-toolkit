@@ -6,4 +6,4 @@ max_turns: 4
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-In two sentences, what does git rebase do differently from git merge?
+In one sentence, what does the commit message `fix(api): handle empty file id` tell a reader?

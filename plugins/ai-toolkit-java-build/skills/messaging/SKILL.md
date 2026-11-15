@@ -9,7 +9,7 @@ applies_to: [event, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -271,13 +271,10 @@ spring:
       missing-topics-fatal: false
 ```
 
-Use the annotation, not Boot's `spring.kafka.retry.topic.*` properties: those cannot list non-retryable exceptions
-(a missing header would be retried N times) and Boot builds them with `doNotAutoCreateRetryTopics()`, so on a
-cluster without broker-side auto-creation the retry and DLT topics do not exist. `@RetryableTopic` creates them
-(`autoCreateTopics`, default `true`); where the platform forbids that, create the retry topics
-(`<topic>-retry-0`, `-1`, … one per retry) and `<topic>-dlt` together with the topic itself.
-
-A DLT record carries `kafka_exception-fqcn`, `kafka_exception-message` and `kafka_original-topic` headers (`KafkaHeaders.EXCEPTION_FQCN`, `EXCEPTION_MESSAGE`, `ORIGINAL_TOPIC`; Spring Kafka 3.x no longer writes the old `kafka_dlt-*` names) explaining the failure. A redrive
+Use the annotation, not Boot's `spring.kafka.retry.topic.*` properties (§5b: they cannot exclude exceptions and do
+not create the topics). **Non-blocking retry topics break per-key order**: a failed record moves to `-retry-0` while
+later records of the same aggregate are processed. An order-sensitive consumer uses blocking retries instead
+(`DefaultErrorHandler` + `DeadLetterPublishingRecoverer`, §5b). DLT header names differ by path (§5b). A redrive
 operator tool replays from DLT after a fix.
 
 ## 6. Concurrency & ordering
@@ -293,7 +290,7 @@ Sections below keep their names and numbers but live in `references/` so this fi
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
-| §3 Outbox Performance & Clean-up, §5a, §7 | outbox indexes / partitioning / retention, exactly-once scope, testing producers and consumers | tuning the outbox, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
+| §3 Outbox Performance & Clean-up, §5a, §5b, §7 | outbox indexes / partitioning / retention, exactly-once scope, retry topology and DLT headers, testing | tuning the outbox, choosing blocking vs non-blocking retries, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
 
 ## Do / Don't
 

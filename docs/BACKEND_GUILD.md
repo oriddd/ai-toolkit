@@ -204,6 +204,8 @@ graph LR
   python_fastapi_conventions --> python_security
   python_error_handling --> python_security
   python_code_structure --> python_fastapi_conventions
+  python_ci --> python_cd
+  python_graceful_shutdown --> python_cd
   python_static_analysis --> python_ci
   python_unit_tests --> python_ci
   python_ci --> python_graceful_shutdown
@@ -218,9 +220,13 @@ graph LR
   react_native_state_and_data --> react_native_error_handling
   react_native_code_structure --> react_native_input_validation
   react_native_error_handling --> react_native_input_validation
+  react_native_code_structure --> react_native_permissions_and_push
+  react_native_state_and_data --> react_native_permissions_and_push
+  react_native_security --> react_native_permissions_and_push
   react_native_code_structure --> react_native_security
   react_native_input_validation --> react_native_security
   react_native_code_structure --> react_native_state_and_data
+  react_native_ci --> react_native_app_config_and_updates
   react_native_static_analysis --> react_native_ci
   react_native_unit_tests --> react_native_ci
   react_native_error_handling --> react_native_observability
@@ -334,7 +340,7 @@ it) → `observability` (per-provider metrics/logs) → `integration-tests`
 
 `input-validation` (decide Jakarta `@Constraint` vs Spring `Validator` →
 create rule bean in `rule/` → create validator in `validator/` → register in
-`ValidationConfig` or add `@Validated` to controller) → `unit-tests` (rule
+`ValidationConfig`; parameter constraints run through Boot 3.2+ built-in method validation) → `unit-tests` (rule
 bean in isolation, validator with mocked `ConstraintValidatorContext`) →
 `component-tests` (end-to-end 400 `ProblemDetail` path).
 
@@ -431,7 +437,9 @@ producing code must validate the diff against this list before returning.
     `adapter/<capability>/<vendor>/`; selection/composition is config-driven in
     `config/` with a `@ConditionalOnMissingBean` safe default. No vendor
     type leaks into `spi/`, `service/`, `operation/`, or `controller/`
-    (`pluggable-architecture`, ArchUnit-enforced).
+    (`pluggable-architecture`, ArchUnit-enforced). Accepted facades are used
+    directly, not wrapped: Spring Data repositories, Micrometer, and Spring
+    Kafka / AMQP listeners and templates in `messaging/`.
 21. **Every adapter passes the shared port TCK.** Each port has one
     abstract contract test; every adapter (including the composite)
     subclasses it and passes identical assertions, and a build check fails
@@ -440,8 +448,9 @@ producing code must validate the diff against this list before returning.
 22. **Input validation lives in the validation layer — never inline.**
     Parameter/field rules use Jakarta `@Constraint` + `ConstraintValidator`;
     object/cross-field rules use Spring `Validator` + `@InitBinder`.
-    Domain rule logic is extracted into `rule/` beans. The controller class
-    carries `@Validated`; never write `if (x == null) throw new
+    Domain rule logic is extracted into `rule/` beans. On Boot 3.2+ the
+    controller carries no class-level `@Validated` (built-in method
+    validation; class-level only below 3.2); never write `if (x == null) throw new
     BadRequestException(...)` in a controller, operation, or service
     (`input-validation`).
 23. **Every external downstream is wrapped in a `client/<dep>/` sub-package.**
@@ -454,8 +463,9 @@ producing code must validate the diff against this list before returning.
     in Full 5-Layer, `<Dep>Client` in Simple Wrapper and Lite; `WebClient`,
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
-    exception inside it. In the Full 5-Layer pattern, `exchangeToMono` +
-    `handleResponse` handles all non-2xx, and filter map, request building,
+    exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
+    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).
 24. **Domain endpoint metrics use the Filter → Recorder → Parser pattern.**

@@ -51,8 +51,8 @@ Load each with the Skill tool by its qualified name before editing.
    - component-diagram.md → internal component relationship changed
    - domain-flow.md       → business flow / sequence changed
    - glossary.md          → new domain term introduced
-   - slo.md               → new SLI/SLO defined (summary; the canonical
-                            table is docs/SLO.md — update both)
+   - slo.md               → new SLI/SLO defined (a link to the canonical
+                            table in docs/SLO.md — update that one; never two copies)
    - runbooks.md          → new operational procedure
 3. UPDATE each affected file — fill in, not overwrite. Respect the
    existing section structure.

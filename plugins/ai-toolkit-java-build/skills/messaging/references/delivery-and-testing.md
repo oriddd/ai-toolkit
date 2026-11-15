@@ -7,7 +7,9 @@ Part of the [`messaging`](../SKILL.md) skill. Section numbers and headings are s
 For high-throughput services, the outbox table can grow rapidly:
 1. **Indexes**: Ensure `publishedAt` (a partial index on the unpublished rows works well) and `createdAt` are indexed — the `outbox-migration.sql.tmpl` template ships both.
 2. **Partitioning**: Consider Postgres table partitioning by `createdAt` (e.g., one partition per day).
-3. **Retention**: Run a background job to delete records published more than 7 days ago.
+3. **Retention**: Run a background job to delete records published more than 7 days ago. Prune `processed_events`
+   too, but only rows older than the longest possible redelivery (topic retention + DLT redrive window) — a dedupe
+   row deleted sooner lets a late redelivery run its effect twice.
 4. **Batching**: The relay should fetch and publish in batches of 100-500 to minimize overhead.
 
 ### 5a. Exactly-once — what it does and does not cover
@@ -19,6 +21,42 @@ For high-throughput services, the outbox table can grow rapidly:
 - It does **not** cover a database write or an HTTP call. For those,
   "exactly-once effect" = at-least-once delivery + the idempotent consumer
   (§4) + the outbox (§3). That is the default for every service here.
+
+### 5b. Retry topology and DLT headers
+
+**Non-blocking (`@RetryableTopic`, the §5 default).** Prefer the annotation over Boot's `spring.kafka.retry.topic.*`
+properties: those cannot list non-retryable exceptions (a missing header would be retried N times) and Boot builds
+them with `doNotAutoCreateRetryTopics()`, so on a cluster without broker-side auto-creation the retry and DLT topics
+do not exist. `@RetryableTopic` creates them (`autoCreateTopics`, default `true`); where the platform forbids that,
+create the retry topics (`<topic>-retry-0`, `-1`, … one per retry) and `<topic>-dlt` together with the topic itself.
+The partition keeps moving while a record waits in a retry topic, so **per-key ordering is lost** for retried records.
+
+**Blocking (order-sensitive consumers).** When events of one aggregate must be applied in order, retry in place and
+dead-letter at the end — the partition waits, order holds:
+
+```java
+@Bean
+DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> template, KafkaRetryProperties retry) {
+    var backOff = new ExponentialBackOffWithMaxRetries(retry.attempts() - 1);
+    backOff.setInitialInterval(retry.delayMs());
+    backOff.setMultiplier(retry.multiplier());
+    backOff.setMaxInterval(retry.maxDelayMs());
+    var handler = new DefaultErrorHandler(new DeadLetterPublishingRecoverer(template), backOff);   // → <topic>-dlt
+    handler.addNotRetryableExceptions(IllegalArgumentException.class, JsonProcessingException.class);
+    return handler;
+}
+```
+
+`KafkaRetryProperties` is the `@ConfigurationProperties(prefix = "kafka.retry")` record of the §4 keys
+(`attempts`, `delayMs`, `multiplier`, `maxDelayMs`). Boot applies a single `CommonErrorHandler` bean to its listener container factory. Keep the total back-off below
+`max.poll.interval.ms`, or the consumer is evicted from the group mid-retry. Do not combine it with
+`@RetryableTopic` on the same listener.
+
+**DLT headers.** The `@RetryableTopic` path writes `kafka_exception-fqcn`, `kafka_exception-message` and
+`kafka_original-topic` (`KafkaHeaders.EXCEPTION_FQCN`, `EXCEPTION_MESSAGE`, `ORIGINAL_TOPIC`). A plain
+`DeadLetterPublishingRecoverer` (the blocking path) keeps its defaults, `kafka_dlt-exception-fqcn`,
+`kafka_dlt-exception-message`, `kafka_dlt-original-topic` (`KafkaHeaders.DLT_*`). A redrive tool reads the names of
+the path it serves.
 
 ### ShedLock for the relay (and every `@Scheduled` job)
 

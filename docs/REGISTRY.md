@@ -12,10 +12,10 @@ enforce that every skill has a home in this file.
 | Tier | Count |
 | --- | --- |
 | MUST | 48 |
-| SHOULD | 26 |
+| SHOULD | 29 |
 | MAY | 1 |
 | FOUNDATIONAL | 2 |
-| **Total** | **77** |
+| **Total** | **80** |
 
 ## Skills
 
@@ -78,6 +78,7 @@ Legend — **T** = ships templates; **HITL** = human-in-the-loop;
 | [`python-security`](../plugins/ai-toolkit-python-build/skills/python-security/SKILL.md) | SHOULD |  | ✓ | rest | `python-code-structure`, `python-fastapi-conventions`, `python-error-handling` | Python / FastAPI security — JWT bearer authentication as a dependency, scope and object-level authorization, OWASP API Top 10 basics … |
 | [`python-code-structure`](../plugins/ai-toolkit-python-design/skills/python-code-structure/SKILL.md) | MUST |  |  | rest, worker, cli, library | — | Python 3.14 (3.12+) service layout — src layout, api/operations/services/clients/models/config layers, pydantic-settings, constructor … |
 | [`python-fastapi-conventions`](../plugins/ai-toolkit-python-design/skills/python-fastapi-conventions/SKILL.md) | MUST |  |  | rest | `python-code-structure` | Python FastAPI conventions — thin routers, Depends injection, explicit response models, one pagination contract, problem+json errors … |
+| [`python-cd`](../plugins/ai-toolkit-python-ops/skills/python-cd/SKILL.md) | SHOULD |  |  | rest, worker | `python-ci`, `python-graceful-shutdown` | Python / FastAPI Helm chart for Kubernetes — api and worker Deployments, Alembic migration hook Job, hardened security context, probes … |
 | [`python-ci`](../plugins/ai-toolkit-python-ops/skills/python-ci/SKILL.md) | MUST |  |  | rest, worker, cli, library | `python-static-analysis`, `python-unit-tests` | Python CI (3.14, 3.12+) — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a multi-stage, non-root … |
 | [`python-graceful-shutdown`](../plugins/ai-toolkit-python-ops/skills/python-graceful-shutdown/SKILL.md) | SHOULD |  |  | rest, worker | `python-ci` | Python / FastAPI graceful shutdown on Kubernetes — uvicorn's SIGTERM drain and --timeout-graceful-shutdown, preStop sleep, the grace-period … |
 | [`python-observability`](../plugins/ai-toolkit-python-ops/skills/python-observability/SKILL.md) | SHOULD |  |  | rest, worker | `python-code-structure` | Python / FastAPI observability — structlog JSON logs with contextvars correlation IDs, OpenTelemetry traces, prometheus-client metrics with … |
@@ -89,9 +90,11 @@ Legend — **T** = ships templates; **HITL** = human-in-the-loop;
 | [`sonar-quality-gate`](../plugins/ai-toolkit-quality/skills/sonar-quality-gate/SKILL.md) | SHOULD |  |  | rest, event, scheduler, library, monolith, worker, cli, mobile | — | Drive the SonarQube/SonarCloud new-code quality gate to green — bugs, vulnerabilities, smells, hotspots, duplication, coverage — without … |
 | [`react-native-error-handling`](../plugins/ai-toolkit-react-native-build/skills/react-native-error-handling/SKILL.md) | MUST |  |  | mobile | `react-native-code-structure`, `react-native-state-and-data` | React Native error contract — typed AppError hierarchy, message catalogue, API-error mapping in one place, error boundaries, reporting hook. |
 | [`react-native-input-validation`](../plugins/ai-toolkit-react-native-build/skills/react-native-input-validation/SKILL.md) | MUST |  |  | mobile | `react-native-code-structure`, `react-native-error-handling` | React Native input validation with zod schemas in a validation layer, react-hook-form, cross-field rules, schemas shared with API types. |
+| [`react-native-permissions-and-push`](../plugins/ai-toolkit-react-native-build/skills/react-native-permissions-and-push/SKILL.md) | SHOULD |  |  | mobile | `react-native-code-structure`, `react-native-state-and-data`, `react-native-security` | React Native (Expo) runtime permissions and push — ask at point of use, denied vs blocked, permission strings via config plugins … |
 | [`react-native-security`](../plugins/ai-toolkit-react-native-build/skills/react-native-security/SKILL.md) | MUST |  |  | mobile | `react-native-code-structure`, `react-native-input-validation` | React Native security baseline — tokens in Keychain/Keystore, no secrets in the JS bundle, deep-link validation, TLS and pinning stance … |
 | [`react-native-code-structure`](../plugins/ai-toolkit-react-native-design/skills/react-native-code-structure/SKILL.md) | MUST |  |  | mobile | — | React Native feature-based layout — Expo Router routes, TypeScript strict, path aliases, dependency direction, naming for screens … |
 | [`react-native-state-and-data`](../plugins/ai-toolkit-react-native-design/skills/react-native-state-and-data/SKILL.md) | MUST |  |  | mobile | `react-native-code-structure` | React Native data layer — server state in TanStack Query behind one api client, client state in Zustand, query-key conventions, optimistic … |
+| [`react-native-app-config-and-updates`](../plugins/ai-toolkit-react-native-ops/skills/react-native-app-config-and-updates/SKILL.md) | SHOULD |  |  | mobile | `react-native-ci` | React Native (Expo) app config and OTA updates — app.config.ts variants per EAS profile (APP_VARIANT), fingerprint runtimeVersion, EAS … |
 | [`react-native-ci`](../plugins/ai-toolkit-react-native-ops/skills/react-native-ci/SKILL.md) | MUST |  |  | mobile | `react-native-static-analysis`, `react-native-unit-tests` | React Native CI/CD on GitHub Actions — cached installs, lint/type/test gates, EAS Build or Fastlane, versioning and build numbers, OTA … |
 | [`react-native-observability`](../plugins/ai-toolkit-react-native-ops/skills/react-native-observability/SKILL.md) | SHOULD |  |  | mobile | `react-native-error-handling`, `react-native-security`, `react-native-ci` | React Native observability — Sentry crash and performance monitoring, structured logging, analytics behind an interface, PII scrubbing … |
 | [`react-native-e2e-tests`](../plugins/ai-toolkit-react-native-quality/skills/react-native-e2e-tests/SKILL.md) | SHOULD |  |  | mobile | `react-native-unit-tests`, `react-native-code-structure` | React Native end-to-end tests with Maestro — stable test IDs, deterministic test data, a clear E2E vs unit split. |

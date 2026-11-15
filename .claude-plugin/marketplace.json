@@ -83,7 +83,7 @@
     {
       "name": "ai-toolkit-python-ops",
       "source": "./plugins/ai-toolkit-python-ops",
-      "description": "Experimental — Python ops phase — GitHub Actions with uv, hardened Dockerfile, graceful shutdown on Kubernetes, structlog, OpenTelemetry and Prometheus observability.",
+      "description": "Experimental — Python ops phase — GitHub Actions with uv, hardened Dockerfile, Helm chart and graceful shutdown on Kubernetes, structlog, OpenTelemetry and Prometheus observability.",
       "category": "development"
     },
     {
@@ -113,7 +113,7 @@
     {
       "name": "ai-toolkit-react-native-build",
       "source": "./plugins/ai-toolkit-react-native-build",
-      "description": "Experimental — React Native build phase: typed error handling, schema-based input validation and mobile security.",
+      "description": "Experimental — React Native build phase: typed error handling, schema-based input validation, mobile security, permissions and push.",
       "category": "development"
     },
     {
@@ -125,7 +125,7 @@
     {
       "name": "ai-toolkit-react-native-ops",
       "source": "./plugins/ai-toolkit-react-native-ops",
-      "description": "Experimental — React Native ops phase: GitHub Actions CI with EAS or Fastlane, plus Sentry observability.",
+      "description": "Experimental — React Native ops phase: GitHub Actions CI with EAS or Fastlane, app config variants and OTA updates, plus Sentry observability.",
       "category": "development"
     },
     {

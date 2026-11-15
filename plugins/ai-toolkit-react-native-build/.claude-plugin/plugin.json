@@ -1,6 +1,6 @@
 {
   "name": "ai-toolkit-react-native-build",
-  "description": "Experimental — React Native build phase: typed error handling, schema-based input validation and mobile security.",
+  "description": "Experimental — React Native build phase: typed error handling, schema-based input validation, mobile security, permissions and push.",
   "version": "0.6.0",
   "author": {
     "name": "oriddd"

@@ -9,7 +9,7 @@ applies_to: [mobile]
 depends_on: [react-native-static-analysis, react-native-unit-tests]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -70,6 +70,8 @@ jobs:
 ```
 
 `npm run verify` is the verify script from `react-native-static-analysis`: `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`.
+Expo apps add `- run: npx expo-doctor` after `npm ci` (SDK-mismatched native packages, see
+`react-native-app-config-and-updates` §4).
 Mark the `verify` job as a required status check in branch protection. CI runs exactly what developers and agents run
 locally; no step is `continue-on-error`. Split it into separate steps (`typecheck`, `lint`, `format:check`, `test`) only
 if you want per-step timings in the log.
@@ -186,7 +188,8 @@ Linux for Android (`fastlane android release`, keystore from secrets). Keep lane
 OTA (EAS Update; Microsoft App Center CodePush was retired in 2025, so do not start new work on it) may ship **JS and asset changes only**, never native changes, and only to
 the matching `runtimeVersion`. Use channels (`preview`, `production`), roll out gradually, keep a rollback
 (`eas update:republish`). Store-policy-sensitive changes (new features that change app purpose) go through
-the store. Every OTA passes the same `verify` gate.
+the store. Every OTA passes the same `verify` gate. `runtimeVersion` policy, per-variant `app.config.ts`, channel per
+profile and the publish workflow: `react-native-app-config-and-updates`.
 
 ## 6. Secrets and hygiene
 
@@ -211,3 +214,4 @@ the store. Every OTA passes the same `verify` gate.
 - `react-native-unit-tests`, `react-native-e2e-tests`: test stages.
 - `react-native-observability`: source map upload and release health per version.
 - `react-native-security`: secrets and signing hygiene.
+- `react-native-app-config-and-updates`: app variants per profile, fingerprint runtime version, EAS Update publishing.

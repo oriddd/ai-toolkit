@@ -31,6 +31,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 8. `ai-toolkit-react-native-quality:react-native-e2e-tests` — Maestro flows for the critical journeys only.
 9. `ai-toolkit-react-native-quality:react-native-static-analysis` and `ai-toolkit-react-native-ops:react-native-ci` — keep gates green; update CI only if the
    feature adds build or env requirements.
+10. `ai-toolkit-react-native-build:react-native-permissions-and-push` — only if the feature needs a device permission or push.
+11. `ai-toolkit-react-native-ops:react-native-app-config-and-updates` — only if the feature needs a feature flag, an app
+   config change (plugin, permission string, variant) or ships as an OTA update.
 
 ## Step-by-step procedure
 

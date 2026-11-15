@@ -10,7 +10,7 @@ depends_on: [api-design]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # openapi-first-codegen
@@ -59,6 +59,11 @@ default for the plugin). They MUST be:
   (see `exception-handling` skill) — never inline error shapes.
 - Reusable schemas under `components/schemas`; primitive aliases under
   `components/schemas` too (e.g. `EntityId: { type: string, format: uuid }`).
+- **Enumerated parameters and properties are `$ref` enums**
+  (`Layout: { type: string, enum: [summary, detailed] }` under `components/schemas`). An inline `enum:` on a
+  parameter is generated as a plain `String` and unknown values are accepted; a `$ref` enum becomes a Java enum
+  and an unknown value is a 400. The generator converts the query value with an `EnumConverterConfiguration`,
+  which must sit inside the component scan (`configPackage`, §2).
 
 ## 2. Plugin block (`pom.xml`)
 
@@ -79,6 +84,8 @@ default for the plugin). They MUST be:
         <apiPackage>{{basePackage}}.generated.api</apiPackage>
         <modelPackage>{{basePackage}}.generated.api.model</modelPackage>
         <configOptions>
+          <!-- default org.openapitools.configuration is outside the scan: without it a valid ?layout=summary is a 400 -->
+          <configPackage>{{basePackage}}.generated.configuration</configPackage>
           <useSpringBoot3>true</useSpringBoot3>      <!-- also switches imports to jakarta.* (useJakartaEe) -->
           <!-- the spring generator defaults to springdoc + swagger2 annotations (io.swagger.v3.oas.annotations):
                without springdoc on the classpath the generated interfaces do not compile. The spec is the documentation. -->
@@ -104,6 +111,8 @@ Pin the generator version in `<properties>` and let Renovate bump it. The genera
 generated interfaces are annotated `@Validated`, so parameter constraints are checked through the AOP proxy and fail
 with `ConstraintViolationException` — the `exception-handling` template maps it to `400`.
 `invokerPackage` is omitted on purpose: with `interfaceOnly=true` the generator emits no invoker classes.
+A `@WebMvcTest` slice does not load the generated `EnumConverterConfiguration`: add
+`@Import(EnumConverterConfiguration.class)` to it, or enum query parameters fail with 400 in the slice only.
 
 ## 3. Static-analysis / coverage exclusions
 
@@ -112,12 +121,12 @@ Add to the relevant plugins (paths are repo-relative):
 
 | Plugin | Exclusion |
 | --- | --- |
-| **Jacoco** (`jacoco-maven-plugin`)         | `<exclude>**/generated/api/**</exclude>` in the `<configuration><excludes>` block (covers `generated/api/model/` too). |
+| **Jacoco** (`jacoco-maven-plugin`)         | `<exclude>**/generated/**</exclude>` in the `<configuration><excludes>` block (covers `generated/api/model/` and `generated/configuration/`). |
 | **Spotless**                                | `<excludes><exclude>target/generated-sources/**</exclude></excludes>` inside the `<java>` block. |
-| **SpotBugs / FindSecBugs**                  | `<excludeFilterFile>` referencing a filter that matches `{{basePackage}}.generated.api.**`. |
-| **ArchUnit** (in tests)                     | Exclude **by package**: generated and hand-written classes both compile to `target/classes`, so a path filter on `target/generated-sources/**` matches nothing. Use `ImportOption.DoNotIncludeArchives` plus a custom `ImportOption` such as `location -> !location.contains("/generated/api/")`, or `.resideOutsideOfPackage("..generated.api..")` in each rule. |
-| **NullAway / Error-Prone**                  | `-XepExcludedPaths:.*/generated-sources/.*`. |
-| **Sonar (optional)**                        | `sonar.coverage.exclusions=**/generated/api/**`, `sonar.exclusions=**/generated/api/**`. |
+| **SpotBugs / FindSecBugs**                  | `<excludeFilterFile>` referencing a filter that matches `{{basePackage}}.generated.**`. |
+| **ArchUnit** (in tests)                     | Exclude **by package**: generated and hand-written classes both compile to `target/classes`, so a path filter on `target/generated-sources/**` matches nothing. Use `ImportOption.DoNotIncludeArchives` plus a custom `ImportOption` such as `location -> !location.contains("/generated/")`, or `.resideOutsideOfPackage("..generated..")` in each rule. |
+| **NullAway / Error-Prone**                  | `-XepExcludedPaths:.*/generated-sources/.*` and `-XepOpt:NullAway:UnannotatedSubPackages={{basePackage}}.generated`. |
+| **Sonar (optional)**                        | `sonar.coverage.exclusions=**/generated/**`, `sonar.exclusions=**/generated/**`. |
 
 Without these, every spec change inflates the coverage delta and triggers
 false-positive findings.

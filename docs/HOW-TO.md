@@ -184,11 +184,15 @@ mkdir -p plugins/ai-toolkit-java-design/skills/my-skill
 
 # 3. Add a row to docs/README.md and name the skill in docs/INDEX_BY_USE_CASE.md
 
-# 4. Validate — the tool tells you exactly what is missing
-bash tools/validate-skills.sh
+# 4. Add a realistic trigger prompt to tools/eval_cases/triggers.py (and, for a key skill, a behaviour case in
+#    behaviour.py — AUTHORING.md §10), then generate the eval suites
+python3 tools/build-evals.py
 
 # 5. Regenerate auto-generated indexes
 python3 tools/build-indexes.py
+
+# 6. Validate — the tool tells you exactly what is missing
+bash tools/validate-skills.sh
 ```
 
 ---
