@@ -10,7 +10,7 @@ depends_on: [code-structure, pluggable-architecture]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Observability Skill
@@ -86,9 +86,21 @@ its extra encoder options.
   `ContextPropagatingTaskDecorator` (Spring Framework 6.1 / Boot 3.2+; a `TaskDecorator` bean is applied to the
   auto-configured executor, call `setTaskDecorator(...)` on your own) so MDC and the trace context survive the
   thread hop. There is no Spring `MdcTaskDecorator`; don't hand-roll one.
+- The decorator copies only the `ThreadLocal`s registered in Micrometer's `ContextRegistry` (`io.micrometer:context-propagation`,
+  brought in by Micrometer Tracing): the trace context is, custom MDC keys such as `callerId` are **not**. Register
+  them once at startup, or they arrive empty on the worker thread:
+  ```java
+  @Configuration
+  class MdcPropagationConfig {
+      MdcPropagationConfig() {   // MDC keys set by the request filter that must follow @Async / Reactor hops
+          ContextRegistry.getInstance().registerThreadLocalAccessor(new Slf4jThreadLocalAccessor("callerId"));
+      }
+  }
+  ```
 - For `Mono`/`Flux`, enable automatic context propagation
   (`spring.reactor.context-propagation: auto`, Boot 3.2+) so MDC follows the
-  Reactor Context — the hand-written `MdcContextLifter` hook is no longer needed.
+  Reactor Context — the hand-written `MdcContextLifter` hook is no longer needed. It uses the same `ContextRegistry`,
+  so the registration above covers custom MDC keys there too.
 
 **Log-level governance.**
 - `ERROR` — unexpected, requires alert.

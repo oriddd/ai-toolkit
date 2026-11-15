@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -30,8 +30,10 @@ my-service/
 │   ├── api/                     # FastAPI routers + dependencies: HTTP <-> model translation only
 │   ├── operations/              # one class/function per use case: orchestrates services
 │   ├── services/                # one domain capability each: business rules, no HTTP types
-│   ├── clients/                 # outbound transport (httpx, SDKs) behind a Protocol
+│   ├── clients/                 # outbound transport (httpx, SDKs) behind a Protocol (see `python-external-client`)
 │   ├── repositories/            # persistence behind a Protocol (see `python-persistence`)
+│   ├── messaging/               # outbox relay, event publisher, consumers (see `python-messaging`)
+│   ├── security/                # token verification behind a Protocol (see `python-security`)
 │   ├── models/                  # pydantic request/response models + domain value objects
 │   ├── errors/                  # exception hierarchy + message catalogue (see `python-error-handling`)
 │   └── config/                  # pydantic-settings classes
@@ -50,8 +52,10 @@ api ──► operations ──► services ──► repositories / clients
 ```
 
 - A layer imports only from layers to its right. `services` never import `fastapi`; `models` never import `services`.
-- Enforce it mechanically with `import-linter` contracts (see `python-static-analysis`); ruff's `TID`
-  rules only ban specific named imports, they cannot express layer direction.
+- Enforce it mechanically with an `import-linter` `layers` contract (see `python-static-analysis` §3); ruff's
+  `TID` rules only ban specific named imports, they cannot express layer direction.
+- `clients/`, `repositories/`, `messaging/` and `security/` are adapters at the right-hand end: they may import
+  the leaf packages (and `messaging/` the repositories), never `services/`, `operations/` or `api/`.
 - No cycles; if two modules need each other, extract the shared piece into a third brick.
 
 ## 3. The LEGO brick principle
@@ -165,6 +169,7 @@ chosen at runtime among 3+ implementations. A plain function beats a class with 
 
 ## Cross-references
 - `python-fastapi-conventions` — the `api/` layer in detail.
-- `python-error-handling`, `python-input-validation`, `python-persistence` — the build-phase bricks.
+- `python-error-handling`, `python-input-validation`, `python-persistence`, `python-external-client`,
+  `python-security`, `python-messaging` — the build-phase bricks.
 - `python-unit-tests` — how each brick is tested with fakes.
 - `python-static-analysis` — enforcing import direction and typing.

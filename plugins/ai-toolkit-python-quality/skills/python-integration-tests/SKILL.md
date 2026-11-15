@@ -10,7 +10,7 @@ depends_on: [python-unit-tests, python-persistence]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -37,7 +37,7 @@ substitute SQLite, whose locking, types and constraint behaviour differ.
 ## Dependencies
 ```toml
 [dependency-groups]
-dev = ["testcontainers[postgres]>=4.15", "pytest-asyncio>=0.26", "asgi-lifespan>=2.1"]
+dev = ["testcontainers[postgres]>=4.15", "types-docker", "pytest-asyncio>=0.26", "asgi-lifespan>=2.1"]
 ```
 The pytest settings live in the one `[tool.pytest.ini_options]` table from `python-unit-tests`, which
 already sets both loop scopes to `"session"` (do not add a second table or repeat the keys):
@@ -70,10 +70,28 @@ uv run pytest -m integration           # separate CI job
 
 ## 2. One container per session, one clean state per test
 ```python
+import os
+
+import docker
+from docker.errors import DockerException
 from testcontainers.community.postgres import PostgresContainer  # not the deprecated .postgres
+
+def _docker_available() -> bool:
+    try:
+        docker.from_env().ping()
+    except DockerException:
+        return False
+    return True
 
 @pytest.fixture(scope="session")
 def postgres_url() -> Iterator[str]:
+    if external := os.environ.get("TEST_DATABASE_URL"):   # a CI service container or a local server
+        yield external
+        return
+    if not _docker_available():
+        if os.environ.get("CI"):
+            pytest.fail("integration tests need Docker in CI")   # never a silent green build
+        pytest.skip("Docker is not available: integration tests skipped")
     with PostgresContainer("postgres:16-alpine", driver="asyncpg") as pg:
         yield pg.get_connection_url()
 
@@ -92,7 +110,8 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             yield s
         await tx.rollback()
 ```
-Pin image tags to the production major version; never `latest`.
+Pin image tags to the production major version; never `latest`. Without the Docker check, a machine without
+Docker gets a `DockerException` *error* in every integration test instead of a skip.
 
 `run_alembic_upgrade` is a project helper, not a library function. A minimal version runs the real
 migrations on the engine's connection. The default async `alembic/env.py` creates its own engine and calls
@@ -110,6 +129,8 @@ def run_migrations_online() -> None:
 
 Read the URL in `env.py` from the same settings class the app uses, and only when no connection was
 passed (`if config.attributes.get("connection") is None: config.set_main_option("sqlalchemy.url", ...)`).
+Move the generated module-level `fileConfig(config.config_file_name)` into that CLI branch too: run from a test,
+it would reset logging (`disable_existing_loggers=True`) in the middle of the session.
 
 ```python
 async def run_alembic_upgrade(engine: AsyncEngine) -> None:
@@ -161,6 +182,9 @@ async def clean_tables(engine: AsyncEngine) -> AsyncIterator[None]:
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(table.delete())
 ```
+
+Messaging adapters (`python-messaging`) are tested here too: the outbox row commits and rolls back with the
+state change, the relay skips rows another relay has locked, and a duplicate message is handled once.
 
 ## 4. Other dependencies
 HTTP downstreams are stubbed with `respx` (unit/integration) or a WireMock container; brokers and caches

@@ -26,8 +26,8 @@ public class CreateScheduleRequestValidator implements Validator {
                          @NonNull final Errors errors) {
         final CreateScheduleRequest request = (CreateScheduleRequest) target;
 
-        if (ScheduleType.RECURRING.equals(request.getType())
-                && request.getIntervalDays() == null) {
+        if (ScheduleType.RECURRING.equals(request.type())          // DTOs are records: accessor type(), not getType()
+                && request.intervalDays() == null) {
             errors.rejectValue(
                     "intervalDays",                        // field path
                     "schedule.recurring.intervalDays",     // error code

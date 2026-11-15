@@ -10,7 +10,7 @@ depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -107,7 +107,9 @@ your own modules, and never patch `datetime` (inject a `Clock`).
 
 ## 4. Fixtures and builders
 Fixtures provide collaborators (`fixed_clock`, `fake_repo`); plain builder functions create test data
-with overridable defaults (`an_order(total_cents=0)`). Keep fixtures function-scoped unless
+with overridable defaults (`an_order(total_cents=0)`). Give builders typed keyword-only parameters
+(`def an_order(*, total_cents: int = 1_000, ...) -> Order`), not `**overrides: object`, which mypy --strict
+rejects when splatted into the constructor. Keep fixtures function-scoped unless
 construction is expensive and the object is immutable.
 
 ## 5. Parametrize tables
@@ -176,3 +178,4 @@ only true boilerplate (`if TYPE_CHECKING:`, `...` in Protocols) via `exclude_als
 - `python-integration-tests` — what unit tests deliberately do not cover.
 - `python-static-analysis` — lint/type rules applied to tests too.
 - `python-error-handling`, `python-input-validation` — negative cases to cover.
+- `python-external-client` — respx tests for HTTP adapters; `python-security` — fake token verifiers.

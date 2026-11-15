@@ -10,7 +10,7 @@ depends_on: [cd, observability]
 ships_templates: true
 hitl: true
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Health Indicator Skill (HITL)
@@ -174,7 +174,7 @@ Set deterministic values so component tests do not perform real HTTP calls
 
 ```yaml
 {{configKey}}:
-  base-url: http://host:port/path
+  base-url: http://localhost:9/path   # a parseable placeholder: clients built from it must still start
   readiness-endpoint: /readiness
 ```
 

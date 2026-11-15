@@ -6,7 +6,7 @@ cat > package.json <<'EOF'
   "version": "0.1.0",
   "private": true,
   "dependencies": { "react": "19.1.0", "react-native": "0.81.4", "@tanstack/react-query": "^5.0.0", "@react-navigation/native": "^7.1.0", "@react-navigation/native-stack": "^7.3.0", "zod": "^4.0.0" },
-  "devDependencies": { "typescript": "^5.9.0", "jest": "^29.7.0" }
+  "devDependencies": { "typescript": "~6.0.0", "jest": "^30.0.0" }
 }
 EOF
 printf '{ "compilerOptions": { "strict": true, "jsx": "react-native" } }\n' > tsconfig.json

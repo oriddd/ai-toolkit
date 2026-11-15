@@ -10,7 +10,7 @@ depends_on: [unit-tests, static-analysis, testable-code-principles]
 ships_templates: false
 hitl: false
 version: 1.1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-11
 ---
 
 # Quality Review Skill

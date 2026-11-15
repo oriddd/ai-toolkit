@@ -1,7 +1,7 @@
 {
   "name": "ai-toolkit-python-design",
   "description": "Experimental — Python 3.12 / FastAPI design phase — src layout, layering, dependency injection, settings and REST conventions; ships the Python routing hook. Part of the `ai-toolkit-python` set — install that to get the whole language.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": {
     "name": "oriddd"
   },

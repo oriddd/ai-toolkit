@@ -1,5 +1,7 @@
 package {{basePackage}}.exception;
+
+import org.jspecify.annotations.Nullable;
 public class ForbiddenException extends BaseDomainException {
     public ForbiddenException(String errorCode, String message) { super(errorCode, message); }
-    public ForbiddenException(String errorCode, String message, Throwable cause) { super(errorCode, message, cause); }
+    public ForbiddenException(String errorCode, String message, @Nullable Throwable cause) { super(errorCode, message, cause); }
 }

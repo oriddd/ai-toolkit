@@ -86,12 +86,24 @@ class EditableProductIdValidatorTest {
 Use a `@WebMvcTest` slice with `@MockitoBean` (Spring Boot 3.4+; replaces the deprecated `@MockBean`) on the
 beans the slice does not load — the rule beans, the lookup services the validators use, and the controller's
 own service/operation; fire a request whose body is otherwise **valid** and assert the 400 ProblemDetail and the
-violation text (see `component-tests`):
+violation text (see `component-tests`).
+
+The slice loads every `@ControllerAdvice`, `Filter`, `HandlerInterceptor` and `WebMvcConfigurer`, but **not**
+plain `@Component`s or your `@Configuration` classes. So:
+
+- `@Import` the beans a loaded advice/filter/interceptor injects — the Spring `Validator`s `ValidationConfig` binds
+  (otherwise the context fails with `NoSuchBeanDefinitionException`), and the collaborators of a metrics filter or
+  `ClientIdCaptureInterceptor` (`strategy-registry-pattern`), or `@MockitoBean` them.
+- `@Import` the production `SecurityConfig` and send a token with `.with(jwt())` (`spring-security-test`). Without
+  it the slice runs Boot's default security: an unauthenticated request gets `401`, a `PATCH`/`POST` without a CSRF
+  token `403` — never the `400` under test. `@MockitoBean JwtDecoder` stands in for the issuer the slice cannot reach.
 
 ```java
 @WebMvcTest(ProductController.class)
+@Import({SecurityConfig.class, CreateScheduleRequestValidator.class})   // real security chain + validators ValidationConfig injects
 class ProductControllerValidationTest {
     @Autowired MockMvc mockMvc;
+    @MockitoBean JwtDecoder jwtDecoder;                      // .with(jwt()) below never calls it
     @MockitoBean ProductEditabilityRule editabilityRule;     // rule bean used by the validator
     @MockitoBean ProductLookupService productLookupService;  // lookup used by the validator
     @MockitoBean UpdateProductOperation updateProductOperation;  // the controller's own collaborator
@@ -101,11 +113,12 @@ class ProductControllerValidationTest {
         when(productLookupService.getProductType("prod-1")).thenReturn("TypeA");
         when(editabilityRule.isEditable("TypeA")).thenReturn(false);
         mockMvc.perform(patch("/api/v1/products/prod-1")
+                       .with(jwt())
                        .contentType(APPLICATION_JSON)
                        .content("{\"name\":\"New name\"}"))           // valid body: only the path rule fails
                .andExpect(status().isBadRequest())
                .andExpect(jsonPath("$.status").value(400))
-               .andExpect(content().string(containsString("Product 'prod-1' is not editable")));
+               .andExpect(jsonPath("$.errors[0].message").value("Product 'prod-1' is not editable"));
         verifyNoInteractions(updateProductOperation);
     }
 }

@@ -10,7 +10,7 @@ depends_on: [external-client]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Resilience Patterns Skill
@@ -32,8 +32,9 @@ Micrometer are present.
 Prevent a failure in one part of the system from taking down the entire service by isolating resources.
 
 - **Thread Pool Bulkhead**: Separate thread pools for different external dependencies. **Async only:** the
-  annotation works only on methods returning `CompletionStage` / `CompletableFuture`; on a synchronous method it
-  is not applied.
+  annotation works only on methods returning `CompletionStage` / `CompletableFuture`; on a synchronous method every
+  call fails with `IllegalStateException: ThreadPool bulkhead is only applicable for completable futures` (at call
+  time, not at startup — the context starts fine and the first request breaks).
 - **Semaphore Bulkhead**: Limit the number of concurrent calls to a dependency. Works on synchronous methods —
   the default choice for blocking (servlet) code.
 
@@ -74,8 +75,8 @@ Every network call **must** have a timeout.
 - **Connect Timeout**: Max time to establish a TCP connection.
 - **Read Timeout**: Max time to wait for a packet.
 - **Request Timeout**: Total time for the operation (enforced by Resilience4j/Spring). Resilience4j
-  `@TimeLimiter` works **only on async return types** (`CompletionStage` / `CompletableFuture`) and is silently
-  skipped on a synchronous method. For synchronous code, set connect and read timeouts on the HTTP client
+  `@TimeLimiter` works **only on async return types** (`CompletionStage` / `CompletableFuture`); on a synchronous
+  method every call throws `IllegalReturnTypeException` ("CompletionStage expected") — at call time, not at startup. For synchronous code, set connect and read timeouts on the HTTP client
   itself (`external-client` §6) and bound retries with a total time budget (`external-client` §10).
 
 ## 4. The Fail-Fast Pattern

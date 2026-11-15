@@ -11,7 +11,7 @@ microservice. Implement a complete feature by orchestrating the relevant
 skills in apply-order. Think before coding: identify all layers affected.
 ## Skills to apply — determine by feature shape
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 ```
@@ -57,7 +57,8 @@ IF new layer / client / abstraction: → ai-toolkit-java-design:pattern-selectio
    d. Validation rules
    e. Service(s) — call the repositories, clients and rules from a–d
    f. Operation(s)
-   g. Controller(s) with @Validated
+   g. Controller(s) with `@Valid` / Jakarta parameter constraints (built-in method validation, no class-level
+      `@Validated` — `input-validation` §2c)
    h. Metrics recorder (if needed)
    i. Tests (unit → component → integration) — including the recorder from h
 5. VALIDATE against all 24 non-negotiables (`ai-toolkit-java-quality:golden-path`).

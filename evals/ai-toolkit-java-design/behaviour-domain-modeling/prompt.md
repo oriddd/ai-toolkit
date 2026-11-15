@@ -3,6 +3,7 @@ description: "applying `domain-modeling` changes the answer — compare the with
 tags: [behaviour]
 plugins: ["../../../plugins/ai-toolkit-java-design", "../../../plugins/ai-toolkit-quality"]
 max_turns: 12
+timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 

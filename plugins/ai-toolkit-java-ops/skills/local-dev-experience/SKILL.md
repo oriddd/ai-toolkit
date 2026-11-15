@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Local Dev Experience Skill
@@ -83,13 +83,16 @@ down:      ; docker compose down                      ## stop them, keep the vol
 reset:     ; docker compose down -v                   ## stop them and delete the volumes — destroys local data
 build:     ; ./mvnw -B -q -DskipTests package         ## build the jar
 test:      ; ./mvnw -B -q test                        ## unit + component tests
-it:        ; ./mvnw -B -q -Dgroups=integration verify ## integration tests (needs Docker)
+it:        ; ./mvnw -B -q test-compile failsafe:integration-test failsafe:verify   ## integration tests only (needs Docker)
 lint:      ; ./mvnw -B -q compile spotless:check spotbugs:spotbugs spotbugs:check   ## format + bug checks (compile first: SpotBugs reads classes)
 format:    ; ./mvnw -B -q spotless:apply              ## format the code
 precommit: format lint test                           ## what the hooks run
 run:       ; ./mvnw spring-boot:run -Dspring-boot.run.profiles=local   ## run against the compose deps
 logs:      ; docker compose logs -f --tail=200        ## follow the dependency logs
 ```
+
+`it` calls the Failsafe goals directly: `-Dgroups=integration verify` would also filter out every unit and component
+test while the JaCoCo and PIT gates still run, so the gate fails (`integration-tests`, "CI integration").
 
 Discover targets with `make` (no args runs `help`). Every project speaks the same verbs:
 `up`, `down`, `build`, `test`, `it`, `lint`, `format`, `precommit`, `run`,
@@ -142,19 +145,22 @@ repos:
         pass_filenames: false
       - id: fast-tests
         name: fast tests
-        entry: ./mvnw -q -DskipTests=false test -Dtest='*Test' -DfailIfNoTests=false
+        entry: ./mvnw -q -DskipTests=false test -Dtest='*Test,!*ComponentTest' -Dsurefire.failIfNoSpecifiedTests=false
         language: system
         pass_filenames: false
         stages: [pre-push]
 ```
 
-Install once: `pre-commit install && pre-commit install --hook-type pre-push`.
+`*Test` alone also matches `*ComponentTest` (a full Spring context per class); the `!` pattern keeps the pre-push
+hook to the fast unit tests. Install once: `pre-commit install && pre-commit install --hook-type pre-push`.
 Keep the `rev:` pins current with `pre-commit autoupdate` (or Renovate's `pre-commit` manager), never by hand.
 
 ## 6. IDE settings
 
 Ship under `.idea/codeStyles/` (IntelliJ) or `.vscode/settings.json` so
-formatting is identical across contributors. Spotless is the authoritative
+formatting is identical across contributors. The rest of `.idea/` and `.vscode/` stays ignored: the `create-repo`
+`.gitignore` uses `.idea/*` + `!.idea/codeStyles/` and `.vscode/*` + `!.vscode/settings.json` (a plain `.idea/` would
+ignore the shared files too). Spotless is the authoritative
 formatter; IDE files only configure trivia (import order, line length).
 
 ## 7. Repo-level scripts (`bin/`)

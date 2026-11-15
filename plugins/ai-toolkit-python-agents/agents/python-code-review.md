@@ -34,6 +34,9 @@ from memory.
    of the unit, marker segregation, naming.
 8. `ai-toolkit-python-quality:python-static-analysis` — ruff / `mypy --strict` / import-linter configured and not suppressed.
 9. `ai-toolkit-python-ops:python-ci` — only if the diff touches the pipeline or Dockerfile.
+10. `ai-toolkit-python-build:python-security` — routes, authentication, CORS, secrets or untrusted input in the diff.
+11. `ai-toolkit-python-build:python-external-client` — only if the diff adds or changes an outbound HTTP client.
+12. `ai-toolkit-python-build:python-messaging` — only if the diff publishes or consumes events.
 
 Also apply `ai-toolkit-quality:code-hygiene` to the diff: needless comments/docstrings, dead code, speculative abstraction,
 redundant or meaningless tests.
@@ -88,7 +91,12 @@ caller asks for a different layout.
 4. Broad `except Exception` that swallows the cause or drops the chain (`raise ... from`) — MAJOR.
 5. `Any` leaking through public signatures; missing return annotations — MAJOR.
 6. Public functions without both a positive and a negative test — MAJOR.
-7. Classes > ~100 lines or functions > ~30 lines (the `ai-toolkit-python-design:python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
+7. A non-health route without an authentication/scope dependency in a project that has one; a use case that
+   loads a resource by id without an ownership check; `jwt.decode` without an algorithm allow-list or with
+   `verify_signature: False` — BLOCKER.
+8. An `httpx.AsyncClient` created per call or at module level; retries on a non-idempotent `POST` — MAJOR.
+9. A broker `send` inside a use case or transaction instead of the outbox; a consumer without idempotency — MAJOR.
+10. Classes > ~100 lines or functions > ~30 lines (the `ai-toolkit-python-design:python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
 
 ## Rules
 

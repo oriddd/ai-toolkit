@@ -10,7 +10,7 @@ depends_on: [code-structure, pluggable-architecture]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Persistence Skill
@@ -37,6 +37,8 @@ src/main/resources/
 <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
 <!-- generates the typed metamodel (Invoice_) used by Specifications; versions come from the Boot BOM -->
 <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-jpamodelgen</artifactId><scope>provided</scope></dependency>
+<!-- @Nullable on the BaseEntity template (NullAway convention of static-analysis); not managed by the Boot 3.5 BOM -->
+<dependency><groupId>org.jspecify</groupId><artifactId>jspecify</artifactId><version>1.0.0</version></dependency>
 ```
 
 Also put the metamodel generator on the compiler's processor path, with its transitive JAXB jars (on the plain classpath
@@ -65,7 +67,7 @@ list Lombok too:
 ```java
 @Entity
 @Table(name = "invoices")
-@Getter @NoArgsConstructor(access = PROTECTED)
+@Getter
 public class Invoice extends BaseEntity {           // BaseEntity (template): @Version Long version + audit columns
                                                      // (createdAt/updatedAt/createdBy/updatedBy) + AuditingEntityListener
     @Id
@@ -81,12 +83,15 @@ public class Invoice extends BaseEntity {           // BaseEntity (template): @V
     @Column(nullable = false)
     private Status status;
 
+    @SuppressWarnings("NullAway.Init")              // JPA-only constructor: Hibernate sets every field right after it
+    protected Invoice() {}
+
     public Invoice(UUID id, UUID ownerId, String name) {
         this.id = id; this.ownerId = ownerId; this.name = name; this.status = Status.NEW;
     }
 
     @Override public boolean equals(Object o) {      // identity = id; a new (null-id) entity equals only itself
-        return this == o || (o instanceof Invoice other && id != null && id.equals(other.id));
+        return this == o || (o instanceof Invoice other && id != null && id.equals(other.getId()));   // getter: works on a lazy proxy
     }
     @Override public int hashCode() { return getClass().hashCode(); }   // stable across persist / merge
 }
@@ -103,9 +108,17 @@ Rules:
 - **Every entity extends `BaseEntity`** (template) — never repeat the
   version and audit columns per entity.
 - **`equals` / `hashCode` are id-based**: `equals` compares a non-null `id`,
-  `hashCode` returns a constant per class. Never use Lombok `@Data` /
+  `hashCode` returns a constant per class. Read the other side through
+  `getId()`, never `other.id`: on a Hibernate lazy proxy the field is `null`
+  and only the getter returns the id. Never use Lombok `@Data` /
   `@EqualsAndHashCode` on entities (they touch lazy fields and change the
   hash after persist).
+- **The JPA no-arg constructor is written by hand**, `protected`, with
+  `@SuppressWarnings("NullAway.Init")` — not Lombok `@NoArgsConstructor`:
+  NullAway (`static-analysis`) rejects a constructor that leaves non-null
+  fields unset, and Hibernate fills them right after calling it. Fields that
+  really can be null (the `BaseEntity` version and audit columns) are
+  `@Nullable` instead.
 - **`@Version` is a `Long` wrapper**, not a primitive `long`: Spring Data decides "new vs existing" from a null version. With an assigned id
   and a primitive version it falls back to the id check, treats the entity as existing, runs `merge()` (an extra SELECT) and never fills `createdAt` / `createdBy`.
 - **`@Version`** on every aggregate root. Concurrent updates fail with
@@ -119,7 +132,10 @@ Rules:
   that reads `SecurityContextHolder`; `AuditConfig` in `config/` only enables
   auditing. It records an opaque subject id, falls back to `"system"` only
   outside an HTTP request (schedulers, consumers), and returns empty for an
-  unauthenticated request.
+  unauthenticated request. `AuditConfig` carries `@Profile("!component-test")`:
+  component tests that exclude the DataSource / JPA auto-configuration would
+  otherwise fail at startup (`JPA metamodel must not be empty`); remove it if
+  your component tests run against a real database.
 - **Soft delete** with `@SQLRestriction("deleted_at is null")` (Hibernate 6.3+; `@Where` is deprecated) and an `@SQLDelete` that sets `deleted_at`,
   if hard-delete is forbidden by domain rules; otherwise hard-delete.
   A soft-deleted row still holds its PII: on a right-to-be-forgotten request

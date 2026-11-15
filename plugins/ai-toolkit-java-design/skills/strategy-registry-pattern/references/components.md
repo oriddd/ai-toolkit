@@ -301,6 +301,12 @@ public class ClientIdCaptureInterceptor implements HandlerInterceptor {
 // config/: a WebMvcConfigurer registers it — registry.addInterceptor(clientIdCaptureInterceptor)
 ```
 
+**Web-slice tests.** Every `@WebMvcTest` loads `Filter`s, `HandlerInterceptor`s and `WebMvcConfigurer`s — so the
+`MetricsFilter`, the `ClientIdCaptureInterceptor` and the `WebMvcConfigurer` that registers it — but **not** the
+plain `@Component`s they inject (`ClientIdParser`, `MetricNameResolver`, `MetricsRecorderRegistry`, …). Without them
+the slice context fails with `NoSuchBeanDefinitionException`. `@Import` those collaborators (or `@MockitoBean` them)
+in each slice test — `input-validation` §5c has a full slice example.
+
 ### 7. **Helpers** — Shared Logic (Optional)
 
 **Responsibility:** Provide shared utilities or tag-building logic used by multiple strategies.

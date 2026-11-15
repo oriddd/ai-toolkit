@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash): require confirmation before commits, pushes, tags, stashes and history rewrites.
+# PreToolUse(Bash): require confirmation before commits, pushes, tags, stashes, discards and history rewrites.
 # Policy: never commit/push until the developer asks (skill: completion-gate).
 # Best-effort safety net for Claude's Bash tool — see guard_git.py. Always exits 0.
 d="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
@@ -22,7 +22,7 @@ fi
 LC_ALL=C
 ask() {
   cat <<'JSON'
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"ai-toolkit policy: do not commit, push, tag, stash, release or rewrite history until the developer asks. Approve only if you asked for it. Headless runs (claude -p) have nobody to approve, so the command is refused: run it yourself, run interactively, or pass --permission-prompt-tool."}}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"ai-toolkit policy: do not commit, push, tag, stash, discard work, release or rewrite history until the developer asks. Approve only if you asked for it. Headless runs (claude -p) have nobody to approve, so the command is refused: run it yourself, run interactively, or pass --permission-prompt-tool."}}
 JSON
   exit 0
 }
@@ -46,6 +46,7 @@ while [ $i -lt $n ]; do
   fi
   i=$((i + 1))
 done
+cmd="${cmd//\$\{IFS\}/ }"; cmd="${cmd//\$IFS/ }"
 
 # --- statement checks ---
 text_re='(^|[^[:alnum:]_.-])(git|gh)[[:space:]].*(commit|push|tag|stash|rebase|merge|revert|publish)'
@@ -61,12 +62,14 @@ check_git() { # words after "git"
     case "${a[i]}" in -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--config-env) i=$((i + 2)) ;; -*) i=$((i + 1)) ;; *) break ;; esac
   done
   sub="${a[i]:-}"; rest=("${a[@]:i+1}")
-  local flags=() pos=() skip=0
+  local flags=() pos=() skip=0 paths=0
   for p in "${rest[@]}"; do
+    if [ $paths -ge 1 ]; then paths=2; break; fi
     if [ $skip -eq 1 ]; then skip=0; continue; fi
-    [ "$p" = "--" ] && break
+    [ "$p" = "--" ] && { paths=1; continue; }
     case "$p" in -*) flags+=("$p"); value_opt "$p" && skip=1 ;; *) pos+=("$p") ;; esac
   done
+  [ $paths -eq 2 ] || paths=0
   case "$sub" in
     commit|push|rebase|cherry-pick|merge|am|revert|commit-tree|update-ref|filter-branch|filter-repo|send-email|fast-import)
       if [ ${#rest[@]} -eq 1 ] && in_list "${rest[0]}" --abort --continue --skip --quit --show-current-patch -h --help; then return 1; fi
@@ -82,12 +85,31 @@ check_git() { # words after "git"
       return 0 ;;
     reset)
       for f in "${flags[@]}"; do in_list "$f" --hard --merge --keep --soft && return 0; done
+      { [ ${#pos[@]} -gt 1 ] || [ $paths -eq 2 ]; } && return 1
       for p in "${pos[@]}"; do case "$p" in *'~'*|*'^'*|@\{*|ORIG_HEAD|FETCH_HEAD) return 0 ;; esac; done
       return 1 ;;
     stash) [ ${#rest[@]} -eq 0 ] && return 0; in_list "${rest[0]}" list show create -h --help && return 1; return 0 ;;
-    branch) for f in "${flags[@]}"; do in_list "$f" -f --force -M -C && return 0; done; return 1 ;;
-    checkout) for f in "${flags[@]}"; do [ "$f" = -B ] && return 0; done; return 1 ;;
-    switch) for f in "${flags[@]}"; do in_list "$f" -C --force-create && return 0; done; return 1 ;;
+    branch) for f in "${flags[@]}"; do in_list "$f" -f --force -M -C -D && return 0; done; return 1 ;;
+    checkout)
+      for f in "${flags[@]}"; do in_list "$f" -B -f --force && return 0; done
+      [ $paths -eq 2 ] && return 0
+      local cpos=() cskip=0
+      for p in "${rest[@]}"; do
+        [ "$p" = "--" ] && break
+        if [ $cskip -eq 1 ]; then cskip=0; continue; fi
+        case "$p" in -b|-B|--orphan) cskip=1 ;; -*) ;; *) cpos+=("$p") ;; esac
+      done
+      [ ${#cpos[@]} -gt 1 ] && return 0
+      in_list . "${cpos[@]}" && return 0; return 1 ;;
+    switch) for f in "${flags[@]}"; do in_list "$f" -C --force-create -f --force --discard-changes && return 0; done; return 1 ;;
+    restore)
+      local staged=0
+      for f in "${flags[@]}"; do in_list "$f" -h --help && return 1; in_list "$f" -S --staged && staged=1; done
+      [ $staged -eq 0 ] && return 0
+      for f in "${flags[@]}"; do in_list "$f" -W --worktree && return 0; done; return 1 ;;
+    clean)
+      for f in "${flags[@]}"; do in_list "$f" -h --help --dry-run && return 1; [[ "$f" =~ ^-[A-Za-z]*n[A-Za-z]*$ ]] && return 1; done
+      return 0 ;;
     pull) for f in "${flags[@]}"; do case "$f" in -r|--rebase|--rebase=true|--rebase=merges|--rebase=interactive) return 0 ;; esac; done; return 1 ;;
     svn) in_list "${rest[0]:-}" dcommit rebase commit-diff set-tree && return 0; return 1 ;;
     subtree) in_list "${pos[0]:-}" add merge pull push && return 0; return 1 ;;
@@ -105,6 +127,21 @@ check_gh() {
   local a=("$@") i=0
   while [ $i -lt ${#a[@]} ]; do case "${a[i]}" in -R|--repo|--hostname) i=$((i + 2)) ;; -*) i=$((i + 1)) ;; *) break ;; esac; done
   local g="${a[i]:-}" v="${a[i+1]:-}" n=$(( ${#a[@]} - i ))
+  if [ "$g" = api ] && [ "$v" = graphql ]; then
+    local j val
+    for ((j = i + 2; j < ${#a[@]}; j++)); do
+      case "${a[j]}" in
+        --input|--input=*) return 0 ;;
+        -f|-F|--field|--raw-field) val="${a[j+1]:-}" ;;
+        --field=*|--raw-field=*) val="${a[j]#*=}" ;;
+        -f?*|-F?*) val="${a[j]:2}" ;;
+        *) continue ;;
+      esac
+      [[ "$val" =~ (^|[^[:alnum:]_])mutation([^[:alnum:]_]|$) ]] && return 0
+      case "${val#*=}" in @*) return 0 ;; esac
+    done
+    return 1
+  fi
   if [ "$g" = api ]; then
     local j m="" body=0
     for ((j = i + 1; j < ${#a[@]}; j++)); do
@@ -155,10 +192,29 @@ check_statement() { # $1 depth, words in global array "words"
         if [ $skip -eq 1 ]; then skip=0; continue; fi
         case "$w" in --prefix|-C|--dir|--cwd|--filter|-F|--workspace|-w|--registry) skip=1 ;; -*) ;; *) pos+=("$w") ;; esac
       done
+      for w in "${args[@]}"; do in_list "$w" -h --help && return 1; done
       in_list "${pos[0]:-}" publish version release && return 0
       [ "$prog" = yarn ] && [ "${pos[0]:-}" = npm ] && [ "${pos[1]:-}" = publish ] && return 0 ;;
-    mvn|mvnw|mvn.cmd|mvnw.cmd|mvnd) for w in "${args[@]}"; do case "$w" in release:*|deploy*) return 0 ;; esac; done ;;
-    gradle|gradlew|gradlew.bat) for w in "${args[@]}"; do case "${w##*:}" in *MavenLocal) ;; publish*) [ "${w:0:1}" != - ] && return 0 ;; esac; done ;;
+    mvn|mvnw|mvn.cmd|mvnw.cmd|mvnd)
+      local skip=0
+      for w in "${args[@]}"; do
+        if [ $skip -eq 1 ]; then skip=0; continue; fi
+        case "$w" in
+          -f|--file|-pl|--projects|-rf|--resume-from|-P|--activate-profiles|-s|--settings|-gs|--global-settings|-t|--toolchains|-gt|--global-toolchains|-T|--threads|-l|--log-file|-b|--builder|-D|--define|-emp|--encrypt-master-password|-ep|--encrypt-password) skip=1 ;;
+          -*) ;;
+          deploy|deploy:*|release:*|*:deploy:*|*:release:*|*:maven-deploy-plugin:*|*:maven-release-plugin:*|maven-deploy-plugin:*|maven-release-plugin:*) return 0 ;;
+        esac
+      done ;;
+    gradle|gradlew|gradlew.bat)
+      local skip=0
+      for w in "${args[@]}"; do
+        if [ $skip -eq 1 ]; then skip=0; continue; fi
+        case "$w" in
+          -x|--exclude-task|-p|--project-dir|-b|--build-file|-c|--settings-file|-g|--gradle-user-home|-I|--init-script|--include-build|--project-cache-dir) skip=1 ;;
+          -*) ;;
+          *) case "${w##*:}" in *MavenLocal) ;; publish*) return 0 ;; esac ;;
+        esac
+      done ;;
     twine) [ "${args[0]:-}" = upload ] && return 0 ;;
     poetry|cargo|uv|hatch|flit|pdm) [ "${args[0]:-}" = publish ] && return 0 ;;
     sh|bash|zsh|dash|ksh|fish)

@@ -7,7 +7,7 @@ depends_on: [persistence, observability, pluggable-architecture]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Data Privacy Skill
@@ -92,9 +92,9 @@ The converter must use authenticated encryption — never `Cipher.getInstance("A
 
 ```java
 @Entity
-public class UserEntity {
-    @Id private String id;
-    
+public class UserEntity extends BaseEntity {          // persistence §1: version + audit columns, assigned UUID v7 id
+    @Id private UUID id;
+
     @Convert(converter = EncryptionConverter.class)
     private String email;
 }

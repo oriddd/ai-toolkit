@@ -10,7 +10,7 @@ depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-11
 ---
 
 # Validation Pattern (Foundational)
@@ -92,8 +92,7 @@ public class EditableProductIdValidator
 
 **Apply in controller:**
 ```java
-@RestController
-@Validated  // REQUIRED — Boot < 3.2 silently ignores param constraints without it; 3.2+ it selects the ConstraintViolationException path
+@RestController   // no class-level @Validated: Boot 3.2+ validates parameter constraints itself (HandlerMethodValidationException)
 public class ProductController {
     @PatchMapping("/{id}")
     public ResponseEntity<ProductResponse> update(
@@ -122,7 +121,7 @@ public class CreateScheduleRequestValidator implements Validator {
     @Override
     public void validate(Object target, Errors errors) {
         final CreateScheduleRequest request = (CreateScheduleRequest) target;
-        if (ScheduleType.RECURRING.equals(request.getType()) && request.getIntervalDays() == null) {
+        if (ScheduleType.RECURRING.equals(request.type()) && request.intervalDays() == null) {   // record accessors
             errors.rejectValue("intervalDays", "schedule.recurring.intervalDays",
                     "intervalDays is required for RECURRING schedules");
         }
@@ -228,11 +227,15 @@ class CreateScheduleRequestValidatorTest {
 }
 ```
 
-**Component Test** (HTTP → 400):
+**Component Test** (HTTP → 400). The slice loads `ValidationConfig` (a `@ControllerAdvice`) but not the plain
+`@Component` validators it injects, and runs Boot's default security unless you import yours — `@Import` both, or
+the context fails (`NoSuchBeanDefinitionException`) or the request gets `401`/`403` instead of `400`:
 ```java
 @WebMvcTest(ProductController.class)
+@Import({SecurityConfig.class, CreateScheduleRequestValidator.class})
 class ProductControllerValidationTest {
     @Autowired MockMvc mockMvc;
+    @MockitoBean JwtDecoder jwtDecoder;              // the slice cannot reach the issuer; .with(jwt()) bypasses it
     @MockitoBean ProductEditabilityRule rule;   // Spring Boot 3.4+; replaces the deprecated @MockBean
     @MockitoBean UpdateProductOperation operation;   // the controller's own collaborator
 
@@ -240,6 +243,7 @@ class ProductControllerValidationTest {
     void update_uneditableProduct_returns400() throws Exception {
         when(rule.isEditableProduct("p-1")).thenReturn(false);
         mockMvc.perform(patch("/api/v1/products/p-1")
+                .with(jwt())                                    // without a token: 401, not the 400 under test
                 .contentType(MediaType.APPLICATION_JSON)        // without it: 415, not the 400 under test
                 .content("{\"name\":\"New name\"}"))            // otherwise valid body
             .andExpect(status().isBadRequest());
@@ -252,7 +256,8 @@ class ProductControllerValidationTest {
 ✅ **Do:**
 - Put domain logic in `rule/` beans — validators orchestrate only
 - Use Jakarta for field/param; Spring for cross-field
-- Add `@Validated` on controller for parameter validation
+- Rely on Boot 3.2+ built-in method validation for controller parameters — no class-level `@Validated`
+  (on Boot < 3.2 it is required, or parameter constraints are silently ignored)
 - Bind Spring Validators with scoped `@InitBinder("dtoName")`
 - Test each layer independently
 
@@ -270,10 +275,11 @@ class ProductControllerValidationTest {
 - [ ] Unit-test rule bean
 - [ ] For Jakarta: Create annotation + validator
 - [ ] For Spring: Create validator + register in ValidationConfig
-- [ ] Add `@Validated` or `@Valid` to controller
+- [ ] Add `@Valid` to the `@RequestBody`; constraint annotations go on the parameters (no class-level `@Validated`)
 - [ ] Unit-test validator
 - [ ] Component-test HTTP→400 path
-- [ ] Add `@MockitoBean` for the rule beans / downstream services in affected tests (never for a registered `Validator`)
+- [ ] Add `@MockitoBean` for the rule beans / downstream services in affected tests (never for a registered `Validator` —
+  `@Import` it, with `SecurityConfig`)
 
 ## Related Skills
 

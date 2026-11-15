@@ -10,7 +10,7 @@ depends_on: [code-structure, pluggable-architecture]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Feature Flags Skill
@@ -43,23 +43,26 @@ if (features.isEnabled(FeatureFlags.ENABLE_INVOICE_PRICING_V2)) {
 ```
 
 ### 2b. Structural Toggles (@ConditionalOnProperty)
-For larger changes, switch entire bean implementations. Select by a provider key (an enum in the typed
-properties, see `pluggable-architecture` §5), not a boolean such as `use-s3`.
+For larger changes, switch entire bean implementations. Select by a typed key (an enum in the typed properties, see
+`pluggable-architecture` §5), not a boolean such as `use-new-engine`.
 
 Choosing **which vendor** backs a capability (S3 vs local disk) is provider selection, not a release flag: it is
-wired exactly as `pluggable-architecture` §3 describes — a `*Port` in `spi/`, one adapter per vendor, the vendor
-client injected as a bean rather than created with `new` in the config. Keep structural toggles for switching
-**behaviour** (old vs new implementation of the same port), and give them the same lifecycle as any other flag (§4):
+wired exactly as `pluggable-architecture` §3 describes — a `*Port` in `spi/`, one adapter per vendor, selected by
+`platform.<capability>.provider` (e.g. `platform.storage.provider: s3`), never a `features.*` key, and it has no
+removal date. Keep structural toggles for switching **behaviour** — old vs new implementation of the same port —
+and give them the same lifecycle as any other flag (§4):
 
 ```java
 @Bean
-@ConditionalOnProperty(name = "features.storage.provider", havingValue = "s3")
-public ObjectStorePort s3ObjectStore(S3Client s3) { return new S3ObjectStoreAdapter(s3); }
+@ConditionalOnProperty(name = "features.pricing.engine", havingValue = "v2")
+public PricingEngine pricingEngineV2(TaxRules taxRules) { return new PricingEngineV2(taxRules); }
 
 @Bean
-@ConditionalOnProperty(name = "features.storage.provider", havingValue = "local", matchIfMissing = true)
-public ObjectStorePort localObjectStore(ObjectStoreProperties props) { return new LocalObjectStoreAdapter(props.rootDir()); }
+@ConditionalOnProperty(name = "features.pricing.engine", havingValue = "v1", matchIfMissing = true)   // default: the old path
+public PricingEngine legacyPricingEngine() { return new LegacyPricingEngine(); }
 ```
+
+When v2 is 100% rolled out, delete `LegacyPricingEngine`, both conditions and the key (§4).
 
 ### 2c. Toggle-at-the-Edge Pattern
 

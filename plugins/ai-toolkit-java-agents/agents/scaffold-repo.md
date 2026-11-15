@@ -23,7 +23,7 @@ question list and your proposed defaults, then stop.
 
 ## Skills to apply (in this order)
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 1. `ai-toolkit-java-scaffold:project-types` — classify the
@@ -76,7 +76,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
       template)
    b. Application.java + package skeleton (code-structure)
    c. application.yaml (local-friendly defaults = `default` profile) plus the
-      profile files of spring-boot-conventions §2 (`test`, `k8s`, `prod`)
+      profile files of spring-boot-conventions §2 (`k8s`, `prod`), `application-local.yaml`
+      (local-dev-experience) and the test-only `src/test/resources/application-component-test.yaml`
+      (component-tests — the test profile is `component-test`, never `test`)
    d. Static analysis config (checkstyle.xml, spotbugs, ArchUnit base rule)
    e. Dockerfile (multi-stage) + .dockerignore
    f. Jenkinsfile, or the GitHub Actions workflows of

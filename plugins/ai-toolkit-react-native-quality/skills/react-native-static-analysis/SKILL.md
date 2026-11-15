@@ -9,7 +9,7 @@ depends_on: [react-native-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -38,17 +38,18 @@ package.json               # scripts + lint-staged
 ## Dependencies
 
 ```json
-{ "devDependencies": { "typescript": ">=5.6 <6.1", "eslint": "^9.39.0", "typescript-eslint": "^8.13.0",
-  "eslint-plugin-react-hooks": "^7.0.0", "eslint-plugin-react-native": "^5.0.0", "eslint-plugin-boundaries": "^5.0.0",
-  "eslint-import-resolver-typescript": "^4.0.0",
-  "eslint-plugin-testing-library": "^7.0.0", "eslint-plugin-jest": "^28.8.0", "eslint-config-prettier": "^9.1.0",
-  "prettier": "^3.3.0", "husky": "^9.1.0", "lint-staged": "^15.2.0" } }
+{ "devDependencies": { "typescript": ">=5.6 <6.1", "eslint": "^10.0.0", "typescript-eslint": "^8.72.0",
+  "eslint-plugin-react-hooks": "^7.1.0", "eslint-plugin-boundaries": "^7.4.0",
+  "eslint-import-resolver-typescript": "^4.4.0",
+  "eslint-plugin-testing-library": "^7.16.0", "eslint-plugin-jest": "^29.0.0", "eslint-config-prettier": "^10.1.0",
+  "prettier": "^3.3.0", "husky": "^9.1.0", "lint-staged": "^17.0.0" } }
 ```
 
-These ranges were installed together under ESLint 9 with no peer-dependency conflict (`eslint-plugin-react-native`
-needs v5; v4 peers on ESLint <= 8). Stay on ESLint 9 although 10 is current: `eslint-plugin-react-native` 5
-still peers on ESLint <= 9 (npm ERESOLVE on 10); move when it supports 10. `typescript-eslint` supports
-TypeScript below 6.1, so use TypeScript 5.x or 6.0 (whichever your Expo SDK ships).
+These ranges were installed together on ESLint 10 with no peer-dependency conflict. ESLint 9 is end of life (npm marks
+9.39.x "no longer supported"). Do not add `eslint-plugin-react-native`: its last release (5.0.0, December 2024) peers on
+ESLint <= 9; its one rule used here, `no-inline-styles`, is a core `no-restricted-syntax` selector in section 2.
+`typescript-eslint` supports TypeScript below 6.1, so use TypeScript 5.x or 6.0 (whichever your Expo SDK ships, SDK 58:
+`~6.0`), never TypeScript 7. `lint-staged` 17 needs Node >= 22.22.1 (see `.nvmrc` in `react-native-ci`).
 
 ## 1. Scripts: the single source of truth
 
@@ -74,7 +75,6 @@ in that order, stopping at the first failure. `--max-warnings 0` makes warnings 
 import { defineConfig } from 'eslint/config';     // replaces the deprecated tseslint.config()
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
-import reactNative from 'eslint-plugin-react-native';
 import boundaries from 'eslint-plugin-boundaries';
 import testingLibrary from 'eslint-plugin-testing-library';
 import jest from 'eslint-plugin-jest';
@@ -86,7 +86,7 @@ export default defineConfig(
   { languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } } },
   {
     linterOptions: { reportUnusedDisableDirectives: 'error' },
-    plugins: { 'react-hooks': reactHooks, 'react-native': reactNative, boundaries },
+    plugins: { 'react-hooks': reactHooks, boundaries },
     settings: {
       // without this resolver the @app/* @shared/* aliases do not resolve and boundaries checks nothing
       'import/resolver': { typescript: { project: './tsconfig.json' } },
@@ -104,16 +104,15 @@ export default defineConfig(
       // allow `onPress={() => onPress(id)}`; the default flags every void-returning arrow shorthand in JSX
       '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
       'no-console': 'error',
-      'react-native/no-inline-styles': 'error',
-      'boundaries/element-types': ['error', { default: 'disallow', rules: [
-        { from: 'app', allow: ['feature', 'shared'] },
-        { from: 'feature', allow: ['feature', 'shared'] },
-        { from: 'shared', allow: ['shared'] },
-      ] }],
-      // a feature is imported through its index.ts only (relative imports inside the feature are not affected)
-      'boundaries/entry-point': ['error', { default: 'disallow', rules: [
-        { target: 'feature', allow: 'index.ts' },
-        { target: ['app', 'shared'], allow: '**' },
+      'no-restricted-syntax': ['error', {                     // inline style objects with literal values
+        selector: 'JSXAttribute[name.name=/(^s|S)tyle$/] ObjectExpression > Property > :matches(Literal, UnaryExpression).value',
+        message: 'No inline styles: use StyleSheet.create or a design-system primitive.',
+      }],
+      // app -> features -> shared; another feature only through its index.ts (imports inside a feature are not checked)
+      'boundaries/dependencies': ['error', { default: 'disallow', policies: [
+        { from: { element: { types: ['app', 'feature'] } },
+          allow: { to: { element: { type: 'feature', fileInternalPath: 'index.ts' } } } },
+        { from: { element: { types: ['app', 'feature', 'shared'] } }, allow: { to: { element: { type: 'shared' } } } },
       ] }],
     },
   },
@@ -129,16 +128,18 @@ export default defineConfig(
 );
 ```
 
-`eslint-plugin-react-hooks` 7's `recommended` rules include the React Compiler checks. `boundaries/element-types` turns the dependency direction from
-`react-native-code-structure` into a failing check and `boundaries/entry-point` limits cross-feature imports
-to a feature's `index.ts`. Keep the `disableTypeChecked` override last (before `prettier`), otherwise
+`eslint-plugin-react-hooks` 7's `recommended` rules include the React Compiler checks. `boundaries/dependencies` turns the
+dependency direction from `react-native-code-structure` into a failing check and limits cross-feature imports to a
+feature's `index.ts`. It is the `eslint-plugin-boundaries` 7 syntax: `element-types` and `entry-point`, `rules:` and
+string selectors are the deprecated v5 form and print migration warnings on every run. The selector rule flags
+`style={{ color: 'red' }}` and `[styles.box, { padding: 8 }]` but not computed values (`{ width: wide ? 10 : 5 }`). Keep the `disableTypeChecked` override last (before `prettier`), otherwise
 type-aware rules throw on config files ("not found by the project service").
 
 Prove the boundaries once after setup: add `import { App } from '@app/App'` to a file under `src/shared/` and
-`import { x } from '@features/orders/hooks/x'` to a file under `src/app/`. `npm run lint` must fail with
-`boundaries/element-types` and `boundaries/entry-point`; then delete both. If it passes, the resolver
-is not resolving the aliases. (Verified on ESLint 9.39, `eslint-plugin-boundaries` 5.4, resolver 4.4,
-`eslint-plugin-react-hooks` 7.1, `eslint-plugin-testing-library` 7.16, `eslint-plugin-jest` 28.14.)
+`import { x } from '@features/orders/hooks/x'` to a file under `src/app/`. `npm run lint` must fail twice with
+`boundaries/dependencies`; then delete both. If it passes, the resolver is not resolving the aliases. (Verified
+2026-11-11 on ESLint 10.14, `typescript-eslint` 8.72, `eslint-plugin-boundaries` 7.4, resolver 4.4,
+`eslint-plugin-react-hooks` 7.1, `eslint-plugin-testing-library` 7.16, `eslint-plugin-jest` 29.17, TypeScript 6.0, Expo SDK 58.)
 
 ## 3. Prettier
 

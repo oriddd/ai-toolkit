@@ -10,7 +10,7 @@ depends_on: [python-static-analysis, python-unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -138,6 +138,8 @@ RUN groupadd --system app && useradd --system --gid app --uid 10001 app
 WORKDIR /app
 # owned by root: the runtime user can read and run the code but not modify it
 COPY --from=build /app/.venv /app/.venv
+# migrations ship inside the package; alembic.ini uses script_location = my_service:alembic
+COPY alembic.ini ./
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live')"]
@@ -150,6 +152,11 @@ Dependencies are copied before source so the expensive layer is cached. The runt
 compiler, no uv, no dev dependencies and no source tree (only the non-editable `.venv`), and runs as an
 unprivileged user that cannot write to the installed code. `.dockerignore` excludes
 `.git`, `.venv`, `tests`, `__pycache__`, `.env*`.
+
+Migrations run from the same image, once per deploy and before the new version takes traffic (a Kubernetes
+Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic upgrade head` with the runtime
+`DB_*` environment. They never run in the app's lifespan, where every replica would race to migrate. This needs
+`script_location = my_service:alembic` in `alembic.ini` (see `python-persistence`): the image has no `src/`.
 
 ## 4. Reproducibility and supply chain
 - Commit `uv.lock`; `uv sync --locked` (or `uv lock --check`) fails CI on drift.

@@ -17,7 +17,7 @@ time, tests green after every step, no behaviour change unless explicitly reques
 
 ## Skills to apply (in this order)
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 1. `ai-toolkit-python-design:python-code-structure` — target layout and layering; use it to audit what is out of place.
@@ -38,6 +38,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 | `print` / `logging.basicConfig` / unstructured logs | `ai-toolkit-python-ops:python-observability` |
 | Router returning raw dicts or ORM objects | `ai-toolkit-python-design:python-fastapi-conventions` §3 |
 | Mocks of the class under test, no fakes | `ai-toolkit-python-quality:python-unit-tests` §3 |
+| `requests` / a new `httpx` client per call, no timeout, ad-hoc retry loops | `ai-toolkit-python-build:python-external-client` |
+| Hand-parsed `Authorization` headers, identity from the body, missing ownership checks | `ai-toolkit-python-build:python-security` |
+| Broker `send` inside the transaction, consumers that are not idempotent | `ai-toolkit-python-build:python-messaging` |
 | Tests that need a real DB but use mocks | `ai-toolkit-python-quality:python-integration-tests` |
 
 ## Step-by-step procedure

@@ -19,7 +19,7 @@ while IFS= read -r line; do
     if [ -x "$path" ]; then echo "WARN: $path is executable on disk but mode $mode in git — stage the mode change (git add $path)"
     else echo "WARN: $path is mode $mode in git; make it executable (git update-index --chmod=+x $path)"; fi
   fi
-done < <(git ls-files -s -- 'tools/*.py' 2>/dev/null)
+done < <(git ls-files -s -- 'tools/*.py' ':!tools/eval_cases/*' 2>/dev/null)   # eval_cases/ are imported modules
 # 2. CRLF
 while IFS= read -r f; do
   [ -f "$f" ] || continue

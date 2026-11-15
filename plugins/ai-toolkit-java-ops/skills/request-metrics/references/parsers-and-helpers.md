@@ -8,13 +8,15 @@ Each parser is a focused `@Component` that extracts exactly one tag value from
 the request/response context. Parsers always return a non-blank sentinel
 (`UNKNOWN`, `BASIC`, …) on failure — never `null` or empty string. Micrometer rejects a `null` tag value, and
 Prometheus treats an empty label value as "label absent", which merges unrelated requests into one ambiguous series.
+A parser that accepts a missing request/response declares the parameter `@Nullable` (JSpecify, the `static-analysis`
+NullAway convention); otherwise NullAway rejects the `parse…(null)` call in its unit test.
 
 ### `RequestMethodParser`
 
 ```java
 @Component
 public class RequestMethodParser {
-    public String parseRequestMethod(final HttpServletRequest request) {
+    public String parseRequestMethod(final @Nullable HttpServletRequest request) {
         if (request == null || request.getMethod() == null) {
             return MonitoringConstants.UNKNOWN;
         }
@@ -28,7 +30,7 @@ public class RequestMethodParser {
 ```java
 @Component
 public class ResponseStatusParser {
-    public String parseResponseStatus(final HttpServletResponse response) {
+    public String parseResponseStatus(final @Nullable HttpServletResponse response) {
         return response == null
                 ? MonitoringConstants.UNKNOWN
                 : String.valueOf(response.getStatus());
@@ -37,6 +39,12 @@ public class ResponseStatusParser {
 ```
 
 ### `ClientIdParser` — auth-aware tag extraction
+
+Only when the service uses Spring Security (create-repo #9 auth = yes): the parser imports `JwtAuthenticationToken`
+(`spring-boot-starter-oauth2-resource-server`) and `UsernamePasswordAuthenticationToken`, which do not exist on the
+classpath otherwise. Without authentication there is no client id to read: leave out `ClientIdParser`,
+`ClientIdCaptureInterceptor`, its `WebMvcConfigurer` and the `clientId` tag in `MetricsTagsHelper` (§7) — a tag that is
+always `UNKNOWN` only adds a label.
 
 ```java
 @Component
@@ -49,7 +57,7 @@ public class ClientIdParser {
     // Reads the principal from the request, never SecurityContextHolder (that stays in permission/,
     // ArchUnit rule securityHolderLivesInPermissionOnly). Spring Security's request wrapper returns
     // the current Authentication from getUserPrincipal().
-    public String parseClientId(final HttpServletRequest request) {
+    public String parseClientId(final @Nullable HttpServletRequest request) {
         if (request != null && request.getAttribute(CLIENT_ID_ATTRIBUTE) instanceof String captured) {
             return captured;    // a filter running outside Spring Security sees no principal itself
         }
@@ -113,6 +121,7 @@ public class ExportFormatParser {
 
 Rules for all parsers:
 - **Never return `null` or `""`** — always return a non-blank sentinel.
+- A parameter the parser null-checks is `@Nullable` (`org.jspecify.annotations.Nullable`).
 - **Tag values come from a closed set.** Never return a request parameter, header or path segment as-is: a client could
   create unlimited time series. Map it onto known values and return `OTHER` for the rest (`observability`: fewer than 100 values per tag).
 - **Swallow exceptions** and return the sentinel; a bad tag must not fail the request. Log at `DEBUG` (or a
@@ -148,7 +157,7 @@ public class MetricsTagsHelper {
 ```
 
 Recorders call `metricsTagsHelper.buildGenericTags(request, response)` and
-then add their own domain-specific tags on top.
+then add their own domain-specific tags on top. Without Spring Security (§6) the helper has two parsers and two tags.
 
 ## 8. `MetricsTimerHelper` — Timer with custom SLO buckets
 

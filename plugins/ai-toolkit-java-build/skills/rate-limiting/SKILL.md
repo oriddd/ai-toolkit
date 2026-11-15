@@ -8,7 +8,7 @@ depends_on: [observability, external-client, pluggable-architecture]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Rate Limiting Skill
@@ -86,7 +86,8 @@ The caller (a filter or the operation) turns a refusal into the domain exception
 ```java
 RateLimitDecision decision = rateLimiter.tryConsume(clientKey);
 if (!decision.allowed()) {
-    // TooManyRequestsException → 429 + Retry-After, mapped by the exception-handling GlobalExceptionHandler template
+    // TooManyRequestsException carries the computed wait; the exception-handling GlobalExceptionHandler template
+    // answers 429 with Retry-After = retryAfterSeconds (its 30 s default applies only when no wait is known)
     throw ExceptionMessages.rateLimitExceeded(decision.retryAfterSeconds());
 }
 ```

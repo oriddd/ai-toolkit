@@ -75,7 +75,7 @@ public class JpaInvoiceRepository implements InvoiceRepository { }
 public class StrictInvoiceRepository implements InvoiceRepository {
     public Optional<Invoice> findById(String id) {
         Invoice found = load(id);
-        if (found == null) throw new InvoiceNotFoundException(id);  // Contract violation!
+        if (found == null) throw ExceptionMessages.resourceNotFound("Invoice", id);  // Contract violation!
         // Base interface says "return empty when not found", but this throws
     }
 }
@@ -128,7 +128,7 @@ public class InvoiceService {
     
     public Invoice getInvoice(String id) {
         return repository.findById(id)
-                .orElseThrow(() -> new InvoiceNotFoundException(id));  // → 404, not a 500 NoSuchElementException
+                .orElseThrow(() -> ExceptionMessages.resourceNotFound("Invoice", id));  // NotFoundException → 404, not a 500 NoSuchElementException (exception-handling)
     }
 }
 

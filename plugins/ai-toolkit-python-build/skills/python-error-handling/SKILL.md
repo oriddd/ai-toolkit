@@ -10,7 +10,7 @@ depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -42,6 +42,7 @@ caller might want to catch. Business code raises domain errors only; it knows no
 ```python
 class DomainError(Exception):
     code: ClassVar[ErrorCode]  # set by every raised class; category bases are never raised directly
+    headers: ClassVar[Mapping[str, str]] = {}   # response headers the status requires
 
     def __init__(self, **params: object) -> None:
         self.params = params
@@ -53,6 +54,10 @@ class _Tolerant(dict[str, object]):
 
 class NotFoundError(DomainError): ...
 class ConflictError(DomainError): ...
+class ForbiddenError(DomainError): ...
+
+class UnauthorizedError(DomainError):             # RFC 9110: every 401 names its auth scheme
+    headers: ClassVar[Mapping[str, str]] = {"WWW-Authenticate": "Bearer"}
 
 class DependencyUnavailableError(DomainError):
     code = ErrorCodes.DEPENDENCY_UNAVAILABLE
@@ -86,7 +91,15 @@ class ErrorCodes:
         "EMAIL_ALREADY_REGISTERED", 409, "Email already registered", "This email is already registered")
     DEPENDENCY_UNAVAILABLE = ErrorCode(
         "DEPENDENCY_UNAVAILABLE", 503, "Dependency unavailable", "Dependency {dependency} is unavailable")
+    DEPENDENCY_BAD_RESPONSE = ErrorCode(   # the dependency answered, but not per its contract
+        "DEPENDENCY_BAD_RESPONSE", 502, "Bad dependency response", "Dependency {dependency} sent an invalid response")
+    NOT_AUTHENTICATED = ErrorCode(
+        "NOT_AUTHENTICATED", 401, "Not authenticated", "A valid bearer token is required")
+    FORBIDDEN = ErrorCode("FORBIDDEN", 403, "Forbidden", "The caller may not perform this action")
 ```
+
+`NotAuthenticatedError(UnauthorizedError)` and `AccessDeniedError(ForbiddenError)` carry the last two; they are
+raised by the authentication dependency and the use cases (see `python-security`).
 
 Raise: `raise OrderNotFoundError(order_id=order_id)`. Codes are an API; never rename a released one.
 
@@ -129,7 +142,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error(request: Request, exc: DomainError) -> JSONResponse:
         return _problem(request, status_code=exc.code.status, title=exc.code.title,
-                        detail=str(exc), code=exc.code.code)
+                        detail=str(exc), code=exc.code.code, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -177,7 +190,9 @@ def _problem(
 ```
 
 The 500 body never leaks exception text or stack traces; those go to the log. Starlette still
-re-raises after the 500 handler runs, so test clients need `raise_server_exceptions=False` to see the body.
+re-raises after the 500 handler runs, so a test that asserts the 500 body must turn that off:
+`ASGITransport(app=app, raise_app_exceptions=False)` for httpx, `TestClient(app, raise_server_exceptions=False)`
+for Starlette's client. With the defaults the test sees the original exception instead.
 
 The `Exception` handler is run by Starlette's `ServerErrorMiddleware`, which sits **outside** every
 middleware added with `add_middleware`. The 500 response therefore has no `x-request-id` and no CORS
@@ -229,3 +244,5 @@ returns `None`. Let everything else bubble to the handler.
 - `python-input-validation` — produces the 422 `errors` list.
 - `python-persistence` — raises `ConflictError` on optimistic-lock failure.
 - `python-observability` — logging the unexpected-error path with correlation IDs.
+- [`python-external-client`](../python-external-client/SKILL.md) — the full outbound mapping (§5 here) with retries.
+- [`python-security`](../python-security/SKILL.md) — raising the 401/403 errors.

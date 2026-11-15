@@ -9,7 +9,7 @@ depends_on: [static-analysis]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # GitHub Actions CI Skill
@@ -18,7 +18,7 @@ GitHub Actions. Produces four workflow files under `.github/workflows/`.
 
 **Action pinning.** Every `uses:` below is written `owner/action@<sha>  # vX.Y.Z`. Replace `<sha>` with the full
 40-character commit SHA of the action's **current** release and put that release tag in the comment (for example
-`actions/checkout` and `actions/setup-java` are on v5 since late 2025). Tags can be re-pointed silently; a SHA cannot.
+`actions/checkout` is on v7 and `actions/setup-java` on v6 as of November 2026). Tags can be re-pointed silently; a SHA cannot.
 Let Dependabot / Renovate (`github-actions` ecosystem) bump the SHA and the comment together.
 
 **`{{version}}` is literal.** In `image.yml`, `pattern={{version}}` is `docker/metadata-action` syntax, not a scaffold
@@ -34,6 +34,7 @@ on:
   pull_request: {}
 permissions:
   contents: read
+  actions: read          # dorny/test-reporter reads the workflow run
   checks: write          # dorny/test-reporter publishes a check run (read-only on PRs from forks)
 concurrency:
   group: build-${{ github.ref }}
@@ -62,12 +63,17 @@ jobs:
             **/target/surefire-reports
             **/target/failsafe-reports
       - uses: dorny/test-reporter@<sha>  # vX.Y.Z
-        if: always()
+        # a PR from a fork gets a read-only token and cannot create the check run: skip it there
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         with:
           name: tests
           path: '**/target/surefire-reports/*.xml,**/target/failsafe-reports/*.xml'
           reporter: java-junit
 ```
+
+Public repositories that take fork PRs and still want the report: upload the XML reports as an artifact on every run
+and publish them from a second workflow on `workflow_run` (the "Recommended setup for public repositories" in the
+`dorny/test-reporter` README).
 
 ## 2. `image.yml` — build + scan + push + sign + attest (release tags only)
 
@@ -157,9 +163,13 @@ jobs:
         # A tag pushed with the default GITHUB_TOKEN does not trigger other
         # workflows, so image.yml would never run. Use a PAT or GitHub App token.
         with:
-          release-type: maven
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 ```
+
+No `release-type` input: setting it switches the action to single-package mode, which ignores the manifest config
+(release-please-action README, "manifest — do not set `release-type`"), so the Helm chart's `appVersion` would never be
+bumped. Commit `release-please-config.json` (`"release-type": "maven"` plus the `helm-chart/Chart.yaml` `extra-files`
+entry) and `.release-please-manifest.json` from `release-versioning` §3 (`ai-toolkit-workflow`) at the repo root.
 
 ## 4. `lint-commits.yml` — Conventional Commits (`commitlint` check)
 

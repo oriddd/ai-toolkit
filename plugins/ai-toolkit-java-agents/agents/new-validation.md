@@ -16,7 +16,7 @@ annotation, the validator, the domain rule bean, and the tests.
 
 ## Skills to apply (in this order)
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 1. `ai-toolkit-java-build:input-validation` — the full
@@ -49,7 +49,9 @@ validation/
   validator/<RuleName>Validator.java
   rule/<RuleName>Rule.java            (domain rule bean)
 ```
-Add `@Validated` to the controller class if not already present.
+Put the annotation on the controller parameter (or on a field of a `@Valid` request body). Boot 3.5 validates it with
+the built-in method validation — do **not** add class-level `@Validated` to the controller (it switches to
+`ConstraintViolationException`; `input-validation` §2c). Only on Spring Boot < 3.2 is `@Validated` required.
 
 ### Spring Validator style
 ```
@@ -76,7 +78,8 @@ the gate a second time.
 - [ ] `ctx.disableDefaultConstraintViolation()` called before custom
       message template.
 - [ ] Parsers / lookups in the rule bean, never directly in `isValid()`.
-- [ ] Controller carries `@Validated` (Jakarta style).
+- [ ] Jakarta constraints are actually enforced: built-in method validation, **no** class-level `@Validated` on the
+      controller (Boot 3.5; `input-validation` §2c).
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.

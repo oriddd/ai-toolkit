@@ -9,7 +9,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # Graceful Shutdown Skill
@@ -147,28 +147,31 @@ the pod mid-drain.
 
 ## Component test — settings, readiness and an in-flight request
 
-Guild rule #17 asks for this test. It uses the service's **own** configuration (no property overrides), checks the
-settings, then closes the context (the same path `SIGTERM` takes) and asserts that readiness went to
-`REFUSING_TRAFFIC` and that a request already in flight still completes:
+Guild rule #17 asks for this test. It runs under the `component-test` profile with `ComponentTestConfiguration`
+(`component-tests`), like every component test — a bare `@SpringBootTest` needs every `${VAR}` without a default
+(e.g. `JWT_ISSUER_URI` from `permissions`) and a real database. The settings check uses the cached test context. The
+two shutdown checks never close that context (the test framework still needs it after each test method, and a closed
+one fails them with "ApplicationContext … is not active"); each starts its **own** application with
+`SpringApplicationBuilder`, closes it (the same path `SIGTERM` takes) and asserts that readiness went to
+`REFUSING_TRAFFIC` and that a request already in flight still completes. Latches, not `Thread.sleep`, order the steps:
 
 ```java
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GracefulShutdownComponentTest.SlowTestController.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)   // two tests close the context
+@Import(ComponentTestConfiguration.class)
+@ActiveProfiles("component-test")
 class GracefulShutdownComponentTest {
 
-    @LocalServerPort private int port;
-    @Value("${server.servlet.context-path:}") private String contextPath;
-    @Autowired private ConfigurableApplicationContext context;
-    @Autowired private ApplicationAvailability availability;
     @Autowired private Environment environment;
 
     @RestController
     static class SlowTestController {
+        private final CountDownLatch requestStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseRequest = new CountDownLatch(1);
+
         @GetMapping("/test/slow")
-        String slow() throws InterruptedException {
-            Thread.sleep(2_000);   // simulates a request that is in flight when shutdown starts
-            return "done";
+        String slow() throws InterruptedException {   // in flight until the test releases it
+            requestStarted.countDown();
+            return releaseRequest.await(10, TimeUnit.SECONDS) ? "done" : "released by timeout";
         }
     }
 
@@ -180,33 +183,57 @@ class GracefulShutdownComponentTest {
 
     @Test
     void close_readiness_becomesRefusingTraffic() {
+        final ConfigurableApplicationContext app = startApp(event -> { });
+        final ApplicationAvailability availability = app.getBean(ApplicationAvailability.class);
         assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.ACCEPTING_TRAFFIC);
 
-        context.close();     // what SIGTERM triggers
+        app.close();         // what SIGTERM triggers
 
         assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
     }
 
     @Test
     void close_inFlightRequest_completesWith200() throws Exception {
-        final HttpClient client = HttpClient.newHttpClient();
-        final HttpRequest request = HttpRequest.newBuilder(
-                URI.create("http://localhost:" + port + contextPath + "/test/slow")).build();
-        final CompletableFuture<HttpResponse<String>> inFlight =
-                client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
-        Thread.sleep(500);   // let the request reach the controller
+        final CountDownLatch shutdownStarted = new CountDownLatch(1);
+        final ConfigurableApplicationContext app = startApp(event -> {
+            if (event instanceof AvailabilityChangeEvent<?> change && change.getState() == ReadinessState.REFUSING_TRAFFIC) {
+                shutdownStarted.countDown();
+            }
+        });
+        final SlowTestController controller = app.getBean(SlowTestController.class);
+        final int port = ((WebServerApplicationContext) app).getWebServer().getPort();
+        final String contextPath = app.getEnvironment().getProperty("server.servlet.context-path", "");
+        final CompletableFuture<HttpResponse<String>> inFlight = HttpClient.newHttpClient().sendAsync(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + contextPath + "/test/slow")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(controller.requestStarted.await(10, TimeUnit.SECONDS)).isTrue();
 
-        context.close();     // what SIGTERM triggers
+        final CompletableFuture<Void> shutdown = CompletableFuture.runAsync(app::close);   // what SIGTERM triggers
+        assertThat(shutdownStarted.await(10, TimeUnit.SECONDS)).isTrue();
+        controller.releaseRequest.countDown();
 
         final HttpResponse<String> response = inFlight.get(10, TimeUnit.SECONDS);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("done");
+        shutdown.get(30, TimeUnit.SECONDS);
+    }
+
+    /** A dedicated application per shutdown test: closing it leaves the cached test context untouched. */
+    private static ConfigurableApplicationContext startApp(final ApplicationListener<ApplicationEvent> listener) {
+        return new SpringApplicationBuilder(<Application>.class, ComponentTestConfiguration.class, SlowTestController.class)
+                .profiles("component-test")
+                .properties("server.port=0")
+                .listeners(listener)
+                .run();
     }
 }
 ```
 
-If the service secures every path, permit `/test/**` in the component-test security configuration or send a test
-token. Keep it in the component-test suite (it takes a few seconds).
+`<Application>` is the service's `@SpringBootApplication` class. If the service secures every path, permit `/test/**`
+in the component-test security configuration or send a test token. Keep it in the component-test suite (it starts two
+extra applications, a few seconds). On embedded Tomcat an in-flight request also completes with
+`server.shutdown: immediate` (Tomcat waits for running requests when it stops), so the settings test is what guards
+the property; the in-flight test proves the drain path end to end.
 
 ## Smoke test (load test during rolling update)
 

@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -43,8 +43,13 @@ shared/state/ useSessionStore.ts
 
 ```json
 { "dependencies": { "@tanstack/react-query": "^5.59.0", "zustand": "^5.0.0",
-  "@react-native-community/netinfo": "^11.4.0" } }
+  "@react-native-community/netinfo": "<sdk-matched>" } }
 ```
+
+Native modules (`netinfo`, and every other package with native code) must match the Expo SDK: add them with
+`npx expo install <package>` (SDK 58: `netinfo` 12.0.1), never a hand-written range; bare apps take the version the
+library documents for their React Native version. Current TanStack Query 5.x (5.107) deprecates `fetchQuery`, `prefetchQuery` and
+`ensureQueryData` in favour of `queryClient.query(options)`; `no-deprecated` (`react-native-static-analysis`) fails the old names.
 
 ## 1. One api-client, one mapping point
 
@@ -217,16 +222,19 @@ focusManager.setEventListener((handleFocus) => {          // React Native has no
   return () => { sub.remove(); };
 });
 
+// exported so the retry and reporting policy is unit-tested without rendering the provider
+export const createQueryClient = (errorReporter: ErrorReporter) => new QueryClient({
+  queryCache: new QueryCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
+  mutationCache: new MutationCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
+  defaultOptions: {
+    queries: { retry: (n, e) => n < 2 && e.retryable, networkMode: 'offlineFirst' },
+    mutations: { retry: 0 },
+  },
+});
+
 export const QueryProvider = ({ children }: PropsWithChildren) => {
   const { errorReporter } = useServices();                  // the client lives inside the services provider
-  const [client] = useState(() => new QueryClient({
-    queryCache: new QueryCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
-    mutationCache: new MutationCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
-    defaultOptions: {
-      queries: { retry: (n, e) => n < 2 && e.retryable, networkMode: 'offlineFirst' },
-      mutations: { retry: 0 },
-    },
-  }));
+  const [client] = useState(() => createQueryClient(errorReporter));
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 };
 ```

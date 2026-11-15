@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -72,9 +72,13 @@ class DateRange(BaseModel):
     @model_validator(mode="after")
     def end_not_before_start(self) -> Self:
         if self.end < self.start:
-            raise ValueError("end must not be before start")
+            raise PydanticCustomError("date_range_inverted", "end must not be before start")
         return self
 ```
+
+Raise `pydantic_core.PydanticCustomError(<code>, <message>)`, not a bare `ValueError`: a `ValueError` reaches the
+client as `code: "value_error"`, the same for every rule, so clients cannot branch on it. A model-level error has
+an empty `loc`, so its `field` in the 422 body is just the location (`"body"`); name the fields in the message.
 
 Validators are pure: no I/O, no clock, no database. Use `@field_validator` for normalising one field.
 
@@ -134,3 +138,4 @@ boundary, then pass the typed object inward. Past the boundary, code trusts its 
 - `python-fastapi-conventions` — request/response model conventions.
 - `python-code-structure` — injecting rule objects.
 - `python-unit-tests` — table-driven validation tests.
+- [`python-security`](../python-security/SKILL.md) — mass assignment and bounded inputs.

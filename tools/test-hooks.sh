@@ -41,6 +41,14 @@ ASK=(
   # evasions (H-5)
   'bash -c -e "git push"' 'echo "git push" | sh' $'bash <<EOF\ngit push\nEOF' 'watch -n 5 "git push"' '$(echo git) push' '`which git` commit -m x' '$GIT push'
   'git -c alias.ci=commit ci -m x' 'git -c alias.p="!git push" p' $'x=$((1<<2))\ngit push' $'ls # note\ngit push'
+  # word splitting via $IFS, forced branch delete, full deploy-plugin coordinates, graphql mutations
+  'git commit$IFS-m x' 'git commit${IFS}-m x' 'git branch -D x' 'mvn org.apache.maven.plugins:maven-deploy-plugin:deploy'
+  'mvn org.apache.maven.plugins:maven-deploy-plugin:3.1.2:deploy-file' 'mvn deploy:deploy-file -Dfile=x' 'mvn -pl app clean deploy'
+  'gh api graphql -f query="mutation { addStar(input: {starrableId: \"x\"}) { clientMutationId } }"' 'gh api graphql -F query=@q.graphql'
+  'git reset HEAD~1 --' 'yarn version patch'
+  # discarding uncommitted work (completion-gate §1)
+  'git clean -fdx' 'git clean -f' 'git restore .' 'git restore src/A.java' 'git restore --staged --worktree f' 'git checkout -- f'
+  'git checkout .' 'git checkout HEAD f' 'git checkout -f main' 'git switch --discard-changes main'
 )
 # cases the no-python fallback is not expected to catch (it does not handle substitutions, aliases or heredocs)
 FB_SKIP_ASK=('$(echo git) push' '`which git` commit -m x' 'git -c alias.ci=commit ci -m x' 'git -c alias.p="!git push" p')
@@ -61,6 +69,11 @@ QUIET=(
   '$EDITOR commit.txt' 'git status | bash' 'git subtree split --prefix x' 'git submodule foreach git status'
   # heredoc bodies are data unless fed to a shell (H-6)
   $'cat <<EOF\ngit commit -m x\nEOF' $'cat > f <<\'EOF\'\ngit push\nEOF\necho ok'
+  # option values and read-only forms that mention deploy/publish/version
+  'mvn -pl deployment-service verify' 'mvn -f deploy/pom.xml verify' 'mvn -P release verify' 'gradle build -x publish'
+  'yarn version --help' 'npm publish --help' "gh api graphql -f query='{ viewer { login } }'" 'git reset HEAD~1 -- file.txt'
+  'git reset HEAD~1 a.txt b.txt' 'git clean -n' 'git clean -fdn' 'git clean --dry-run' 'git restore --staged f' 'git checkout main'
+  'git checkout -b x origin/x' 'git switch main'
 )
 FB_SKIP_QUIET=($'cat <<EOF\ngit commit -m x\nEOF' $'cat > f <<\'EOF\'\ngit push\nEOF\necho ok')
 for c in "${ASK[@]}";   do expect_ask "$c";   done

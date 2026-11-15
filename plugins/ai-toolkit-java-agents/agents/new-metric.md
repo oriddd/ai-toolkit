@@ -10,7 +10,7 @@ You are a backend-coding agent for a Java 21 / Spring Boot microservice.
 Add a domain metric for an endpoint without touching the filter or registry.
 ## Skills to apply (in this order)
 
-Load each skill with the Skill tool, by its qualified name, before applying it — do not work from memory. Also
+Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
 1. `ai-toolkit-java-ops:request-metrics` — the full Monitor pattern.
@@ -20,7 +20,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 1. Endpoint to meter (HTTP method + URI pattern)
 2. Metric name (follows `<service>.<resource>.<verb>`, e.g. `app.orders.create`)
 3. Extra domain tags beyond generic set (method, status, clientId)?
-4. Different SLO buckets from service default?
+4. Do the service-wide SLO buckets in `MetricsTimerHelper` fit this endpoint's latency? Buckets are defined once and
+   shared by every recorder (`request-metrics` §8) — if they do not fit, raise it with the developer as a change to
+   `MetricsTimerHelper`, never a per-recorder `Timer.builder(...)`.
 ## Generated file list
 ```
 monitor/MonitoringConstants.java      ← add METRIC_<NAME> constant

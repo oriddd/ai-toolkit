@@ -10,7 +10,7 @@ depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-11
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -127,6 +127,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_async_engine(resolved.db.sqlalchemy_url(), pool_size=resolved.db.pool_size)
+        app.state.engine = engine                   # for the readiness probe
         app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
         yield
         await engine.dispose()
@@ -144,7 +145,26 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 `create_app()` is a factory so tests build isolated apps: unit tests pass explicit settings
 (`create_app(test_settings)`, no `DB_*` environment needed; the engine connects lazily, so with the
 unit-of-work provider overridden nothing touches a database). Tests must run the lifespan
-(`with TestClient(app)` or `asgi-lifespan`, see `python-unit-tests`), otherwise `app.state` is empty. Add `/health/live` and `/health/ready`.
+(`with TestClient(app)` or `asgi-lifespan`, see `python-unit-tests`), otherwise `app.state` is empty.
+
+`app.mount("/metrics", ...)` answers `GET /metrics` with a 307 to `/metrics/`; Prometheus follows it, but point
+scrape configs and tests at `/metrics/`.
+
+Add `/health/live` (process is up, no I/O) and `/health/ready` (dependencies reachable):
+
+```python
+@router.get("/ready")
+async def ready(engine: Annotated[AsyncEngine, Depends(get_engine)], response: Response) -> dict[str, str]:
+    try:
+        async with asyncio.timeout(2), engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 - readiness reports any failure as DOWN
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "DOWN"}
+    return {"status": "UP"}
+```
+
+Health routes are the only routes without an authentication dependency (see `python-security`).
 
 ## Do / Don't
 - ✅ `async def` routes only when everything awaited inside is async; otherwise `def` (runs in the threadpool).
@@ -160,3 +180,4 @@ unit-of-work provider overridden nothing touches a database). Tests must run the
 - `python-error-handling` — the exception-to-problem+json mapping.
 - `python-input-validation` — request models and rule objects.
 - `python-observability` — request logging, metrics and tracing middleware.
+- `python-security` — the `get_principal` dependency, scope aliases, CORS and docs exposure.

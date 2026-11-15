@@ -25,7 +25,7 @@ serviceMonitor:
   enabled: true       # also needs the Prometheus Operator CRD in the cluster; skipped automatically without it
   interval: 30s
 
-springProfilesActive: k8s   # spring-boot-conventions profiles: default / test / k8s / prod
+springProfilesActive: k8s   # profiles: default (application.yaml) / local / component-test (tests only) / k8s / prod
 
 credentials:
   existingSecret: ""  # preferred: a Secret managed by External Secrets / Sealed Secrets / SOPS

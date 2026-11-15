@@ -14,11 +14,9 @@ public interface MetricsRecorder {
     /** Must exactly match the value in MonitoringConfig's pattern map. */
     String getSupportedMetricName();
 
-    /** Override only to add composite matching logic. */
-    default boolean canHandle(final String metricName) {
-        return StringUtils.isNotBlank(getSupportedMetricName())
-                && StringUtils.isNotBlank(metricName)
-                && getSupportedMetricName().equals(metricName);
+    /** Override only to add composite matching logic. String::isBlank — no commons-lang3 needed. */
+    default boolean canHandle(final @Nullable String metricName) {
+        return metricName != null && !metricName.isBlank() && metricName.equals(getSupportedMetricName());
     }
 }
 ```

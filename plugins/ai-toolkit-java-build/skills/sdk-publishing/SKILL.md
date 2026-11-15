@@ -10,7 +10,7 @@ depends_on: [release-versioning, static-analysis]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-11
 ---
 
 # SDK Publishing Skill
@@ -37,7 +37,7 @@ Follow Spring Boot's own convention: the code lives in an **`-autoconfigure`** m
 **`-starter`** module (a `pom.xml` with dependencies only, no code) is what consumers add.
 
 ```
-foo-spring-boot-starter/            # thin: depends on foo-spring-boot-autoconfigure (+ any libraries it needs at runtime)
+foo-spring-boot-starter/            # thin: depends on foo-spring-boot-autoconfigure + hibernate-validator (+ any libraries it needs at runtime)
 └── pom.xml
 foo-spring-boot-autoconfigure/      # all the code below
 ├── pom.xml                   # packaging = jar
@@ -70,6 +70,11 @@ foo-spring-boot-autoconfigure/      # all the code below
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-configuration-processor</artifactId>
         <optional>true</optional>        <!-- generates IDE metadata -->
+    </dependency>
+    <dependency>
+        <groupId>jakarta.validation</groupId>
+        <artifactId>jakarta.validation-api</artifactId>
+        <scope>provided</scope>          <!-- compiles @NotBlank on FooProperties; the provider (hibernate-validator) comes via the -starter -->
     </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -220,6 +225,14 @@ it on the record:
 public record FooProperties(@NotBlank String baseUrl) {}
 ```
 
+The constraint is only checked when a Bean Validation **provider** (Hibernate Validator) is on the consumer's
+classpath — without one Boot skips it and a blank value starts silently. So the thin `-starter` depends on
+`org.hibernate.validator:hibernate-validator` (a library, not a starter; version from the Boot BOM), and the
+autoconfigure module compiles against `jakarta.validation-api` (`provided`, above). Never ship the API jar without a
+provider at runtime: Boot then tries to validate and fails every startup with `NoProviderFoundException`. Add an
+`ApplicationContextRunner` test that a blank `base-url` fails with `BindValidationException` (`hibernate-validator`
+in `test` scope).
+
 ## Versioning + deprecation policy
 
 - **SemVer.** Major = breaking, minor = additive, patch = bug fix.
@@ -305,7 +318,7 @@ one sentence, split it.
 ✅ Configuration metadata is published so IDEs autocomplete.
 ❌ Never depend on a Spring starter from a library's autoconfigure module — only on
 `spring-boot-autoconfigure` (`provided`) and optional libraries. Your own thin `-starter`
-module depends on your `-autoconfigure` module.
+module depends on your `-autoconfigure` module (and on `hibernate-validator` when the properties carry constraints).
 ❌ Never break wire compatibility in a non-major release.
 ❌ Never extract code into a library before the rule of three is satisfied.
 

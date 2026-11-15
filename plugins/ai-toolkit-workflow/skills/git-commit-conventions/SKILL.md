@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-08-02
+last_reviewed: 2026-11-11
 ---
 
 # Git Commit Conventions Skill
@@ -309,7 +309,7 @@ When creating commits, verify:
 
 ## Cross-references
 - [`release-versioning`](../release-versioning/SKILL.md) — consumes these prefixes to drive SemVer bumps, CHANGELOG generation, and `commitlint` enforcement.
-- `ci` / `github-actions-ci` — where a commit-message lint job (e.g. commitlint) can run in the pipeline; neither ships one by default, so add it before making it a required check.
+- `ci` / `github-actions-ci` — run the same commitlint check in the pipeline: the Jenkinsfile's PR-only `Commit messages` stage and `github-actions-ci`'s `lint-commits.yml` (copied from `release-versioning` §1). Make it a required check only once that job exists.
 - `quality-review` — commit hygiene is part of the pull-request review checklist.
 
 ## References

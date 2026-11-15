@@ -1,4 +1,6 @@
 package {{basePackage}}.exception;
+
+import org.jspecify.annotations.Nullable;
 /**
  * Base type for every domain exception. Unchecked, so it needs no {@code throws} clause and
  * {@code @Transactional} rolls back on it by default. Always carries an error code from
@@ -10,7 +12,7 @@ public abstract class BaseDomainException extends RuntimeException {
         super(message);
         this.errorCode = errorCode;
     }
-    protected BaseDomainException(String errorCode, String message, Throwable cause) {
+    protected BaseDomainException(String errorCode, String message, @Nullable Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
     }

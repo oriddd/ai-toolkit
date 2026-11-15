@@ -39,6 +39,8 @@ jobs:
         run: bash tools/validate-skills.sh
       - name: Generated docs are in sync
         run: python3 tools/build-indexes.py --check
+      - name: Eval suites are in sync with tools/eval_cases
+        run: python3 tools/build-evals.py --check
       - name: Relative links
         run: python3 tools/check-links.py
       - name: Hook behaviour (commit guard, session start, detectors, wiring)

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audit fix round (2026-11-11)
+- Java: about 50 verified fixes from an independent audit and a real build (Kafka DLT loop, lost domain events, `@Validated`
+  on Boot 3.2+, `/api/v2` denied, NullAway/SpotBugs/Spotless build breaks, contract-test override, IT-only command, guard gaps).
+- React Native: toolchain brought current (Jest 30, RNTL 14, ESLint 10, boundaries v7); a sample Expo SDK 58 app passes `verify`.
+- Python: 17 fixes; new `python-external-client`, `python-security`, `python-messaging`; a sample FastAPI service passes `verify`.
+- Evals generated from `tools/eval_cases/` by `tools/build-evals.py` (CI checks they are in sync); 44 behaviour cases.
+- Agents load their skills first, before any clarifying question (they used to ask first and sometimes never loaded them).
+- Results (Claude Code 2.1.311): routing 105/105 (76 triggers, 29 negatives); agents 24/24 cases pass; behaviour
+  44 skills, all with a with/without lift (e.g. `permissions` 1.00 vs 0.00, `react-native-input-validation` 1.00 vs
+  0.00, `python-error-handling` 0.80 vs 0.00, `react-native-ci` 1.00 vs 0.33).
+  Open: `strategy-registry-pattern` 0.80 and `react-native-state-and-data` 0.80 (`safeParse` at the edge 0/3).
+- Behaviour graders for `documentation-and-adr`, `messaging`, `resilience-patterns`, `graceful-shutdown`,
+  `python-unit-tests` and `release-versioning` now check the skill's own rules instead of practices the model already
+  follows (lift 0.00 → +0.80, +0.73, +0.60, +0.56, +0.33, +0.17). Regex graders can assert absence
+  (`match: not_contains`, a third tuple field in `tools/eval_cases/behaviour.py`).
+- The `test-writer` eval prompt now describes the fixture's hand-built `RestTemplate`; without it the main session
+  rightly stopped to ask instead of delegating (now 2/2 graded runs delegate and load `unit-tests`).
+- Clean Java rebuild (a fresh agent follows create-repo and the skills literally: REST + JWT + JPA/Flyway + Kafka
+  outbox + metrics + health): BUILD SUCCESS — 154 tests, JaCoCo 85/75 per class, PIT 93 %, Spotless, Checkstyle,
+  SpotBugs, Error Prone/NullAway clean, Helm lint strict. It needed 4 workarounds (the previous audit needed 9); all
+  are fixed here: `@Nullable` exception causes (+ JSpecify in the ci pom), a transaction manager and Kafka switches for
+  component tests with persistence/messaging, Resilience4j-annotated client mocks, a parseable health-indicator test
+  URL; ShedLock setup documented. Testcontainers ITs did not run (no Docker).
+
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per
   plugin (unrelated request; other language stack), with/without-plugin behaviour cases for 21 skills, and agent cases
