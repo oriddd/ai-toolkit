@@ -10,7 +10,7 @@ depends_on: [cd, observability]
 ships_templates: true
 hitl: true
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Health Indicator Skill (HITL)
@@ -84,18 +84,25 @@ It must:
 - Log at `debug` on every refresh; `error` on failure.
 
 ### b) `health/config/ReadinessClientConfig.java`
-Create if missing. Single `@Bean RestClient readinessRestClient(RestClient.Builder builder)` built from Boot's
-injected `RestClient.Builder` (keeps observation/tracing), with short timeouts:
+Create if missing. Single `@Bean RestClient readinessRestClient(...)` built from Boot's
+injected `RestClient.Builder` (keeps observation/tracing), with short timeouts set through Boot's
+`ClientHttpRequestFactoryBuilder` and `ClientHttpRequestFactorySettings` beans — they keep the detected HTTP client
+(pooling) and `spring.http.client.*`; a `new SimpleClientHttpRequestFactory()` would drop both:
 
 ```java
 @Bean
-RestClient readinessRestClient(final RestClient.Builder builder) {
-    final SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-    requestFactory.setConnectTimeout(Duration.ofSeconds(2));
-    requestFactory.setReadTimeout(Duration.ofSeconds(2));
-    return builder.requestFactory(requestFactory).build();
+RestClient readinessRestClient(final RestClient.Builder builder,
+                               final ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
+                               final ClientHttpRequestFactorySettings requestFactorySettings) {
+    return builder.requestFactory(requestFactoryBuilder.build(requestFactorySettings
+                    .withConnectTimeout(Duration.ofSeconds(2))
+                    .withReadTimeout(Duration.ofSeconds(2))))
+            .build();
 }
 ```
+
+Boot 4.x (opt-in): inject `HttpClientSettings` instead of `ClientHttpRequestFactorySettings` (same `with*Timeout`
+methods).
 
 If `authMode != none`, add the appropriate default header / interceptor
 (e.g. `defaultHeader(HttpHeaders.AUTHORIZATION, ...)`).

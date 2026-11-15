@@ -6,6 +6,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"   # weekly: the freshness check fails here before it fails an unrelated PR
 
 permissions:
   contents: read

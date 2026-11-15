@@ -30,7 +30,7 @@ Load each with the Skill tool by its qualified name before editing.
 3. `ai-toolkit-docs:uml-diagram` — if component
    relationships or sequence flows changed.
 4. `ai-toolkit-workflow:release-versioning` §5
-   CHANGELOG — the one CHANGELOG format, for updating `[Unreleased]` entries.
+   CHANGELOG — the CHANGELOG format, for updating `[Unreleased]` entries.
 
 ## Step-by-step procedure
 
@@ -40,9 +40,12 @@ Load each with the Skill tool by its qualified name before editing.
    - project-overview.md  → feature list, purpose or tech stack changed
    - architecture.md      → structural / component / dependency change
    - code-standards.md    → new pattern added to the catalogue
-   - build-plan.md        → new task started or completed
-   - progress-tracker.md  → milestone moved
-   - dependencies.md      → new library, new downstream service
+   - build-plan.md        → build, pipeline or deployment changed; a task started
+                            (its "Current Plan" section — finished tasks move to
+                            progress-tracker.md)
+   - progress-tracker.md  → milestone moved, task finished, metrics or tech debt changed
+   - dependencies.md      → new or changed upstream consumer, downstream service
+                            or infrastructure (never libraries)
    - library-docs.md      → new library or changed usage of one
    - system-context.md    → external actor or boundary changed
    - component-diagram.md → internal component relationship changed
@@ -56,7 +59,9 @@ Load each with the Skill tool by its qualified name before editing.
 4. APPEND a bullet to CHANGELOG.md under [Unreleased] (skip when a release bot — release-please / semantic-release — generates the changelog):
    - Format from release-versioning §5: the bullet goes under the section of
      its Conventional Commit type (`### Features` for feat, `### Bug Fixes`
-     for fix, `### Deprecations` for a deprecation, …)
+     for fix, `### Deprecations` for a deprecation, …). If the existing
+     CHANGELOG uses Keep a Changelog sections (Added, Changed, Fixed, …),
+     keep its scheme (§5 allows that) — never mix the two in one file.
    - One bullet per logical change
    - Format: `- <scope>: <what changed and why in one line> (#PR)`
 5. If the change introduces a significant architectural decision, create
@@ -64,6 +69,8 @@ Load each with the Skill tool by its qualified name before editing.
    ai-toolkit-docs:documentation-and-adr.
 6. If a component or sequence diagram changed, regenerate the Mermaid
    block in component-diagram.md or domain-flow.md.
+7. You have no shell: do not claim the docs are validated. End your result
+   with "Run: bash context/validate-context.sh" so the caller runs it.
 ```
 
 ## Output format
@@ -77,8 +84,9 @@ For each file you touch:
 - Appended under ### Features: `- auth: add JWT refresh-token rotation`
 ```
 
-Return only this list (path + one-line summary per file) — do not paste the full
-content of changed files; the caller reads the diff.
+Return only this list (path + one-line summary per file), followed by the line
+`Run: bash context/validate-context.sh` when you touched `context/` — do not paste
+the full content of changed files; the caller reads the diff and runs the validator.
 
 ## Non-negotiables
 

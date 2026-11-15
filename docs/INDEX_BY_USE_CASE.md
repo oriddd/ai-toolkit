@@ -47,7 +47,7 @@ injects a routing table at session start.
 | **Process or publish events** | `python-messaging`, `python-persistence`, `python-integration-tests` | — |
 | **Write tests** | `python-unit-tests`, `python-integration-tests` | `react-native-unit-tests`, `react-native-e2e-tests` |
 | **Lint / typing / static analysis** | `python-static-analysis` | `react-native-static-analysis` |
-| **CI and release** | `python-ci` | `react-native-ci` |
+| **CI and release** | `python-ci`, `python-graceful-shutdown` | `react-native-ci` |
 | **Logs, traces, crashes** | `python-observability` | `react-native-observability` |
 
 | Any language | Skills |

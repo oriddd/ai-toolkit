@@ -19,6 +19,7 @@ stale copies).
 | New or changed test | `python-unit-tests` (q) (+ `python-integration-tests` (q) for real DB/broker) |
 | Lint / typing / pre-commit | `python-static-analysis` (q) |
 | Pipeline / Dockerfile | `python-ci` (o) |
+| Kubernetes deploy, SIGTERM / graceful shutdown, worker entrypoint | `python-graceful-shutdown` (o) |
 | Logs / traces / metrics | `python-observability` (o) |
 
 **Python gates**

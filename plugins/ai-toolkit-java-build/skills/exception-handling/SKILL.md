@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Exception Handling Skill
@@ -42,7 +42,7 @@ exception/
 ├── ForbiddenException.java               # extends base – maps to 403
 ├── NotFoundException.java                # extends base – maps to 404
 ├── ConflictException.java                # extends base – maps to 409
-├── UnsupportedApiVersionException.java   # extends base – maps to 406 (response-mapper)
+├── UnsupportedApiVersionException.java   # extends base – maps to 406, Accept versioning only (response-mapper)
 ├── DependencyException.java              # extends base – maps to 500 (downstream non-2xx that is not an outage)
 ├── TooManyRequestsException.java         # extends base – maps to 429 + Retry-After
 ├── UnavailableException.java             # extends base – maps to 503 + Retry-After (downstream down)
@@ -243,7 +243,7 @@ Rules:
 | Caller is authenticated but not allowed for this resource | `ForbiddenException` |
 | Resource genuinely does not exist | `NotFoundException` |
 | State conflict (duplicate, stale version) | `ConflictException` (409) |
-| Requested API version / projection is not served | `UnsupportedApiVersionException` (406) |
+| Requested API version / projection is not served | Media-type (`Accept`) versioning: `UnsupportedApiVersionException` (406). An unknown URI version (`/api/v9/…`) is `NotFoundException` (404) via `ExceptionMessages.resourceNotFound("API version", v)` |
 | Caller exceeded its rate limit | `TooManyRequestsException` (429 + `Retry-After`) |
 | Downstream dependency is down / timed out (5xx, timeout, connection refused) | `UnavailableException` wrapping the cause (→ 503 + `Retry-After`) |
 | Downstream returned an unexpected error that is not an outage (e.g. a 4xx caused by our request) | `DependencyException` via `ExceptionMessages.dependencyCallFailed(dep, status)` (→ 500, generic detail) |
@@ -287,7 +287,7 @@ controller and the advice.
 - [`ForbiddenException.java.tmpl`](./templates/ForbiddenException.java.tmpl) — Maps to 403.
 - [`TooManyRequestsException.java.tmpl`](./templates/TooManyRequestsException.java.tmpl) — Maps to 429 + `Retry-After`.
 - [`UnavailableException.java.tmpl`](./templates/UnavailableException.java.tmpl) — Maps to 503 + `Retry-After`.
-- [`UnsupportedApiVersionException.java.tmpl`](./templates/UnsupportedApiVersionException.java.tmpl) — Maps to 406.
+- [`UnsupportedApiVersionException.java.tmpl`](./templates/UnsupportedApiVersionException.java.tmpl) — Maps to 406 (`Accept` versioning only).
 - [`DependencyException.java.tmpl`](./templates/DependencyException.java.tmpl) — Maps to 500 (generic detail).
 - [`ExceptionMessages.java.tmpl`](./templates/ExceptionMessages.java.tmpl) — Message catalogue.
 - [`GlobalExceptionHandler.java.tmpl`](./templates/GlobalExceptionHandler.java.tmpl) — The `@RestControllerAdvice`.

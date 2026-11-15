@@ -48,7 +48,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 2. Sub-package name: lower-case, no hyphens — hyphens are illegal in Java package names (e.g. `productcatalogue`)
 3. Base URL config key — kebab-case is fine here (e.g. product-catalogue.base-url)
 4. Operations to expose: HTTP method + path + purpose (list each) — and how many you expect within 6 months (decides the pattern, `ai-toolkit-java-build:external-client` §0)
-5. Auth mechanism (none / bearer passthrough / OAuth2 client credentials / basic)
+5. Auth mechanism (none / bearer passthrough / OAuth2 client credentials — `external-client` §6b / basic)
 6. Connect timeout / read timeout in ms
 7. Is idempotent (safe to retry)?
 8. Does this need a domain metric? (→ also apply the `ai-toolkit-java-ops:request-metrics` skill yourself, following the
@@ -150,7 +150,7 @@ diff, including untracked files.
 
 - [ ] Callers import only the package's public entry type — `*Service` (Full 5-Layer) or `*Client` (Simple / Lite);
       no remote DTO or transport type escapes the package.
-- [ ] All non-2xx responses throw a domain exception. Full 5-Layer only: `*Client` uses the `exchangeToMono` +
+- [ ] All non-2xx responses throw a domain exception. Full 5-Layer only: `*Client` uses the `RestClient` `exchange` +
       `handleResponse` pattern.
 - [ ] Full 5-Layer only: `*FilterMapBuilder` is a non-Spring plain object (`new`), not a bean.
 - [ ] Full 5-Layer only: `*ResponseParser` (extract values) is separate from

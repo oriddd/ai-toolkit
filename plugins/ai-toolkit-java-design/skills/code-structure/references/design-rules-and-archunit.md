@@ -77,11 +77,11 @@ class ArchitectureTest {
         .optionalLayer("Scheduler").definedBy("..scheduler..")
         .optionalLayer("Health").definedBy("..health..")
         // project-types renames (Type B event-driven / Type C scheduler) — anchored at the base package
-        // so client/<dep>/…/handler/ or messaging/consumer/ sub-packages are not mistaken for these layers
-        .optionalLayer("Consumer").definedBy("{{basePackage}}.consumer..")
+        // so client/<dep>/…/handler/ sub-packages are not mistaken for these layers; messaging/outbox/ is not a layer
+        .optionalLayer("Consumer").definedBy("{{basePackage}}.messaging.consumer..")
         .optionalLayer("Handler").definedBy("{{basePackage}}.handler..")
         .optionalLayer("Job").definedBy("{{basePackage}}.job..")
-        .optionalLayer("Producer").definedBy("{{basePackage}}.producer..")
+        .optionalLayer("Producer").definedBy("{{basePackage}}.messaging.producer..")
         .optionalLayer("Client").definedBy("..client..")   // optional: no client/ when the service calls no HTTP downstream (create-repo #11)
         .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
         .whereLayer("Consumer").mayNotBeAccessedByAnyLayer()
@@ -95,8 +95,10 @@ class ArchitectureTest {
         // layer names, not package patterns, go in mayOnlyBeAccessedByLayers; only dependencies between two layers are checked,
         // so give every top-level package whose access you want enforced (scheduler, health, …) its own layer;
 
+    // one slice per top-level package, but messaging/consumer and messaging/producer apart:
+    // consumer -> handler/service -> producer is the normal flow, not a cycle
     @ArchTest static final ArchRule noCycles =
-        slices().matching("{{basePackage}}.(*)..").should().beFreeOfCycles();
+        slices().matching("{{basePackage}}.(messaging.*|*)..").should().beFreeOfCycles();
 
     @ArchTest static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")

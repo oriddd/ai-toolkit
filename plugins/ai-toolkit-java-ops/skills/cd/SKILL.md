@@ -10,7 +10,7 @@ depends_on: [ci]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-15
 ---
 
 # CD Skill
@@ -30,7 +30,7 @@ helm-chart/
     ├── _helpers.tpl          # fullname, labels, serviceAccountName, credentialsSecretName
     ├── deployment.yaml
     ├── hpa.yaml
-    ├── pdb.yaml              # only when autoscaling.minReplicas > 1
+    ├── pdb.yaml              # only when autoscaling.minReplicas > 1 (the default is 2)
     ├── secret.yaml
     ├── service.yaml
     ├── serviceAccount.yaml
@@ -99,6 +99,12 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
      services inside one umbrella chart — never collide.
    - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
    - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation).
+   - A `checksum/secret` pod annotation (sha256 of the rendered `secret.yaml`) when the chart renders the Secret, so
+     changed credentials roll the pods — Spring reads env vars only at startup. With `credentials.existingSecret` the
+     chart cannot see the content: let the secret operator (or a reloader controller) restart the Deployment on rotation.
+   - `topologySpreadConstraints` over `topology.kubernetes.io/zone` and `kubernetes.io/hostname` (`maxSkew: 1`,
+     `whenUnsatisfiable: ScheduleAnyway`, `matchLabelKeys: [pod-template-hash]`), on by default
+     (`topologySpread.enabled`): replicas do not share one node or zone, and a single-zone cluster still schedules.
    *(Add shared ConfigMaps as needed for your platform.)*
 4. **Image registry** – `deployment.yaml` resolves the registry inline with
    `{{ (.Values.global).imageRegistry | default .Values.image.registry }}` so a parent
@@ -122,6 +128,8 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
    dev/test only: in real environments point `credentials.existingSecret` at a Secret managed by External Secrets,
    Sealed Secrets or SOPS. The Deployment loads whichever Secret applies with `envFrom.secretRef`.
 10. **`templates/pdb.yaml`** – PodDisruptionBudget (`maxUnavailable: 1`), rendered only when `autoscaling.minReplicas > 1`.
+    `values.yaml` defaults `minReplicas: 2`, so a node drain never takes the only pod down; set 1 only for dev
+    environments, which then get no PDB.
 
 ## Probes & observability contract
 

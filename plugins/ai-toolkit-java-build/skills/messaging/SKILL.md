@@ -10,7 +10,7 @@ depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Messaging Skill
@@ -24,8 +24,11 @@ src/main/java/<basePackage>/
 │   ├── producer/        # publishers (use transactional outbox)
 │   ├── consumer/        # @KafkaListener / @RabbitListener
 │   └── outbox/          # outbox table writer + relay
-└── operation/           # use-case orchestrators (publish events as side-effects)
+├── handler/             # event-driven service: orchestrators the consumers call
+└── operation/           # REST service: use-case orchestrators (publish events as side-effects)
 ```
+
+The `code-structure` ArchUnit test layers `..messaging.consumer..` and `..messaging.producer..` as separate slices.
 
 ## 1. Events as immutable records
 

@@ -102,7 +102,9 @@ client id is still tagged.
 
 **Rules:**
 - ✅ Reads request/context and returns a discriminator (String, Enum, etc.)
-- ✅ Returns `Optional.empty()` when no match (Handler/Filter logs warning) — never `null`
+- ✅ Returns `Optional.empty()` when no match (Handler/Filter logs warning) — never `null`. Exception: a resolver that
+  parses client HTTP input (`LayoutResolver`, `ApiVersionResolver`) throws the 4xx domain exception for an unknown
+  value, because the client sent something invalid (`response-layout`: 400, `response-mapper`: 404 / 406)
 - ✅ When the discriminator comes from an ordered rule list (URI patterns), the first match wins, so the list is
   ordered most-specific-first — never a `Map.of(...)`, whose iteration order is unspecified
 - ✅ **Never** contains business logic

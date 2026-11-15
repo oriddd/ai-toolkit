@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Independent review fix round (2026-11-15)
+Three independent reviewers rated `main` 7/10 (Java 7, Python 8, React Native 6.5). Every HIGH and MEDIUM finding was
+verified against the files and fixed, each change proven by a build, type-check or run.
+- **Java:**
+  - `ExceptionMessages` template compiles again (a duplicated `@Nullable` broke every scaffolded service).
+  - `external-client`'s Full 5-Layer transport uses `RestClient` `exchange` + `handleResponse` (was `WebClient` +
+    `.block()` on the servlet stack); the reactive form stays for WebFlux callers. New §6b: outbound OAuth2 client
+    credentials. Timeouts keep Boot's auto-detected HTTP client and `spring.http.client.*`.
+  - One strategy contract everywhere (`getSupported<X>()`, registry indexed at startup); Kafka consumers/producers
+    live in `messaging/consumer|producer` and ArchUnit layers them.
+  - No `return null` from non-`@Nullable` methods in examples (NullAway-clean); API versions: unknown URI version → 404,
+    unserved `Accept` version → 406.
+  - `create-repo`: Spring Boot 3.5 stays the default, 4.x is an explicit opt-in (README records the decision);
+    native structured logging; `lombok.config`.
+  - Helm chart rolls on Secret change, renders the PDB by default (`minReplicas: 2`), spreads across zones.
+  - Error Prone 2.52, NullAway 0.14.3, SpotBugs plugin 4.10.5.0, JaCoCo 0.8.16 (build-tested).
+- **Python:** baseline Python 3.14 (3.12+); new `python-graceful-shutdown` skill; one active outbox relay by default
+  (two `SKIP LOCKED` relays reordered one aggregate's events on a real PostgreSQL); ownership check after load in
+  `python-new-endpoint`; CORS allows PUT/PATCH/DELETE + `If-Match` and exposes `ETag`; `validation` layer in
+  import-linter; `uv init --package` skeleton; migration round-trip test.
+- **React Native:** Expo Router is the default structure (React Navigation documented as the alternative); app
+  version/build read at runtime (an unset `EXPO_PUBLIC_*` crashed production EAS builds at launch); `mapHttpError`
+  honours the server's problem `code`; request timeout + abort signal; single-flight token refresh; Maestro
+  `clearKeychain` on iOS; feature-internal import direction enforced by ESLint.
+- **Neutral:** `documentation-and-adr`, `context-maintenance` and `uml-diagram` are language-neutral (per-language
+  skill table) and agree on one diagram location; context templates mark SLO/DR sections "required for services";
+  `release-versioning` accepts an existing Keep-a-Changelog file; HOW-TO no longer lists a check that always fails.
+- **Evals:** behaviour cases for all 10 language-neutral skills (were 4); agent cases grant Write/Edit and grade the
+  agent's output (the file it must write, or `file:line` in a review), plus a case that does not name the agent;
+  near-miss negatives for the neutral plugins. CI also runs weekly so freshness fails before it fails a PR.
+- **Deliberate corrections of original rules** (substance kept, mechanism changed): `external-client` (`.block()` +
+  `exchangeToMono` → `RestClient` `exchange`; same single non-2xx mapping and synchronous API) and the strategy registry
+  (indexed by `getSupported<X>()` instead of iterating `canHandle`; same routing, add-a-strategy-never-touch-the-handler).
+
+## [2.3.0] - 2026-11-11
+
 ### Audit fix round (2026-11-11)
 - Java: about 50 verified fixes from an independent audit and a real build (Kafka DLT loop, lost domain events, `@Validated`
   on Boot 3.2+, `/api/v2` denied, NullAway/SpotBugs/Spotless build breaks, contract-test override, IT-only command, guard gaps).
@@ -30,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are fixed here: `@Nullable` exception causes (+ JSpecify in the ci pom), a transaction manager and Kafka switches for
   component tests with persistence/messaging, Resilience4j-annotated client mocks, a parseable health-indicator test
   URL; ShedLock setup documented. Testcontainers ITs did not run (no Docker).
+
+## [2.2.0] - 2026-11-11
 
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per

@@ -59,6 +59,7 @@ skill:python-code-structure
 skill:python-error-handling
 skill:python-external-client
 skill:python-fastapi-conventions
+skill:python-graceful-shutdown
 skill:python-input-validation
 skill:python-integration-tests
 skill:python-messaging

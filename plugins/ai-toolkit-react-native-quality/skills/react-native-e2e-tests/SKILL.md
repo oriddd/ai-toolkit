@@ -10,7 +10,7 @@ depends_on: [react-native-unit-tests, react-native-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -85,7 +85,8 @@ orders list from `react-native-code-structure`:
 appId: com.example.app
 ---
 - launchApp:
-    clearState: true              # no stored token: the app starts signed out
+    clearState: true              # app data and caches
+    clearKeychain: true           # iOS: tokens live in the Keychain, which clearState leaves in place
 - extendedWaitUntil:
     visible:
       id: signup-email
@@ -125,7 +126,9 @@ pinned version, not verified here). Non-secret values such as `E2E_USER` may use
 ## 4. Determinism
 
 - Run against a dedicated test backend or a mocked server with **seeded, resettable data**.
-- `clearState: true` at the start; no flow depends on another flow's leftovers.
+- `clearState: true` and `clearKeychain: true` at the start (the Keychain holds the tokens of `react-native-security`
+  and survives `clearState` and even a reinstall on iOS; `clearKeychain` clears the whole simulator Keychain, so run iOS
+  flows on a dedicated simulator); no flow depends on another flow's leftovers.
 - Wait for conditions (`assertVisible`, `extendedWaitUntil`), never fixed sleeps.
 - Disable animations and onboarding tours via a launch argument in test builds.
 - Quarantine a flaky flow by tag within one working day, then fix or delete it.

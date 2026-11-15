@@ -15,9 +15,10 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
-from eval_cases.agents import AGENT_SKILLS, AGENTS, FIXTURES, NO_DELEGATE, UNRELATED_AGENT_PROMPT  # noqa: E402
+from eval_cases.agents import (  # noqa: E402
+    AGENT_OUTPUT, AGENT_SKILLS, AGENTS, FIXTURES, NO_DELEGATE, UNNAMED, UNRELATED_AGENT_PROMPT)
 from eval_cases.behaviour import BEHAVIOUR  # noqa: E402
-from eval_cases.triggers import OTHER_STACK, TRIGGERS, UNRELATED  # noqa: E402
+from eval_cases.triggers import NEAR_MISS, OTHER_STACK, TRIGGERS, UNRELATED  # noqa: E402
 
 LANGS = ("react-native", "react-web", "python", "java")
 
@@ -46,6 +47,20 @@ def agent_re(names):
     return '"subagent_type"\\s*:\\s*"(?:[\\w-]+:)?(' + "|".join(sorted(names)) + ')"'
 
 
+def in_subagent(core):
+    sub = '"parent_tool_use_id":"[^"]+"'
+    return sub + "[^\\n]*" + core + "|" + core + "[^\\n]*" + sub
+
+
+def output_grader(agent):
+    kind, path = AGENT_OUTPUT[agent]
+    if kind == "report":
+        core = '"type":"text","text":"(?:[^"\\\\]|\\\\.)*' + path
+    else:
+        core = "(?:File created successfully at: [^\\x22]*" + path + "|The file [^\\x22]*" + path + " has been updated)"
+    return "---\ntype: regex\ntarget: trace\npattern: '" + in_subagent(core).replace("'", "''") + "'\n---\n"
+
+
 def subagent_skill_re(skills):
     s = '"skill":"(?:[\\w-]+:)?(' + "|".join(skills) + ')"'
     sub = '"parent_tool_use_id":"[^"]+"'
@@ -72,7 +87,7 @@ def generate(out):
     for plugin, skills in plugins.items():
         for s in skills:
             write(f"{plugin}/trigger-{s}/prompt.md",
-                  f"---\ndescription: \"`{s}` loads for a typical request, routed by its description alone\"\n"
+                  f"---\ndescription: \"`{s}` loads for a typical request (its description plus the plugin's routing hook)\"\n"
                   f"tags: [trigger]\n{plugins_line(plugin)}max_turns: 4\nallowed_tools: [Skill, Read, Glob, Grep]\n---\n\n{TRIGGERS[s]}\n")
             write(f"{plugin}/trigger-{s}/graders/skill-loaded.md",
                   f"---\ntype: tool_used\ntool: Skill\ninput_match: '{skill_re([s])}'\n---\n")
@@ -80,6 +95,8 @@ def generate(out):
         lang = next((l for l in LANGS if plugin.startswith(f"ai-toolkit-{l}-")), None)
         if lang:
             negatives.append(("no-trigger-other-stack", OTHER_STACK[lang], "a request for a different language stack"))
+        if plugin in NEAR_MISS:
+            negatives.append(("no-trigger-near-miss", NEAR_MISS[plugin], "a nearby request its skills do not cover"))
         for name, prompt, what in negatives:
             write(f"{plugin}/{name}/prompt.md",
                   f"---\ndescription: none of this plugin's skills load for {what}\n"
@@ -97,12 +114,13 @@ def generate(out):
             write(f"{plugin}/behaviour-{s}/graders/skill-loaded.md",
                   f"---\ntype: tool_used\ntool: Skill\ninput_match: '{skill_re([s])}'\n---\n")
 
-    def agent_case(plugin, case, fixture, prompt, description, graders):
+    def agent_case(plugin, case, fixture, prompt, description, graders, writes=False):
         write(f"{plugin}/{case}/case.yaml", f'schema_version: "1.1"\nname: {case}\ncontext:\n  scaffold_script: fixture.sh\n')
         write(f"{plugin}/{case}/fixture.sh", FIXTURES[fixture], 0o755)
         write(f"{plugin}/{case}/prompt.md",
-              f'---\ndescription: "{description}"\ntags: [agent]\n{plugins_line(plugin)}max_turns: 8\n'
-              f"timeout_seconds: 600\nallowed_tools: [Agent, Skill, Read, Glob, Grep]\n---\n\n{prompt}\n")
+              f'---\ndescription: "{description}"\ntags: [agent]\n{plugins_line(plugin)}max_turns: {30 if writes else 8}\n'
+              f"timeout_seconds: {1200 if writes else 600}\n"
+              f"allowed_tools: [Agent, Skill, Read, Glob, Grep{', Write, Edit' if writes else ''}]\n---\n\n{prompt}\n")
         for name, body in graders.items():
             write(f"{plugin}/{case}/graders/{name}.md", body)
 
@@ -111,8 +129,16 @@ def generate(out):
             agent_case(plugin, f"delegate-{agent}", fixture, prompt,
                        f"the main session delegates to `{agent}` for a matching task in a {fixture} project", {
                            "agent-delegated": f"---\ntype: tool_used\ntool: Agent\ninput_match: '{agent_re([agent])}'\n---\n",
-                           "agent-applies-skill": f"---\ntype: regex\ntarget: trace\npattern: '{subagent_skill_re(AGENT_SKILLS[agent])}'\n---\n",
-                       })
+                           **{f"agent-loads-{sk}": f"---\ntype: regex\ntarget: trace\npattern: '{subagent_skill_re([sk])}'\n---\n"
+                              for sk in AGENT_SKILLS[agent]},
+                           "agent-output": output_grader(agent),
+                       }, writes=True)
+        for case, fx, agent, prompt in UNNAMED.get(plugin, []):
+            agent_case(plugin, case, fx, prompt,
+                       f"the main session picks `{agent}` for a matching task without being told its name", {
+                           "agent-delegated": f"---\ntype: tool_used\ntool: Agent\ninput_match: '{agent_re([agent])}'\n---\n",
+                           "agent-output": output_grader(agent),
+                       }, writes=True)
         if plugin != "ai-toolkit-docs":
             agent_case(plugin, "no-delegate-unrelated", fixture, UNRELATED_AGENT_PROMPT,
                        "no agent of this plugin is started for an unrelated question", {

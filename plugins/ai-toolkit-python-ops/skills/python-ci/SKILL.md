@@ -1,7 +1,7 @@
 ---
 name: python-ci
 description: >
-  Python 3.12 CI — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a
+  Python CI (3.14, 3.12+) — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a
   multi-stage, non-root Dockerfile. Use when bootstrapping a repo or moving a service onto the standard pipeline. Lint
   rules live in `python-static-analysis`.
 tier: must
@@ -10,7 +10,7 @@ depends_on: [python-static-analysis, python-unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -120,7 +120,7 @@ separate step with registry credentials scoped to that job.
 
 ## 3. Dockerfile: multi-stage, non-root
 ```dockerfile
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
 # use the image's Python, never a downloaded one
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
@@ -132,7 +132,7 @@ COPY src ./src
 # --no-editable: the package is installed into .venv, so the runtime needs no source tree
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
 RUN groupadd --system app && useradd --system --gid app --uid 10001 app
 WORKDIR /app
@@ -143,8 +143,15 @@ COPY alembic.ini ./
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live')"]
-CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# exec form: uvicorn is PID 1 and receives SIGTERM; the timeout must fit the pod's grace period
+CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "20"]
 ```
+
+The image's Python, `requires-python`, ruff's `target-version` and mypy's `python_version` name the same version
+(3.14 by default; 3.12 and 3.13 are security-only upstream but still supported here). `uv sync` installs the project
+itself, so `pyproject.toml` needs `[project]` and `[build-system]` and the package must sit at
+`src/<normalised project name>/` (`python-code-structure` §1b); without a build system, `--no-editable` has nothing to
+install and `script_location = my_service:alembic` cannot resolve.
 
 `README.md` is copied with the manifests because `pyproject.toml` declares `readme = "README.md"` and the build backend
 reads it when the project is installed (drop it from the `COPY` if you do not declare a readme; keep it out of `.dockerignore`).
@@ -179,3 +186,4 @@ Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic 
 - `python-static-analysis` — the configuration behind the quality job's commands.
 - `python-unit-tests`, `python-integration-tests` — the unit and integration jobs.
 - `python-observability` — health endpoints and runtime telemetry for the container.
+- [`python-graceful-shutdown`](../python-graceful-shutdown/SKILL.md) — SIGTERM, drain budget and the worker entrypoint.

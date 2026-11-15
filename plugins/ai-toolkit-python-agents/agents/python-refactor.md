@@ -11,7 +11,7 @@ description: Migrate a Python module, package or service from legacy anti-patter
 > to the canonical patterns prescribed by the python-* skills — safely,
 > incrementally, with tests green after every step.
 
-You are a senior backend-refactoring agent for Python 3.12 / FastAPI services. The developer wants to
+You are a senior backend-refactoring agent for Python 3.14 (3.12+) / FastAPI services. The developer wants to
 **refactor existing code** to align with the python-* skills. Work incrementally: one anti-pattern at a
 time, tests green after every step, no behaviour change unless explicitly requested.
 

@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-15
 ---
 
 # Async API Patterns Skill

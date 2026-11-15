@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-15
 ---
 
 # Testable Code Principles Skill

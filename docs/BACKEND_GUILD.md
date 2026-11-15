@@ -30,10 +30,10 @@ task-driven recipes.
 | Skill | One-line summary |
 | --- | --- |
 | [`context-maintenance`](../plugins/ai-toolkit-docs/skills/context-maintenance/SKILL.md) | Maintain project context documentation including architecture, standards, build plans, and progress tracking. |
-| [`documentation-and-adr`](../plugins/ai-toolkit-docs/skills/documentation-and-adr/SKILL.md) | Docs as code — README, CONTRIBUTING, ARCHITECTURE (C4 in PlantUML/Structurizr), ADRs under docs/adr/, generated class and sequence diagrams. |
+| [`documentation-and-adr`](../plugins/ai-toolkit-docs/skills/documentation-and-adr/SKILL.md) | Docs as code for any language — README, CONTRIBUTING, ARCHITECTURE with C4 diagrams (hand-written Mermaid by default, PlantUML/Structurizr optional), ADRs … |
 | [`data-privacy`](../plugins/ai-toolkit-java-build/skills/data-privacy/SKILL.md) | Handle PII (Personally Identifiable Information) and GDPR requirements in a Java microservice — field-level encryption, masking in logs, data retention/TTL … |
 | [`exception-handling`](../plugins/ai-toolkit-java-build/skills/exception-handling/SKILL.md) | Java / Spring Boot error contract — typed domain exception hierarchy, static ExceptionMessages catalogue, @RestControllerAdvice mapping each exception to an … |
-| [`external-client`](../plugins/ai-toolkit-java-build/skills/external-client/SKILL.md) | Java / Spring Boot: SDK-style package for a downstream service (HTTP, gRPC, broker, file store) — Service facade, CoreService, thin Client, request builders … |
+| [`external-client`](../plugins/ai-toolkit-java-build/skills/external-client/SKILL.md) | Java / Spring Boot: SDK-style package for a downstream HTTP service — Service facade, CoreService, thin RestClient Client, request builders, response … |
 | [`input-validation`](../plugins/ai-toolkit-java-build/skills/input-validation/SKILL.md) | Java / Spring Boot input validation — Jakarta ConstraintValidator for field/parameter rules, Spring Validator for cross-field rules, custom annotations … |
 | [`permissions`](../plugins/ai-toolkit-java-build/skills/permissions/SKILL.md) | Java / Spring Boot authorization via Strategy + Handler — PermissionsHandler dispatches by caller context (user, service account, external system) to … |
 | [`resilience-patterns`](../plugins/ai-toolkit-java-build/skills/resilience-patterns/SKILL.md) | Java / Spring Boot stability with Resilience4j — timeouts, bulkheads, circuit breakers, fallbacks, fail-fast. |
@@ -85,7 +85,7 @@ task-driven recipes.
 | [`feature-flags`](../plugins/ai-toolkit-java-design/skills/feature-flags/SKILL.md) | Java / Spring Boot feature toggles — local config toggles, remote providers (Unleash, LaunchDarkly), toggle-at-the-edge vs toggle-in-logic, flag lifecycle and … |
 | [`openapi-first-codegen`](../plugins/ai-toolkit-java-design/skills/openapi-first-codegen/SKILL.md) | Java / Spring Boot OpenAPI-first — generate controllers and DTOs from api.yaml with openapi-generator-maven-plugin, exclude generated code from coverage and … |
 | [`response-layout`](../plugins/ai-toolkit-java-design/skills/response-layout/SKILL.md) | Java / Spring Boot ?layout= parameter (summary/detailed/full) via Strategy + Handler + Registry — one LayoutStrategy per field set. |
-| [`response-mapper`](../plugins/ai-toolkit-java-design/skills/response-mapper/SKILL.md) | Java / Spring Boot API versioning and response projections via Strategy + Handler + Registry — version resolved from Accept header, URI or query param; one … |
+| [`response-mapper`](../plugins/ai-toolkit-java-design/skills/response-mapper/SKILL.md) | Java / Spring Boot API versioning and response projections via Strategy + Handler + Registry — version resolved from the URI or the Accept header; one … |
 | [`health-indicator`](../plugins/ai-toolkit-java-ops/skills/health-indicator/SKILL.md) | Java / Spring Boot Actuator readiness HealthIndicator for a downstream dependency, wired into the readiness group and Helm chart; asks for name, URL, endpoint … |
 | [`adapter-contract-tests`](../plugins/ai-toolkit-java-quality/skills/adapter-contract-tests/SKILL.md) | Java / Spring Boot adapter contract tests — one abstract, vendor-neutral suite (TCK) per port, subclassed by every adapter (often with Testcontainers) so … |
 | [`integration-tests`](../plugins/ai-toolkit-java-quality/skills/integration-tests/SKILL.md) | Java / Spring Boot integration tests against real dependencies (DB, broker, object store, mocked HTTP) with Testcontainers, Surefire/Failsafe split, optional … |
@@ -206,6 +206,7 @@ graph LR
   python_code_structure --> python_fastapi_conventions
   python_static_analysis --> python_ci
   python_unit_tests --> python_ci
+  python_ci --> python_graceful_shutdown
   python_code_structure --> python_observability
   python_unit_tests --> python_integration_tests
   python_persistence --> python_integration_tests

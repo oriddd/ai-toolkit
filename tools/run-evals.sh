@@ -17,7 +17,7 @@ cd "$ROOT"
 case "$mode" in
   routing)   exec claude plugin eval . "${common[@]}" --tag trigger negative --runs 1 --ablation none "$@" ;;
   behaviour) exec claude plugin eval . "${common[@]}" --tag behaviour --runs 3 "$@" ;;
-  agents)    exec claude plugin eval . "${common[@]}" --tag agent --runs 1 --ablation none --scaffold --allow-tools Agent "$@" ;;
+  agents)    exec claude plugin eval . "${common[@]}" --tag agent --runs 1 --ablation none --scaffold --allow-tools Agent Write Edit "$@" ;;
   all)       exec claude plugin eval . "${common[@]}" "$@" ;;
   *)         echo "usage: $0 [routing|behaviour|agents|all] [claude plugin eval flags]" >&2; exit 2 ;;
 esac

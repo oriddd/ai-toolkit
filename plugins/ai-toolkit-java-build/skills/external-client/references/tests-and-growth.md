@@ -10,9 +10,28 @@ Part of the [`external-client`](../SKILL.md) skill. Section numbers are stable; 
   filter assembly.
 - **`*ResponseVerifierTest`** — null response, empty hit list, non-empty hit list.
 - **`*ResponseParserTest`** — null doc, missing nested field, found nested field.
-- **`*ClientTest`** — mock `WebClient` exchange (use `MockWebServer` or
-  `exchangeFunction(...)`): assert URI/body/headers built; assert domain
-  exception thrown on 4xx/5xx (`DependencyException` / `UnavailableException`); assert deserialized response on 200.
+- **`*ClientTest`** — bind `MockRestServiceServer` to a `RestClient.Builder` and pass `builder.build()` to the
+  `*Client` constructor (a `WebClient` client: `MockWebServer` or `exchangeFunction(...)`): assert URI/body/headers
+  built; assert domain exception thrown on 4xx/5xx (`DependencyException` / `UnavailableException`), on a timeout
+  (`UnavailableException`) and on an empty 2xx body; assert deserialized response on 200.
+
+```java
+@BeforeEach
+void setUp() {
+    final RestClient.Builder builder = RestClient.builder().baseUrl("http://foo");
+    server = MockRestServiceServer.bindTo(builder).build();
+    client = new FooClient(builder.build(), new FooProperties("http://foo", "/api/v1/search",
+            new FooProperties.Timeouts(Duration.ofSeconds(1), Duration.ofSeconds(2))));
+}
+
+@Test
+void search_serviceUnavailable_throwsUnavailableException() {
+    server.expect(requestTo("http://foo/api/v1/search")).andExpect(method(HttpMethod.POST))
+            .andRespond(withServiceUnavailable());
+    assertThatThrownBy(() -> client.search(new FooSearchRequestDto()))
+            .isInstanceOf(UnavailableException.class);
+}
+```
 - **Retry test** (§10) — two 503s then a 200 → the downstream is called 3 times; a 400 → once.
 - **`*ServiceTest`** — mock `CoreService`; assert domain-language methods
   reject blank inputs with `IllegalArgumentException` and call core methods correctly.

@@ -18,8 +18,8 @@ You are a mobile-coding agent for a React Native / TypeScript (strict) app. The 
 Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
-1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder, dependency direction, typed navigation, naming;
-   screens stay thin and delegate to hooks.
+1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder, dependency direction, Expo Router routes
+   (or React Navigation, §4b), naming; screens stay thin and delegate to hooks.
 2. `ai-toolkit-react-native-design:react-native-state-and-data` — feature api module, query-key factory, query hook returning what
    the screen needs; Zustand only for genuinely client-side state.
 3. `ai-toolkit-react-native-build:react-native-input-validation` — zod schema in the validation layer, react-hook-form wiring,
@@ -41,11 +41,17 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    - Form fields and rules, if any
    - Auth requirement
 
-2. DESIGN: place the screen in its feature folder; add the route to the typed
-   navigation param list. Surface conflicts with existing routes.
+2. DESIGN: detect the navigation the app already uses and keep it — Expo Router
+   (`expo-router` in package.json, `src/app/_layout.tsx`) or React Navigation
+   (a `NavigationContainer` / navigator file). Never migrate unasked. Place the
+   screen in its feature folder; plan the route (Expo Router: a file under
+   `src/app/`; React Navigation: an entry in the typed param list). Surface
+   conflicts with existing routes.
 
 3. GENERATE (in order):
-   a. Route type + registration in the navigator (typed params, no `any`).
+   a. Route: Expo Router — a thin route file re-exporting the feature screen,
+      params parsed with a zod schema in the screen; React Navigation — the
+      param list entry + registration in the navigator (typed params, no `any`).
    b. Feature api function + query-key factory entry + query/mutation hook.
    c. Validation schema (zod) + message catalogue entries, if the screen has input.
    d. Screen-level hook holding the logic; the screen component only renders.
@@ -88,7 +94,7 @@ them), unless you explicitly write "run your own tests" in a test-writer brief, 
 pushes or stashes. Shared test infrastructure (MSW `handlers.ts`, the jest setup file, shared test utilities) stays
 with you: add the handlers and fixtures the tests need before the fan-out.
 
-Keep shared files (`package.json`, navigator, tsconfig, lint config, message catalogue) and the
+Keep shared files (`package.json`, navigator or `src/app/_layout.tsx`, tsconfig, lint config, message catalogue) and the
 verify run to yourself. Verify every result (read the diff, run the tests) before reporting done.
 
 ## Commit policy and completion gate
@@ -105,7 +111,7 @@ run check 5 inline: apply the Do/Don't lists of the loaded `react-native-*` skil
 
 ## Checklist before returning
 
-- [ ] Route is typed; no `any` or `@ts-ignore`.
+- [ ] Route follows the app's navigation (Expo Router file or typed param list); params parsed, no `any` or `@ts-ignore`.
 - [ ] Screen contains no data fetching or business logic; the hook owns it.
 - [ ] Server state in TanStack Query behind the feature api module; keys from the factory.
 - [ ] Input validated with a zod schema; messages from the catalogue.

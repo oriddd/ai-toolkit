@@ -10,7 +10,7 @@ depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Create-Repo Skill (HITL)
@@ -41,7 +41,7 @@ single round if your tool supports it.
 | 4 | Spring Boot `server.servlet.context-path` (e.g. `/foo-service`)? | `contextPath` |
 | 5 | Container port (default `8800`)? | `appPort` |
 | 6 | Codeowner email for CI notifications? | `codeowner` |
-| 7 | `org.springframework.boot:spring-boot-starter-parent` version — the latest **3.5.x** (default: latest 3.5.x patch)? Reject any other major/minor: the skills are written for Boot 3.5, and a 4.x parent does not compile with them. | `springBootVersion` |
+| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** is an explicit opt-in only: warn that the skills are tested on 3.5 and their examples need porting (Jackson 3, modular starters); 3.5's OSS support window is on spring.io. Reject anything older than 3.5. | `springBootVersion` |
 | 8 | Target Kubernetes image registry (default `your-registry.example.com/<org>`)? | `imageRegistry` |
 | 9a | Is this a **deployable service** or a **reusable library / SDK** (`project-types` Type D)? | `projectKind` (`service` / `library`) |
 
@@ -144,8 +144,8 @@ Execute the following skills in order. Each one is documented in its own
    config, env vars in Helm and the `readiness` health group entry in
    `application.yaml`. This sub-skill is itself HITL — let it ask its own
    questions per dependency.
-7a. **`observability`** → JSON `logback-spring.xml` with MDC correlation IDs
-   (guild #11), Micrometer / Prometheus and tracing. **`request-metrics`**
+7a. **`observability`** → structured JSON logs with MDC correlation IDs
+   (guild #11; Boot's native `logging.structured.format.console`), Micrometer / Prometheus and tracing. **`request-metrics`**
    when Phase 1 #10 = yes; with #9 auth = no, generate it without `ClientIdParser`, its interceptor and the
    `clientId` tag (`request-metrics` parsers-and-helpers §6) — those classes need Spring Security.
 7b. **`security-hardening`** → security headers, CORS, secret handling
@@ -206,9 +206,9 @@ Always create these files at the repo root:
 - **`CODEOWNERS`** (`.github/CODEOWNERS`) – single line: `* <codeowner>`.
 - **Maven wrapper** – run `mvn -N wrapper:wrapper` so `./mvnw` and
   `.mvn/wrapper/` exist (the `.gitignore` already keeps the wrapper jar).
-- **`src/main/resources/logback-spring.xml`** – produced once, by
-  `observability` (step 7a: JSON + MDC, guild #11); do not write a second,
-  minimal one here.
+- **Logging** – structured JSON comes from `observability` (step 7a); write a `logback-spring.xml`
+  only if it needs encoder options, never a second, minimal one here.
+- **`lombok.config`** – `lombok.addLombokGeneratedAnnotation = true`, so Jacoco and PIT skip Lombok-generated code.
 - **`src/test/resources/application-component-test.yaml`** – only the
   test-friendly overrides for the `component-test` profile (in-memory
   clients, dummy credentials). Never name it `application.yaml`: a test

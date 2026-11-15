@@ -35,11 +35,18 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 | Language | Status | Prerequisites |
 | --- | --- | --- |
 | Java | **Supported** — the user-tested core of the catalogue; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
-| Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.12, FastAPI, uv |
+| Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.14 (3.12+ supported), FastAPI, uv |
 | React Native | **Experimental** — required concerns only, not yet validated on production projects | React Native with TypeScript, Expo (EAS) or bare workflow (Fastlane), npm |
 
 The Java skills' examples and templates use Lombok (`@Slf4j`, `@RequiredArgsConstructor`, `@Builder`, …). The
 `create-repo` and `ci` POM templates already include it; add it to an existing project before applying the skills.
+
+**Spring Boot 3.5 is a deliberate baseline, not an oversight.** Boot 4 is out, but the Java skills, templates and
+evals are built and tested on 3.5, and moving them is a reviewed migration of its own (Jackson 3, modular starters,
+removed APIs), not a version bump. Until that review lands, `create-repo` generates 3.5 and accepts 4.x only as an
+explicit opt-in. Open-source support for 3.5 is time-limited — check
+[the support window](https://spring.io/projects/spring-boot#support) and plan the upgrade, or use commercial
+support, before it matters to you.
 Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see
 [`docs/AUTHORING.md` §9](./docs/AUTHORING.md#9-freshness-policy).
 

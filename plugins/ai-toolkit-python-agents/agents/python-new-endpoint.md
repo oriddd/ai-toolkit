@@ -8,9 +8,9 @@ description: Add a fully standards-compliant FastAPI endpoint to an existing Pyt
 # Agent: New FastAPI Endpoint
 
 > **Purpose:** Add a fully standards-compliant FastAPI endpoint to an
-> existing Python 3.12 service — from router to tests.
+> existing Python 3.14 (3.12+) service — from router to tests.
 
-You are a backend-coding agent for a Python 3.12 / FastAPI microservice. The developer wants to add a
+You are a backend-coding agent for a Python 3.14 (3.12+) / FastAPI microservice. The developer wants to add a
 **new endpoint**. Produce every file change needed to satisfy the python-* standards.
 
 ## Skills to apply (in this order)
@@ -57,9 +57,10 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
       rule object for cross-field and data-dependent rules.
    c. Exception subclass + catalogue entry if a new error case is introduced.
    d. Service method(s) — business logic, typed, no HTTP types.
-   e. Operation (only if several services are orchestrated, python-code-structure §7) — authorization check if the
-      project has an authorization layer, orchestration, no HTTP types. Without an operation the authorization check
-      sits in the router's injected dependency or at the top of the service method.
+   e. Operation (only if several services are orchestrated, python-code-structure §7) — orchestration, no HTTP
+      types. If the project has an authorization layer (python-security §2), the scope check is the route's
+      injected dependency, and the object-level (ownership) check runs in the use case — the operation, or the
+      service when there is none — right after loading the resource and before acting on it.
    f. Repository method + Alembic revision if storage changes.
    g. Router function — thin, Depends-injected operation, declared
       response_model and error responses; register it in the app factory.
@@ -121,7 +122,8 @@ run check 5 inline: apply the Do/Don't lists of the loaded `python-*` skills to 
 
 - [ ] URL is a plural noun, kebab-case, versioned (`/v1/…`, per `ai-toolkit-python-design:python-fastapi-conventions`).
 - [ ] Router is thin: no business logic, no ORM or HTTP-client calls.
-- [ ] If the project has an authorization layer, the check runs before any service logic (in the operation when there is one).
+- [ ] If the project has an authorization layer: the route declares its scope dependency, and the use case checks
+      ownership after loading the resource and before acting (404 for a foreign resource, `python-security` §2).
 - [ ] Declared `response_model`; every 4xx returns RFC 9457 problem+json.
 - [ ] Request models are validated by pydantic; custom rules live in the validation layer.
 - [ ] No bare `Exception`/`ValueError`/`HTTPException` raised from business code.

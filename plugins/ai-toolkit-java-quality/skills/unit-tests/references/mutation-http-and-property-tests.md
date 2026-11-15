@@ -58,48 +58,71 @@ test runs under Surefire — a layering violation breaks the build.
 
 ## HTTP client tests — WireMock / MockWebServer
 
-When unit-testing a `*Client` from the `external-client` skill, stub the
-HTTP boundary with **WireMock** (same dependency as `integration-tests`) or
-**MockWebServer** (OkHttp). MockWebServer is not managed by the Spring Boot BOM,
-so declare it explicitly; the example uses the OkHttp **4.x** API
-(`okhttp3.mockwebserver`; OkHttp 5 moved it to `mockwebserver3` with a builder API):
+When unit-testing a `*Client` from the `external-client` skill, stub the HTTP boundary — never mock `RestClient` /
+`WebClient` method by method. Pick the stub by transport:
 
-```xml
-<dependency>
-    <groupId>com.squareup.okhttp3</groupId>
-    <artifactId>mockwebserver</artifactId>
-    <version>4.12.0</version>
-    <scope>test</scope>
-</dependency>
-```
+- **`RestClient`** (`external-client` §6): Spring's `MockRestServiceServer` bound to the `RestClient.Builder`
+  (`spring-test`, already in `spring-boot-starter-test` — no extra dependency). The example below.
+- **`WebClient`**, or a test that needs a real socket (connect / read timeouts of the configured request factory):
+  **WireMock** (same dependency as `integration-tests`) or **MockWebServer** (OkHttp — not managed by the Spring
+  Boot BOM, so declare `com.squareup.okhttp3:mockwebserver` explicitly; OkHttp 5 moved it to `mockwebserver3`).
+
+The client is built exactly as in `external-client`: constructor `(RestClient, FooProperties)`, failures mapped to
+the shared catalogue (`UnavailableException` for 5xx and timeouts, `DependencyException` for other non-2xx —
+`exception-handling`); the request DTO is the setter-based `FooSearchRequestDto`:
 
 ```java
 class FooClientTest {
-    static MockWebServer server;
-    @BeforeAll static void up()   throws Exception { server = new MockWebServer(); server.start(); }
-    @AfterAll  static void down() throws Exception { server.shutdown(); }
+    private MockRestServiceServer server;
+    private FooClient client;
 
-    private FooClient client() {
-        return new FooClient(
-            WebClient.builder().baseUrl(server.url("/").toString()).build(), "/api/search");
+    @BeforeEach
+    void setUp() {
+        final RestClient.Builder builder = RestClient.builder().baseUrl("http://foo");
+        server = MockRestServiceServer.bindTo(builder).build();
+        client = new FooClient(builder.build(), new FooProperties("http://foo", "/api/search",
+                new FooProperties.Timeouts(Duration.ofSeconds(1), Duration.ofSeconds(2))));
+    }
+
+    private static FooSearchRequestDto searchFor(final String queryId) {
+        final FooSearchRequestDto request = new FooSearchRequestDto();
+        request.setQueryId(queryId);
+        return request;
     }
 
     @Test
     void search_2xxResponse_returnsMappedHits() {
-        server.enqueue(new MockResponse().setBody("{\"hits\":[{\"id\":\"x\"}]}")
-                .addHeader("Content-Type", "application/json"));
+        server.expect(requestTo("http://foo/api/search")).andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.queryId").value("x"))
+                .andRespond(withSuccess("{\"totalHits\":1,\"products\":[{\"id\":\"p-1\"}]}", MediaType.APPLICATION_JSON));
 
-        FooSearchResponseDto response = client().search(new FooSearchRequestDto("x"));
+        final FooSearchResponseDto response = client.search(searchFor("x"));
 
-        assertThat(response.getHits()).extracting(Hit::id).containsExactly("x");
+        assertThat(response.getTotalHits()).isEqualTo(1);
+        assertThat(response.getProducts()).extracting(FooProductDto::getId).containsExactly("p-1");
+        server.verify();
     }
 
     @Test
-    void search_5xxResponse_throwsFooUnavailableException() {
-        server.enqueue(new MockResponse().setResponseCode(503));
+    void search_5xxResponse_throwsUnavailableException() {
+        server.expect(requestTo("http://foo/api/search")).andRespond(withServiceUnavailable());
 
-        assertThatThrownBy(() -> client().search(new FooSearchRequestDto("x")))
-            .isInstanceOf(FooUnavailableException.class);
+        assertThatThrownBy(() -> client.search(searchFor("x"))).isInstanceOf(UnavailableException.class);
+    }
+
+    @Test
+    void search_4xxResponse_throwsDependencyException() {
+        server.expect(requestTo("http://foo/api/search")).andRespond(withBadRequest());
+
+        assertThatThrownBy(() -> client.search(searchFor("x"))).isInstanceOf(DependencyException.class);
+    }
+
+    @Test
+    void search_timeout_throwsUnavailableException() {
+        server.expect(requestTo("http://foo/api/search"))
+                .andRespond(withException(new SocketTimeoutException("read timed out")));
+
+        assertThatThrownBy(() -> client.search(searchFor("x"))).isInstanceOf(UnavailableException.class);
     }
 }
 ```

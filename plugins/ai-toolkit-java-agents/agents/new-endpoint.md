@@ -40,7 +40,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 9. `ai-toolkit-java-quality:unit-tests` — operation + service +
    validator rule beans.
 10. `ai-toolkit-java-quality:component-tests` — full
-    controller slice: happy path, 400, 401/403, 404.
+    controller slice: happy path, 400, 403 (via the permissions fake), 404. The component profile runs
+    permit-all, so 401 is covered by the separate `*SecurityTest` slice (`component-tests` "Authenticated paths").
 
 Also, when they apply: `ai-toolkit-java-build:persistence` if the endpoint reads or writes storage, and
 `ai-toolkit-java-design:pattern-selection` (HITL — ask its questions in CLARIFY) if it needs a new layer, client or
@@ -142,6 +143,7 @@ diff, including untracked files.
 - [ ] No business logic in the controller.
 - [ ] Request DTO validated with `@Valid`; custom rules use a validator.
 - [ ] Unit tests cover happy path + every exception branch.
-- [ ] Component test covers the success status (2xx — 201 for create), 400, 401/403, 404.
+- [ ] Component test covers the success status (2xx — 201 for create), 400, 403, 404; 401 is covered by the
+      security slice test (`@WebMvcTest` with the production filter chain), not the component test.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

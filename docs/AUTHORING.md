@@ -45,7 +45,10 @@ last_reviewed: 2026-11-03
 ---
 ```
 
-All nine keys are expected in every skill; the validator fails on the rules below. Use `>` (folded) for a
+All nine keys are expected in every skill; the validator fails on the rules below. `version` is the skill's contract
+version (`MAJOR.MINOR`): bump the minor when a rule is added or changed in a way that changes what the skill produces,
+the major when a rule is removed or replaced; wording fixes and reviews leave it alone. Installed users receive changes
+through the *plugin* version (`plugin.json`), which is bumped for every content change. Use `>` (folded) for a
 long description; `tools/build-indexes.py` also reads `>-`, `|`, block lists and quoted values.
 
 | Rule | Validator section |
@@ -151,6 +154,10 @@ description: One paragraph explaining what this skill does. Use when <the situat
 tier: should
 applies_to: [rest]
 depends_on: []
+ships_templates: false
+hitl: false
+version: 1.0
+last_reviewed: 2026-11-15   # today's date
 ---
 
 # My New Skill
@@ -163,7 +170,9 @@ EOF
 
 $EDITOR docs/README.md            # add a row to the skill index
 $EDITOR docs/INDEX_BY_USE_CASE.md # name the skill (in backticks) in the use-case rows it serves
+$EDITOR tools/eval_cases/triggers.py  # add the skill's trigger case (§10)
 python3 tools/build-indexes.py    # regenerates docs/REGISTRY.md and the other generated files
+python3 tools/build-evals.py      # regenerates evals/ from tools/eval_cases/
 
 bash tools/validate-skills.sh
 ```
@@ -194,7 +203,7 @@ for naming, the required skills per language and the routing-hook convention.
 
 ## 9. Freshness policy
 
-Skills pin real versions (Java 21, Spring Boot 3.5, Python 3.12, library majors), so they go stale. Every skill is
+Skills pin real versions (Java 21, Spring Boot 3.5, Python 3.14, library majors), so they go stale. Every skill is
 re-reviewed at least every **180 days**; `last_reviewed` records the date of the last review.
 
 | Age of `last_reviewed` | Validator |
@@ -220,7 +229,7 @@ pinned platform (for example Spring Boot 4) triggers a review of every skill tha
 Each plugin with skills has a `claude plugin eval` suite under `evals/<plugin>/` (Claude Code ≥ 2.1.269). The suites
 live at the repo root, not inside the plugin, because a case must load the plugin together with its `dependencies`
 (`plugins: ["../../../plugins/<plugin>", …]`) and `claude plugin eval` only loads plugins below the directory it runs
-against. A suite has three kinds of case:
+against. A suite has four kinds of case:
 
 - **Trigger cases** (`trigger-<skill>`): a realistic task phrased the way a developer would ask, with a `tool_used`
   grader asserting that the skill loaded. One per skill.

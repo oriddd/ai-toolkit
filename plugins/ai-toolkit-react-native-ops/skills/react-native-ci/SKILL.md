@@ -10,7 +10,7 @@ depends_on: [react-native-static-analysis, react-native-unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -176,6 +176,9 @@ Linux for Android (`fastlane android release`, keystore from secrets). Keep lane
   work for Fastlane or `eas build --local`. Never hand-edit the version.
 - **Build number** (iOS `buildNumber`, Android `versionCode`) must increase monotonically per upload;
   let EAS `autoIncrement` with `appVersionSource: remote` own it, or derive from `${{ github.run_number }}` for Fastlane.
+- The app never receives version or build number through `EXPO_PUBLIC_*` variables (nothing on the runner can set the
+  remote build number); it reads both from the installed binary at runtime (`expo-application`, see
+  `react-native-observability` §1).
 - One tag, one release; never rebuild a tag. Generate release notes from Conventional Commits.
 
 ## 5. OTA update stance

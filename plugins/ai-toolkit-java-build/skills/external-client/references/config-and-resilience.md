@@ -57,8 +57,8 @@ resilience4j:
     enableExponentialBackoff: true          # without this the multiplier below is ignored
     exponentialBackoffMultiplier: 2
     retryExceptions:
-      # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees the raw
-      # WebClientResponseException because handleResponse() has already wrapped it.
+      # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees a raw
+      # HttpServerErrorException / ResourceAccessException because handleResponse() has already wrapped it.
       # {{basePackage}}.exception.UnavailableException (exception-handling), e.g.:
       - com.example.foo.exception.UnavailableException
 ```

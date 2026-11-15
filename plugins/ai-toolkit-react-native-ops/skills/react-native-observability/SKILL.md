@@ -10,7 +10,7 @@ depends_on: [react-native-error-handling, react-native-security, react-native-ci
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -41,7 +41,7 @@ test/fakes/FakeAnalytics.ts
 ## Dependencies
 
 ```json
-{ "dependencies": { "@sentry/react-native": "<current>" } }
+{ "dependencies": { "@sentry/react-native": "<current>", "expo-application": "<sdk-matched>" } }
 ```
 
 `<current>`: in an Expo app, `npx expo install @sentry/react-native` (the version the SDK is built against, SDK 58:
@@ -55,18 +55,24 @@ const appEnvSchema = z.object({
   name: z.enum(['development', 'staging', 'production']),
   apiBaseUrl: z.url({ protocol: /^https$/ }),
   sentryDsn: z.string(),
-  appId: z.string().min(1),
-  version: z.string().min(1),
-  buildNumber: z.string().min(1),             // a string even when numeric: Sentry's `dist` is a string
 });
 export type AppEnv = z.infer<typeof appEnvSchema>;
 export const parseEnv = (raw: unknown): AppEnv => appEnvSchema.parse(raw);   // a bad build fails at launch, loudly
 
-// app/env.ts: Expo inlines each `process.env.EXPO_PUBLIC_*` at build time, so write every reference out in full
+// bootstrap/env.ts: Expo inlines each `process.env.EXPO_PUBLIC_*` at build time, so write every reference out in full
 // (no destructuring, no `process.env[name]`); tests call parseEnv directly
 export const env = parseEnv({ name: process.env.EXPO_PUBLIC_APP_ENV, apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
-  sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '', appId: process.env.EXPO_PUBLIC_APP_ID,
-  version: process.env.EXPO_PUBLIC_APP_VERSION, buildNumber: process.env.EXPO_PUBLIC_BUILD_NUMBER });
+  sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '' });
+
+// shared/config/appInfo.ts: version and build number come from the installed binary at runtime, never from
+// EXPO_PUBLIC_*: EAS owns the build number remotely (react-native-ci §4) and shell variables never reach EAS cloud builds
+export type AppInfo = { appId: string; version: string; buildNumber: string };
+export const readAppInfo = (): AppInfo | null => {
+  const { applicationId, nativeApplicationVersion, nativeBuildVersion } = Application;   // expo-application
+  return applicationId && nativeApplicationVersion && nativeBuildVersion
+    ? { appId: applicationId, version: nativeApplicationVersion, buildNumber: nativeBuildVersion }
+    : null;                                      // web, or a host app such as Expo Go: let Sentry pick its defaults
+};
 ```
 
 Expo types `process.env` with an `any` index signature, so each read fails `no-unsafe-assignment`. Declare the
@@ -74,25 +80,41 @@ variables once in `shared/config/processEnv.d.ts`:
 `declare global { namespace NodeJS { interface ProcessEnv { EXPO_PUBLIC_API_BASE_URL?: string; /* one per variable */ } } } export {};`
 
 ```ts
-
 // shared/services/observability/initSentry.ts
-export function initSentry(env: AppEnv) {
+export const navigationIntegration = Sentry.reactNavigationIntegration();   // screen-load spans, section 6
+
+export function initSentry(env: AppEnv, app: AppInfo | null) {
   Sentry.init({
     dsn: env.sentryDsn,                       // public identifier, see react-native-security
     environment: env.name,
-    release: `${env.appId}@${env.version}+${env.buildNumber}`,
-    dist: env.buildNumber,
+    ...(app && { release: `${app.appId}@${app.version}+${app.buildNumber}`, dist: app.buildNumber }),
     enabled: !__DEV__,
     sendDefaultPii: false,                    // no IP, cookies or user details attached automatically; never true
     tracesSampleRate: env.name === 'production' ? 0.1 : 1.0,
     enableAutoPerformanceTracing: true,
+    integrations: [navigationIntegration],
     beforeSend: scrubEvent,                   // section 2
     beforeSendTransaction: scrubEvent,
     beforeBreadcrumb: scrubBreadcrumb,
   });
 }
-// App.tsx: initSentry(env) before render; export default Sentry.wrap(App);
 ```
+
+```tsx
+// src/app/_layout.tsx (Expo Router): init at module load, register the router's navigation container once
+initSentry(env, readAppInfo());
+function RootLayout() {
+  const navigationRef = useNavigationContainerRef();     // expo-router
+  useEffect(() => { navigationIntegration.registerNavigationContainer(navigationRef); }, [navigationRef]);
+  return <AppProviders env={env}><Stack /></AppProviders>;
+}
+export default Sentry.wrap(RootLayout);
+```
+
+React Navigation apps call `initSentry` in `App.tsx`, export `Sentry.wrap(App)`, and register the ref in
+`<NavigationContainer ref={navigationRef} onReady={() => { navigationIntegration.registerNavigationContainer(navigationRef); }}>`.
+The release string is the one the Sentry Expo plugin and `sentry-cli` upload source maps for
+(`<applicationId>@<version>+<buildNumber>`, `dist` = build number), so stack traces resolve (section 7).
 
 On `@sentry/react-native` 8.28 (Expo SDK 58) `no-deprecated` reports `sendDefaultPii` through a typings bug (the core
 option it inherits is deprecated for `dataCollection`, which the React Native options do not accept); 8.34 fixed it.
@@ -189,8 +211,8 @@ until consent is granted. Tests inject `FakeAnalytics` and assert `events` outco
 
 ## 6. Performance
 
-- Use Sentry's React Navigation integration for screen-load spans; add `Sentry.startSpan` only around
-  business-critical operations (checkout submit), not everywhere.
+- Screen-load spans come from `navigationIntegration` (section 1), registered with the router's navigation container;
+  add `Sentry.startSpan` only around business-critical operations (checkout submit), not everywhere.
 - Watch app start time, slow and frozen frames, and JS thread stalls; set budgets and review them each release.
 - Sample traces (0.1 to 0.2 in production) to control cost.
 

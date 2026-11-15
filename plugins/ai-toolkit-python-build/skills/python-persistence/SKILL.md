@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -186,10 +186,16 @@ Translate `IntegrityError` for unique constraints into a typed domain error the 
 
 ## 5. Migrations with Alembic
 Schema changes only via migrations; never `Base.metadata.create_all` outside tests.
-`alembic revision --autogenerate -m "add orders"`, then **review** the generated script. Migrations are
-forward-compatible (add nullable column -> backfill -> enforce) so old and new app versions overlap on deploy.
-The integration suite runs `upgrade head` on an empty database (its `engine` fixture) and `alembic check`
-for drift (a test, see `python-integration-tests` §3), so the CI integration job covers both.
+Write or change the ORM model first: autogenerate compares `target_metadata` (set it to `Base.metadata` in
+`alembic/env.py`) with the database. Then `alembic revision --autogenerate -m "add orders"` and **review** the
+generated script. Migrations are forward-compatible (add nullable column -> backfill -> enforce) so old and new app versions overlap on deploy.
+
+Every revision has a working `downgrade()` that reverses its `upgrade()` (autogenerate writes one; review it like
+the upgrade). Rolling back a deploy means deploying the old image, which still runs against the new schema, so
+downgrades are for local work and failed releases, not routine rollbacks; that is why upgrades stay additive.
+The integration suite runs `upgrade head` on an empty database (its `engine` fixture), `alembic check`
+for drift and a downgrade-to-base / upgrade-to-head round trip (tests, see `python-integration-tests` §3), so the
+CI integration job covers all three.
 
 Generated scripts must pass the same lint gate as the code. Let Alembic run ruff on every new revision
 (uncomment and adapt the `[post_write_hooks]` section of `alembic.ini`):

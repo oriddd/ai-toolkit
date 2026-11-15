@@ -52,7 +52,7 @@ on objective violations.
     <plugin>
       <groupId>com.github.spotbugs</groupId>
       <artifactId>spotbugs-maven-plugin</artifactId>
-      <version>4.8.6.4</version>
+      <version>4.10.5.0</version>
       <configuration>
         <effort>Max</effort>
         <threshold>Medium</threshold>          <!-- Low would fail the build on every minor finding -->
@@ -77,12 +77,12 @@ on objective violations.
           <path>
             <groupId>com.google.errorprone</groupId>
             <artifactId>error_prone_core</artifactId>
-            <version>2.36.0</version>   <!-- or newer; 2.36+ needs the should-stop arg below -->
+            <version>2.52.0</version>   <!-- 2.36+ needs the should-stop arg; 2.4x+ on JDK 21 also -XDaddTypeAnnotationsToSymbol -->
           </path>
           <path>
             <groupId>com.uber.nullaway</groupId>
             <artifactId>nullaway</artifactId>
-            <version>0.12.0</version>   <!-- or newer -->
+            <version>0.14.3</version>
           </path>
           <!-- Listing processors here disables classpath discovery: every processor the build uses must be listed -->
           <path>
@@ -95,6 +95,7 @@ on objective violations.
           <!-- Error Prone on JDK 17+/21 also needs the --add-exports / --add-opens flags from the note below -->
           <arg>-XDcompilePolicy=simple</arg>
           <arg>--should-stop=ifError=FLOW</arg>   <!-- required by Error Prone 2.36+ -->
+          <arg>-XDaddTypeAnnotationsToSymbol=true</arg>   <!-- required by recent Error Prone on JDK 21 -->
           <!-- ExcludedPaths: openapi-generated models would otherwise fail NullAway at ERROR (golden-path #14).
                ExcludedFieldAnnotations: fields injected by Mockito / Spring (incl. @Value) are never null.
                ExternalInitAnnotations: JPA fills entity fields after the no-arg constructor (persistence). -->

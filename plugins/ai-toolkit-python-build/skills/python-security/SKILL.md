@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-fastapi-conventions, python-error-han
 ships_templates: false
 hitl: true
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -149,9 +149,9 @@ if settings.cors_origins:                                   # only for browser c
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,                # explicit list from settings, never "*" with credentials
-        allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["Location", "X-Request-ID"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],    # only the verbs the API exposes
+        allow_headers=["Authorization", "Content-Type", "If-Match", "X-Request-ID"],
+        expose_headers=["Location", "ETag", "X-Request-ID"],
         allow_credentials=False,                            # bearer tokens need no cookies
     )
 ```

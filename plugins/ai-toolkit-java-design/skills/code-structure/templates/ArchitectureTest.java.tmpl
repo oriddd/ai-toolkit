@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 @AnalyzeClasses(packages = "{{basePackage}}", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
     @ArchTest
@@ -28,11 +29,12 @@ class ArchitectureTest {
             .optionalLayer("Repository").definedBy("..repository..")
             .optionalLayer("Scheduler").definedBy("..scheduler..")
             .optionalLayer("Health").definedBy("..health..")
-            // project-types renames (event-driven / scheduler services), anchored at the base package
-            .optionalLayer("Consumer").definedBy("{{basePackage}}.consumer..")
+            // project-types renames (event-driven / scheduler services), anchored at the base package so
+            // client/<dep>/…/handler/ sub-packages are not mistaken for these layers; messaging/outbox/ is not a layer
+            .optionalLayer("Consumer").definedBy("{{basePackage}}.messaging.consumer..")
             .optionalLayer("Handler").definedBy("{{basePackage}}.handler..")
             .optionalLayer("Job").definedBy("{{basePackage}}.job..")
-            .optionalLayer("Producer").definedBy("{{basePackage}}.producer..")
+            .optionalLayer("Producer").definedBy("{{basePackage}}.messaging.producer..")
             .optionalLayer("Client").definedBy("..client..")   // optional: no client/ when the service calls no HTTP downstream (create-repo #11)
             .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
             .whereLayer("Consumer").mayNotBeAccessedByAnyLayer()
@@ -43,6 +45,11 @@ class ArchitectureTest {
             .whereLayer("Repository").mayOnlyBeAccessedByLayers("Service", "Operation", "Scheduler", "Handler", "Job")
             .whereLayer("Producer").mayOnlyBeAccessedByLayers("Service", "Operation", "Handler", "Job")
             .whereLayer("Client").mayOnlyBeAccessedByLayers("Service", "Operation", "Repository", "Health", "Handler", "Job");
+    @ArchTest
+    static final ArchRule noCycles =
+        // one slice per top-level package, but messaging/consumer and messaging/producer apart:
+        // consumer -> handler/service -> producer is the normal flow, not a cycle
+        slices().matching("{{basePackage}}.(messaging.*|*)..").should().beFreeOfCycles();
     @ArchTest
     static final ArchRule controllersAreNamedController =
         classes().that().resideInAPackage("..controller..")

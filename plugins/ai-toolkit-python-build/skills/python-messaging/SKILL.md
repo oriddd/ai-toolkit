@@ -1,16 +1,16 @@
 ---
 name: python-messaging
 description: >
-  Python async messaging — transactional outbox written in the use case's unit of work, a relay with FOR UPDATE
-  SKIP LOCKED, an idempotent consumer keyed by event id, bounded retries and a dead-letter topic (aiokafka). Use when
-  a Python service publishes or consumes domain events.
+  Python async messaging — transactional outbox written in the use case's unit of work, one active relay (advisory
+  lock, FOR UPDATE SKIP LOCKED), an idempotent consumer keyed by event id, bounded retries, a dead-letter topic
+  (aiokafka). Use when a Python service publishes or consumes domain events.
 tier: should
 applies_to: [rest, worker]
 depends_on: [python-code-structure, python-persistence, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -101,14 +101,18 @@ class OutboxRow(Base):
 `SqlOutbox.add` stores `event.model_dump(mode="json")`. Unit tests use an `InMemoryOutbox` fake on the
 in-memory unit of work and assert the exact event (`python-unit-tests` §3).
 
-## 3. The relay: lock, publish, mark
+## 3. The relay: one active relay, lock, publish, mark
 ```python
+RELAY_LOCK_KEY = 7_315_420_001                         # any constant bigint, the same in every replica
+
 async def publish_batch(self) -> int:
     async with self._factory() as session, session.begin():
+        if not await session.scalar(select(func.pg_try_advisory_xact_lock(RELAY_LOCK_KEY))):
+            return 0                                   # another replica is the active relay this round
         rows = (await session.scalars(
             select(OutboxRow).where(OutboxRow.published_at.is_(None))
             .order_by(OutboxRow.created_at, OutboxRow.id).limit(self._batch_size)
-            .with_for_update(skip_locked=True)         # two relay replicas never take the same rows
+            .with_for_update(skip_locked=True)         # rows held by a replay or cleanup job are skipped
         )).all()
         for row in rows:
             await self._publisher.publish(row.topic, row.key, json.dumps(row.payload).encode(),
@@ -118,11 +122,19 @@ async def publish_batch(self) -> int:
                                   .values(published_at=func.now()))
     return len(rows)
 ```
+- **One active relay** is the default, because the partition key only keeps one aggregate's events in order if
+  they reach the broker in order. Every replica may run the relay; the transaction-scoped advisory lock lets one
+  batch run at a time and is released at commit or rollback, so a crashed relay never holds it. Several relays
+  publishing concurrently with only `FOR UPDATE SKIP LOCKED` take different rows of the same aggregate and publish
+  them out of order. Scale out only if each relay locks whole aggregates (for example
+  `pg_try_advisory_xact_lock(hashtext(key))` per row, ordered by `created_at`) and consumers tolerate a reordered
+  event (they compare an aggregate version and ignore an older one).
 - A publish failure rolls the transaction back and the rows stay unpublished; the next batch retries them.
   A crash after publishing but before commit publishes again: that is the at-least-once contract.
 - `run_relay(relay, stop, idle_seconds)` loops until a `stop` event is set, logs failures with
-  `logger.exception` and keeps going, and sleeps only when a batch was empty. Run it as a lifespan task or a
-  separate worker process; set `stop` on shutdown and await the task so an in-flight batch finishes.
+  `logger.exception` and keeps going, and sleeps only when a batch was empty (a standby replica's batch is empty).
+  Run it as a lifespan task or a separate worker process; set `stop` on shutdown and await the task so an in-flight
+  batch finishes (`python-graceful-shutdown`).
 - The producer is idempotent and waits for all replicas:
   `AIOKafkaProducer(bootstrap_servers=..., enable_idempotence=True, acks="all")`, started and stopped in the
   lifespan; publish with `send_and_wait` so the relay marks only what the broker acknowledged.
@@ -150,10 +162,12 @@ external API cannot be rolled back, so that API must be idempotent itself (pass 
 
 ## 5. Consumer loop: bounded retries, dead letter, then commit
 ```python
-async def run(self) -> None:
+async def run(self, stop: asyncio.Event) -> None:
     async for record in self._source:                       # AIOKafkaConsumer(enable_auto_commit=False)
         await self._process(record)                         # retries max_attempts, then dead-letters
         await self._source.commit()                         # commit the offset only after the outcome is durable
+        if stop.is_set():                                   # SIGTERM: stop between records (`python-graceful-shutdown`)
+            return
 ```
 - Read `event_id` from the record headers; a missing or malformed id goes straight to the dead-letter topic.
 - Retry a failing handler a few times in-process, then publish the original value and headers plus `dlt_reason`
@@ -167,19 +181,21 @@ async def run(self) -> None:
 - Unit: the use case writes the expected event to `InMemoryOutbox`; the consumer loop with fakes.
 - Integration (real PostgreSQL, `python-integration-tests`): the event commits with the state change and
   disappears with a rollback; `publish_batch` publishes once and marks the row; a failing publisher leaves it
-  unpublished; a second relay skips locked rows while the first is publishing; a duplicate message is handled
+  unpublished; a second relay publishes nothing while the first holds the lock, and events of one aggregate leave
+  in `created_at` order with two relays polling; a duplicate message is handled
   once; a failing handler leaves the message claimable again. The broker itself is tested with the Kafka
   testcontainers module or left to a contract test; the relay never needs it.
 
 ## Do / Don't
 - ✅ Outbox row in the same unit of work as the state change; the relay publishes later.
 - ✅ Event id = outbox id = consumer idempotency key; partition key = aggregate id.
-- ✅ `FOR UPDATE SKIP LOCKED` in the relay; idempotent producer with `acks="all"`.
+- ✅ One active relay (`pg_try_advisory_xact_lock`) plus `FOR UPDATE SKIP LOCKED`; idempotent producer with `acks="all"`.
 - ✅ Manual offset commits after processing; bounded retries; a dead-letter topic.
 - ❌ `await producer.send(...)` inside the use case or before `commit()`.
 - ❌ Consumers that assume exactly-once delivery, or deduplicate in memory.
 - ❌ Auto-commit of offsets; infinite in-process retries on one record.
 - ❌ ORM rows, `datetime.now()` or personal data in event payloads.
+- ❌ Several relays publishing concurrently with only `SKIP LOCKED`: one aggregate's events leave out of order.
 
 ## Cross-references
 - [`python-persistence`](../python-persistence/SKILL.md) — the unit of work the outbox joins; migrations for both tables.

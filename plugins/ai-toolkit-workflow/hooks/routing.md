@@ -16,5 +16,4 @@ load the task's skills before asking clarifying questions.
 it is not a guarantee. When a task is finished run `completion-gate`, report evidence per check, then offer to commit.
 Delegate independent units to subagents per `parallel-delegation` and verify what comes back. Subagents cannot ask the
 developer: ask HITL questions here, put the answers in the brief, and answer an agent's `NEEDS INPUT:` the same way.
-When an agent did the work, relay its completion-gate table verbatim; re-run the gate only if you changed code after it. Postman skills apply only
-to Postman collections or workspaces — code standards come from the language routing table.
+When an agent did the work, relay its completion-gate table verbatim; re-run the gate only if you changed code after it.

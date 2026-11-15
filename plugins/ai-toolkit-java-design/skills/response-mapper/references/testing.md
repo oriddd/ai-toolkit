@@ -22,10 +22,17 @@ void handle_v2Path_returnsV2Dto() {
 }
 
 @Test
-void handle_knownVersionWithoutStrategy_isRejected() {
+void handle_knownVersionWithoutStrategy_isNotFound() {
     final var request = new MockHttpServletRequest("GET", "/api/v3/users/u-1");   // V3 exists, but not for User here
     assertThatThrownBy(() -> mapperHandler.handle(User.class, sampleUser, request))
-            .isInstanceOf(UnsupportedApiVersionException.class);
+            .isInstanceOf(NotFoundException.class);                                // URI versioning: 404
+}
+
+@Test
+void handle_unknownPathVersion_isNotFound() {
+    final var request = new MockHttpServletRequest("GET", "/api/v9/users/u-1");
+    assertThatThrownBy(() -> mapperHandler.handle(User.class, sampleUser, request))
+            .isInstanceOf(NotFoundException.class);
 }
 
 @Test
@@ -55,11 +62,18 @@ void handle_noVersion_returnsDefaultVersion() {
 }
 
 @Test
-void handle_unknownVersion_isRejected() {
+void handle_unknownVersion_isNotAcceptable() {
     final var request = new MockHttpServletRequest();
     request.addHeader("Accept", "application/vnd.example.v9+json");
     assertThatThrownBy(() -> mapperHandler.handle(User.class, sampleUser, request))
-            .isInstanceOf(UnsupportedApiVersionException.class);
+            .isInstanceOf(UnsupportedApiVersionException.class);                   // media-type versioning: 406
+}
+
+@Test
+void handle_versionQueryParam_isIgnored() {
+    final var request = new MockHttpServletRequest();
+    request.setParameter("version", "v2");                                          // one scheme per API
+    assertThat(mapperHandler.handle(User.class, sampleUser, request)).isInstanceOf(UserV1DTO.class);
 }
 ```
 

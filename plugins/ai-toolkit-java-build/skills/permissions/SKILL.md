@@ -10,7 +10,7 @@ depends_on: [code-structure, exception-handling, strategy-registry-pattern]
 ships_templates: true
 hitl: false
 version: 1.1
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Permissions Skill
@@ -82,7 +82,7 @@ service actually accepts (Phase 1 #2).
 ```java
 public interface CallerContextResolver {
     /** Returns the context of the current request's principal, or {@code null} if absent. */
-    CallerContext resolve();
+    @Nullable CallerContext resolve();   // org.jspecify.annotations.Nullable — NullAway forces the handler's null check
     /** Returns the current principal's OAuth2 scopes, {@code SCOPE_} prefix stripped (empty if none). */
     Set<String> grantedScopes();
 }

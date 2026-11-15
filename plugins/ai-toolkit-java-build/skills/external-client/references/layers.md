@@ -15,14 +15,13 @@ public class FooService {
     private final FooCoreService fooCoreService;
     private final FooResponseParser fooResponseParser;
 
-    /** Returns the type string of the product, or null if not found. */
-    public String getProductType(final String productId, final CallerContext callerContext) {
+    /** Returns the type string of the product, or empty if no product matches. */
+    public Optional<String> getProductType(final String productId, final CallerContext callerContext) {
         Assert.hasText(productId, "productId must not be blank");   // validated at the API boundary; reaching here blank is a bug
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).build();
-        final FooProductDto product = fooCoreService.fetchSingleProduct(
-                filters, callerContext, FooConstants.FIELDS_TYPE_ONLY);
-        return fooResponseParser.parseProductType(product);
+        return fooCoreService.fetchSingleProduct(filters, callerContext, FooConstants.FIELDS_TYPE_ONLY)
+                .flatMap(fooResponseParser::parseProductType);
     }
 
     /** Returns true iff at least one product matches the given id + type. */
@@ -43,7 +42,8 @@ Rules:
   Spring bean.
 - Inputs are validated at the API boundary (`input-validation`). The facade only asserts the contract
   (`Assert.hasText` → `IllegalArgumentException`, a logged 500 because it is a bug) and **never** returns a
-  silent sentinel (`null` / `false`) for a bad input; let `CoreService` stay guard-free.
+  silent sentinel (`null` / `false`) for a bad input; let `CoreService` stay guard-free. "Not found" is an
+  `Optional` (§7), never a bare `null`.
 - Method names use domain vocabulary (`getProductType`, `isOrderOpen`) — never
   HTTP vocabulary (`post`, `get`, `search`).
 
@@ -99,9 +99,9 @@ public class FooCoreService {
     private final FooResponseVerifier fooResponseVerifier;
     private final FooResponseParser fooResponseParser;
 
-    public FooProductDto fetchSingleProduct(final Map<String, Object> filters,
-                                              final CallerContext callerContext,
-                                              final List<String> fields) {
+    public Optional<FooProductDto> fetchSingleProduct(final Map<String, Object> filters,
+                                                      final CallerContext callerContext,
+                                                      final List<String> fields) {
         final FooSearchRequestDto request = fooRequestBuilder
                 .buildSearchRequest(filters, callerContext, 1, fields);
         final FooSearchResponseDto response = fooClient.search(request);

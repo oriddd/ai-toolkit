@@ -86,3 +86,14 @@ OTHER_STACK = {
 }
 
 UNRELATED = "In two sentences, what is the difference between TCP and UDP?"
+
+NEAR_MISS = {
+    "ai-toolkit-docs": "In two sentences, summarise what this paragraph says: \"The invoice service exposes a REST API "
+                       "and stores invoices in PostgreSQL.\" Do not create files.",
+    "ai-toolkit-quality": "In two sentences, what is the difference between a unit test and an integration test?",
+    "ai-toolkit-workflow": "In two sentences, what does git rebase do differently from git merge?",
+}
+
+TRIGGERS["python-graceful-shutdown"] = (
+    "Every rolling update of our FastAPI orders service on Kubernetes gives clients 502s and connection resets, and the "
+    "Kafka consumer worker sometimes reprocesses messages. Set up proper shutdown for both.")

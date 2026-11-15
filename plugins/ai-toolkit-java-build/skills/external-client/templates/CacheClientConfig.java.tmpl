@@ -2,9 +2,10 @@ package {{basePackage}}.adapter.cache.http;
 import {{basePackage}}.spi.cache.CachePort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 /**
  * Vendor configuration of the "http" cache adapter (pluggable-architecture §3): active only when
@@ -16,15 +17,20 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(HttpCacheProperties.class)
 public class CacheClientConfig {
     @Bean
-    CachePort httpCachePort(RestClient.Builder restClientBuilder, HttpCacheProperties props) {
-        // RestClient has no timeouts by default — without these a hung dependency hangs the caller
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout((int) props.connectTimeout().toMillis());
-        requestFactory.setReadTimeout((int) props.readTimeout().toMillis());
+    CachePort httpCachePort(RestClient.Builder restClientBuilder,
+                            ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
+                            ClientHttpRequestFactorySettings requestFactorySettings,
+                            HttpCacheProperties props) {
+        // RestClient has no timeouts by default — without these a hung dependency hangs the caller.
+        // Boot's builder and settings keep the detected HTTP client (pooling) and spring.http.client.*;
+        // only the timeouts are per dependency.
+        ClientHttpRequestFactorySettings settings = requestFactorySettings
+                .withConnectTimeout(props.connectTimeout())
+                .withReadTimeout(props.readTimeout());
         // Boot's auto-configured builder keeps Micrometer observation (metrics + W3C trace propagation)
         RestClient restClient = restClientBuilder.clone()
                 .baseUrl(props.baseUrl())
-                .requestFactory(requestFactory)
+                .requestFactory(requestFactoryBuilder.build(settings))
                 .build();
         return new HttpCacheAdapter(new CacheClient(restClient, props), new CacheEntryConverter());
     }

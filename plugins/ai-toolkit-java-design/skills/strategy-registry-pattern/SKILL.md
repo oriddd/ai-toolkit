@@ -10,7 +10,7 @@ depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-15
 ---
 
 # Strategy + Registry + Handler/Filter Pattern (Foundational)
@@ -110,7 +110,9 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 ### Test the Resolver
 - ✅ Valid input → returns expected discriminator
-- ✅ Invalid input → returns `Optional.empty()`
+- ✅ Invalid input → returns `Optional.empty()` — except a resolver that parses **client HTTP input** (`?layout=`, an
+  API version): there an unknown value is the client's error and the resolver throws the 4xx domain exception
+  (`response-layout`: 400; `response-mapper`: 404 / 406)
 - ✅ Overlapping rules (e.g. two URI patterns that both match) → the most specific one wins, every run
 - ✅ Edge cases (null request, missing headers, malformed URIs)
 
@@ -121,6 +123,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - ✅ Two strategies with the same discriminator → the constructor throws `IllegalStateException`
 
 ### Test Each Strategy
+- ✅ `getSupported<X>()` returns its discriminator — the value the Registry indexes on
 - ✅ `canHandle` returns `true` for its discriminator
 - ✅ `canHandle` returns `false` for other discriminators
 - ✅ Core behavior method executes correctly
@@ -145,7 +148,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - Let strategies reference other strategies directly
 - Inline data extraction logic in strategies — use Parsers
 - Return `null` from Parsers — return sentinel values
-- Return `null` from Resolvers or Registries — return `Optional`
+- Return `null` from Resolvers or Registries — return `Optional` (an HTTP-input resolver may throw a 4xx instead, see Testing)
 - Rely on `findFirst()` over beans or a `Map.of(...)` for routing — bean order and `Map.of` iteration order are unspecified
 - Skip unit tests for new strategies/parsers
 
@@ -213,4 +216,4 @@ When implementing this pattern:
 ---
 
 **Version:** 1.0  
-**Last Reviewed:** 2026-07-12
+**Last Reviewed:** 2026-11-15

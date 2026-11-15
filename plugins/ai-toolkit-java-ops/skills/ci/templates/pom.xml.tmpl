@@ -18,8 +18,8 @@
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <skipTests>false</skipTests>
-        <!-- Not managed by the Spring Boot parent: keep current (Java 25 bytecode needs a newer JaCoCo); let Renovate bump it -->
-        <jacoco.version>0.8.12</jacoco.version>
+        <!-- Not managed by the Spring Boot parent: keep current (Java 25 bytecode needs 0.8.14+); let Renovate bump it -->
+        <jacoco.version>0.8.16</jacoco.version>
         <pitest.version>1.20.0</pitest.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
     </properties>
@@ -29,7 +29,8 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
         <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-registry-prometheus</artifactId></dependency>
-        <!-- Generated code uses @Slf4j / @RequiredArgsConstructor; version managed by the Spring Boot parent -->
+        <!-- Generated code uses @Slf4j / @RequiredArgsConstructor; version managed by the Spring Boot parent.
+             lombok.config next to this pom sets lombok.addLombokGeneratedAnnotation = true (JaCoCo filtering) -->
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
         <dependency><groupId>org.jspecify</groupId><artifactId>jspecify</artifactId><version>1.0.0</version></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>

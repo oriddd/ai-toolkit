@@ -10,7 +10,7 @@ depends_on: [code-structure, observability, spring-boot-conventions, strategy-re
 ships_templates: false
 hitl: false
 version: 1.1
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Request Metrics Skill
@@ -27,6 +27,20 @@ parser only if it needs a new domain tag) — the filter, registry and existing 
 > This skill applies the **Filter-based variation** of the strategy-registry-pattern.
 > `observability` covers the three-pillar platform setup (Micrometer, structured logs, OpenTelemetry). 
 > This skill covers domain-level per-request metrics on top of that foundation.
+
+### Built-in timer first — when this pattern is justified
+
+Spring Boot already times **every** MVC request as `http.server.requests` (tags `method`, `uri` template, `status`,
+`outcome`, `exception`). Before adding a recorder, check whether that timer is enough:
+
+- Need one or two extra low-cardinality tags on every request → register a `@Component` extending
+  `DefaultServerRequestObservationConvention` and override `getLowCardinalityKeyValues(context)` to add them
+  (`super.getLowCardinalityKeyValues(context).and(KeyValue.of(...))`); no filter needed.
+- Need SLO buckets → `management.metrics.distribution.slo.http.server.requests: 100ms,500ms,1s`.
+- Use this Filter → Recorder → Parser stack only when a use case needs its **own** metric name that dashboards and
+  alerts rely on, a tag set that differs per use case, or per-use-case SLO buckets. Its timers are domain-named
+  (`MonitoringConstants`), never a second `http.server.requests` — do not time the same request twice under the
+  same meaning.
 
 ## 1. Package structure
 
@@ -71,8 +85,9 @@ Sections below keep their numbers but live in `references/` so this file stays s
    also be recorded.
 ✅ Skip `actuator` URIs in `shouldNotFilter` — they have their own metrics.
 ✅ Tag names live in `MonitoringConstants` — never inline strings.
-❌ Never read `SecurityContextHolder` or `HttpServletRequest` inside a
-   `MetricsRecorder` — extract that in a parser and pass the result.
+❌ Never read `SecurityContextHolder` or request data (headers, parameters, attributes, URI) inside a
+   `MetricsRecorder`. The recorder receives the `HttpServletRequest` only to hand it to its parsers and
+   `MetricsTimerHelper`; every extraction lives in a parser, which returns the tag value.
 ❌ Never compile regex patterns per-request — compile once in `MonitoringConfig`.
 ❌ Never emit a blank tag value — Prometheus treats it as "label absent", merging unrelated requests into one ambiguous series.
 ❌ Never add business logic to `MetricsFilter` — it only measures, routes, and

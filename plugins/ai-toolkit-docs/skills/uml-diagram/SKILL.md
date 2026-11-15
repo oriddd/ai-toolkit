@@ -7,7 +7,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-15
 ---
 
 # UML Diagram Skill (Mermaid)
@@ -70,7 +70,8 @@ graph TB
 
 **When to Create**: At project start, or when external dependencies change
 
-**Where it lives**: `context/system-context.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/system-context.md) — paste the diagram above and fill it in)
+**Where it lives**: one copy only — `context/system-context.md` when the repo has a `context/` folder, otherwise
+`docs/diagrams/c4-context.md` (`documentation-and-adr` §3). For `context/system-context.md` there is a blank template in [`context-maintenance`](../context-maintenance/templates/context/system-context.md): paste the diagram above and fill it in.
 
 #### Component/Container Diagram
 **Purpose**: Show high-level technology choices and component interactions
@@ -93,7 +94,7 @@ graph TB
 ```
 ````
 
-**Where it lives**: `context/component-diagram.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/component-diagram.md))
+**Where it lives**: `context/component-diagram.md`, or `docs/diagrams/c4-component.md` without a `context/` folder (blank template in [`context-maintenance`](../context-maintenance/templates/context/component-diagram.md))
 
 ### 2. Sequence Diagrams
 
@@ -543,8 +544,9 @@ You can use the Mermaid CLI in your pipeline to validate syntax:
 **Issue**: Diagram doesn't render on GitHub
 **Solution**: Ensure you used the ` ```mermaid ` identifier and closed it with ` ``` `. Also ensure it's in a `.md` file.
 
-**Issue**: "Max levels exceeded"
-**Solution**: Your diagram is too complex. Try splitting it into smaller sub-graphs or separate diagrams.
+**Issue**: "Maximum text size in diagram exceeded" or "Edge limit exceeded"
+**Solution**: The diagram is over Mermaid's `maxTextSize` (50,000 characters) or, for flowcharts, `maxEdges` (500) limit (defaults in Mermaid 11). Split it into
+smaller diagrams (one concept each, see Best Practices) rather than raising the limits.
 
 **Issue**: Sequence diagram arrows looking weird
 **Solution**: Check the arrow syntax (`->>` for solid, `-->>` for dashed). Avoid mixing them if not intended.
@@ -567,12 +569,12 @@ Component/Container template (§1), saved in `context/component-diagram.md` ([bl
 
 - **Mermaid Official**: https://mermaid.js.org/
 - **Mermaid Live Editor**: https://mermaid.live/
-- **C4 with Mermaid**: https://mermaid.js.org/syntax/c4c.html
+- **C4 with Mermaid**: https://mermaid.js.org/syntax/c4.html
 - **Mermaid Cheat Sheet**: https://mermaid.js.org/syntax/flowchart.html
 
 ## Related Skills
 
 - [context-maintenance](../context-maintenance/SKILL.md) - Maintain context docs
 - [documentation-and-adr](../documentation-and-adr/SKILL.md) - General documentation
-- `api-design` - API design documentation
+- `api-design` (Java) - API design documentation
 

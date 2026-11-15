@@ -190,7 +190,7 @@ REACT_NATIVE = {
              ("unused-directives", r"reportUnusedDisableDirectives")]),
         "react-native-e2e-tests": (
             "Write a Maestro end-to-end flow for the sign-up journey of our React Native app." + TAIL_RN,
-            [("clean-state", r"clearState:\s*true"), ("stable-ids", r"id:\s*[\x22\x27]?signup-"),
+            [("clean-state", r"clearState:\s*true"), ("clear-keychain", r"clearKeychain:\s*true"), ("stable-ids", r"id:\s*[\x22\x27]?signup-"),
              ("waits", r"extendedWaitUntil|assertVisible"), ("env-secrets", r"\$\{MAESTRO_"),
              ("subflows", r"runFlow")]),
     },
@@ -202,10 +202,11 @@ REACT_NATIVE = {
              ("offline-first", r"networkMode:\s*[\x22\x27]offlineFirst"), ("parse-boundary", r"\.safeParse\("),
              ("optimistic", r"onMutate[\s\S]*onError[\s\S]*setQueryData")]),
         "react-native-code-structure": (
-            "Add an Orders feature to our React Native TypeScript app: a list screen and navigation to an order detail "
-            "screen." + TAIL_RN,
-            [("feature-folder", r"features/orders/(screens|hooks|api|model)"), ("typed-screen", r"NativeStackScreenProps<"),
-             ("global-param-list", r"namespace ReactNavigation"), ("a11y-role", r"accessibilityRole"),
+            "Add an Orders feature to our Expo SDK 58 React Native TypeScript app (default template): a list screen and "
+            "navigation to an order detail screen." + TAIL_RN,
+            [("feature-folder", r"features/orders/(screens|hooks|api|model)"),
+             ("thin-route", r"export \{\s*(?:default|\w+Screen as default)\s*\}\s*from|src/app/orders/\[id\]\.tsx"),
+             ("parsed-route-params", r"useLocalSearchParams[\s\S]{0,300}?\.(?:safeParse|parse)\("), ("a11y-role", r"accessibilityRole"),
              ("public-index", r"features/orders/index\.ts|from [\x22\x27]@/features/orders[\x22\x27]")]),
     },
     "ai-toolkit-react-native-build": {
@@ -263,7 +264,8 @@ PYTHON = {
             "consume it in the billing service." + TAIL_PY,
             [("outbox", r"[Oo]utbox"), ("skip-locked", r"skip_locked\s*=\s*True"),
              ("idempotent-claim", r"on_conflict_do_nothing"), ("manual-commit", r"enable_auto_commit\s*=\s*False"),
-             ("idempotent-producer", r"enable_idempotence\s*=\s*True"), ("dlt", r"\.dlt|dead.?letter")]),
+             ("idempotent-producer", r"enable_idempotence\s*=\s*True"), ("dlt", r"\.dlt|dead.?letter"),
+             ("single-relay", r"pg_try_advisory(?:_xact)?_lock")]),
         "python-error-handling": (
             "In my Python FastAPI service OrderService.get(order_id) must fail when the order does not exist, and the "
             "API must answer 404." + TAIL_PY,
@@ -316,6 +318,13 @@ PYTHON = {
              ("ruff-check-hook", r"id:\s*ruff-check"), ("ann", r'"ANN"')]),
     },
     "ai-toolkit-python-ops": {
+        "python-graceful-shutdown": (
+            "Make my Python FastAPI service and its Kafka consumer worker shut down cleanly during Kubernetes rolling "
+            "updates: show the Dockerfile CMD, the Deployment settings, the app lifespan and the worker entrypoint." + TAIL_PY,
+            [("graceful-timeout", r"--timeout-graceful-shutdown"), ("native-prestop-sleep", r"preStop:\s*\n\s*sleep:"),
+             ("exit-stack", r"AsyncExitStack"), ("signal-handler", r"add_signal_handler\("),
+             ("bounded-drain", r"asyncio\.wait\([^)]*timeout\s*="),
+             ("no-shell-cmd", r"\nCMD\s+uvicorn", "not_contains")]),
         "python-ci": (
             "Write the GitHub Actions workflow and the Dockerfile for my Python FastAPI service managed with uv." + TAIL_PY,
             [("locked", r"uv sync --locked"), ("non-editable", r"--no-editable"), ("non-root", r"USER \w+|useradd"),
@@ -329,4 +338,75 @@ PYTHON = {
 }
 
 for _plugin, _cases in PYTHON.items():
+    BEHAVIOUR.setdefault(_plugin, {}).update(_cases)
+
+NEUTRAL = {
+    "ai-toolkit-quality": {
+        "completion-gate": (
+            "I have finished adding a discount feature to my Spring Boot (Maven) service and the new "
+            "DiscountServiceTest passes locally. I'm done, wrap it up. Do not create files.",
+            [("evidence-table", r"\|\s*Check\s*\|\s*Command\s*\|\s*Result"), ("full-build", r"clean verify"),
+             ("changed-code-coverage", r"diff-cover"), ("mutation", r"pitest|mutationCoverage"),
+             ("no-commit-command", r"git commit -m", "not_contains")]),
+        "code-hygiene": (
+            "Clean up this class and its test before I open the pull request. Show the result in your reply; do not "
+            "create files.\n\n```java\n/**\n * Service for order totals.\n * @author jdoe\n */\n"
+            "public class OrderTotals {\n    /** The tax rate. */\n    private final BigDecimal taxRate;\n\n"
+            "    /**\n     * Constructor.\n     * @param taxRate the tax rate\n     */\n"
+            "    public OrderTotals(BigDecimal taxRate) { this.taxRate = taxRate; }\n\n"
+            "    /** Gets the tax rate. @return the tax rate */\n    public BigDecimal getTaxRate() { return taxRate; }\n\n"
+            "    // calculate total\n    public BigDecimal total(BigDecimal net) {\n"
+            "        return net.add(net.multiply(taxRate)); // add tax\n    }\n\n"
+            "    // public BigDecimal oldTotal(BigDecimal net) { return net; }\n}\n```\n\n```java\n"
+            "class OrderTotalsTest {\n    @Test void getTaxRate_returnsTaxRate() {\n"
+            "        assertEquals(new BigDecimal(\"0.17\"), new OrderTotals(new BigDecimal(\"0.17\")).getTaxRate());\n    }\n"
+            "    @Test void total_100_returns117() {\n"
+            "        assertEquals(new BigDecimal(\"117.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"100.00\")));\n    }\n"
+            "    @Test void total_200_returns234() {\n"
+            "        assertEquals(new BigDecimal(\"234.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"200.00\")));\n    }\n}\n```",
+            [("no-internal-javadoc", r"/\*\*", "not_contains"), ("getter-test-removed", r"void getTaxRate_", "not_contains"),
+             ("parameterised", r"@ParameterizedTest"), ("no-inline-what-comments", r";\s*//\s*add tax|\n\s*//\s*calculate total", "not_contains")]),
+        "sonar-quality-gate": (
+            "SonarQube's quality gate fails on my Spring Boot pull request: new-code coverage is 72% against a gate of "
+            "80%, and there are 3 cognitive-complexity code smells in PricingService. Get the gate green." + TAIL,
+            [("token-from-env", r"SONAR_TOKEN"),
+             ("confirm-before-upload", r"[Cc]onfirm|go-ahead|your (?:OK|approval)|before I (?:run|upload|push)"),
+             ("not-verified-reporting", r"not (?:yet )?verified"),
+             ("no-nosonar-usage", r"[;{)]\s*//\s*NOSONAR", "not_contains"),
+             ("no-exclusions-usage", r"sonar\.(?:coverage\.)?exclusions\s*[=:>]|<sonar\.(?:coverage\.)?exclusions>", "not_contains")]),
+    },
+    "ai-toolkit-workflow": {
+        "parallel-delegation": (
+            "I need three independent additions to my Spring Boot service: a new metrics recorder for the export "
+            "endpoint, a new Jakarta validator for SKU format, and unit tests for the existing InvoiceService. Plan how "
+            "you would split this across subagents and write the brief you would send to each. Do not create files.",
+            [("files-owned", r"Files:\s*\S"), ("done-when", r"Done when:"), ("return-section", r"Return:"),
+             ("qualified-test-writer", r"ai-toolkit-java-agents:test-writer"),
+             ("no-builds-in-subagents", r"[Dd]o not run (?:any )?(?:the )?(?:builds?|tests)|[Nn]ever run (?:the )?build")]),
+    },
+}
+
+for _plugin, _cases in NEUTRAL.items():
+    BEHAVIOUR.setdefault(_plugin, {}).update(_cases)
+
+NEUTRAL_DOCS = {
+    "ai-toolkit-docs": {
+        "context-maintenance": (
+            "We just put a Redis cache in front of the pricing client in our service and finished the 'Phase 2' "
+            "milestone. Our repository keeps AI context docs under context/. Which files need updating and what goes "
+            "into each? Show the edits in your reply; do not create files.",
+            [("library-docs", r"library-docs\.md"), ("dependencies-infra", r"dependencies\.md"),
+             ("progress-tracker", r"progress-tracker\.md"), ("validator", r"validate-context\.sh"),
+             ("unreleased", r"\[Unreleased\]")]),
+        "uml-diagram": (
+            "Draw the system context of our order service (customers, API gateway, order service, PostgreSQL, Kafka, "
+            "payment provider) and the checkout sequence for the repository docs. Our repository keeps AI context "
+            "docs under context/. Show the diagrams and where each file goes; do not create files.",
+            [("mermaid", r"```mermaid"), ("context-location", r"context/system-context\.md"),
+             ("flow-location", r"context/domain-flow\.md"), ("error-path", r"\n\s*alt\s"),
+             ("no-image-files", r"\.(?:png|svg)\b", "not_contains")]),
+    },
+}
+
+for _plugin, _cases in NEUTRAL_DOCS.items():
     BEHAVIOUR.setdefault(_plugin, {}).update(_cases)

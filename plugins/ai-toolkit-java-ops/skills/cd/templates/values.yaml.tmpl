@@ -14,12 +14,15 @@ service:
 
 autoscaling:
   enabled: true
-  minReplicas: 1
+  minReplicas: 2       # ≥ 2 keeps one pod serving during a node drain and renders the PodDisruptionBudget
   maxReplicas: {{autoscaling.maxReplicas}}
   targetCPUUtilizationPercentage: 80
 
 podDisruptionBudget:
   maxUnavailable: 1   # rendered only when autoscaling.minReplicas > 1
+
+topologySpread:
+  enabled: true       # spread replicas across zones and nodes (ScheduleAnyway: a preference, never a scheduling blocker)
 
 serviceMonitor:
   enabled: true       # also needs the Prometheus Operator CRD in the cluster; skipped automatically without it

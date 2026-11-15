@@ -10,7 +10,7 @@ depends_on: [python-unit-tests, python-persistence]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -166,6 +166,21 @@ async def test_migrations_head_matchesModels(engine: AsyncEngine) -> None:
     async with engine.connect() as conn:
         await conn.run_sync(check)
 ```
+- Migrations roll back: every `downgrade()` runs and the chain upgrades again (`python-persistence` §5):
+
+```python
+async def test_migrations_downgradeToBaseAndUpgrade_roundTrips(engine: AsyncEngine) -> None:
+    def round_trip(connection: Connection) -> list[str]:
+        config = Config("alembic.ini")
+        config.attributes["connection"] = connection
+        command.downgrade(config, "base")
+        tables_after_downgrade = inspect(connection).get_table_names()
+        command.upgrade(config, "head")
+        return tables_after_downgrade
+
+    async with engine.begin() as conn:
+        assert await conn.run_sync(round_trip) == ["alembic_version"]
+```
 - API: `ASGITransport(app=app)` inside `LifespanManager(app)` (from `asgi-lifespan`; `ASGITransport` does not
   run the lifespan, so `app.state` would be empty) with real settings pointing at the containers
   (`create_app(settings)`, see `python-fastapi-conventions` §7); assert status and problem+json.
@@ -184,7 +199,8 @@ async def clean_tables(engine: AsyncEngine) -> AsyncIterator[None]:
 ```
 
 Messaging adapters (`python-messaging`) are tested here too: the outbox row commits and rolls back with the
-state change, the relay skips rows another relay has locked, and a duplicate message is handled once.
+state change, a second relay publishes nothing while the first holds the relay lock, and a duplicate message is
+handled once.
 
 ## 4. Other dependencies
 HTTP downstreams are stubbed with `respx` (unit/integration) or a WireMock container; brokers and caches

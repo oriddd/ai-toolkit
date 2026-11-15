@@ -6,8 +6,8 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [documentation-and-adr]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-06-28
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Context Maintenance Skill
@@ -50,7 +50,10 @@ context/
 
 This skill ships blank scaffolds in [`templates/context/`](templates/context/README.md). Copy the folder to the repo
 root as `context/`, fill every `(REQUIRED)` section (the prompts are HTML comments, which do not count as content),
-then run `bash context/validate-context.sh` — it fails until each required section has real content.
+then run `bash context/validate-context.sh` — it fails until each required section has real content. Sections marked
+`(REQUIRED for services)` (SLOs, disaster recovery) are optional when `project-overview.md` has the line
+`Project type: library`, `cli` or `mobile`. The validator is for the project's copied `context/` folder; the blank
+templates fail it by design.
 
 ## Update Triggers
 
@@ -191,8 +194,10 @@ mmdc -i context/system-context.md -o system-context.png
 The `CHANGELOG.md` is **append-only** at the top (under `[Unreleased]`).
 
 > **Release bot:** when release-please / semantic-release owns the changelog, do not edit it by hand — not the weekly append, not the release
-> rename (see `release-versioning`). The format is the one in `release-versioning` §5 for every repo, hand-maintained or
-> bot-generated: sections named after the Conventional Commit type (Features, Bug Fixes, …) plus Deprecations.
+> rename (see `release-versioning`). The format is the one in `release-versioning` §5, hand-maintained or
+> bot-generated: sections named after the Conventional Commit type (Features, Bug Fixes, …) plus Deprecations. An
+> existing hand-maintained changelog that already uses Keep a Changelog sections (Added, Changed, Fixed, …) keeps them —
+> never mix the two schemes in one file.
 
 ### Adding Entries
 
@@ -337,7 +342,7 @@ In `progress-tracker.md`:
 ## Related Skills
 
 - [uml-diagram](../uml-diagram/SKILL.md) - Create/update UML diagrams
-- quality-review - Code quality review
+- Code quality review — Java `quality-review`; Python and React Native: the `python-code-review` / `react-native-code-review` agents
 - [documentation-and-adr](../documentation-and-adr/SKILL.md) - General documentation
 
 ## Validation

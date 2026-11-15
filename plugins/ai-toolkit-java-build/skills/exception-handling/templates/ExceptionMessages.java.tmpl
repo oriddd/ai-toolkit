@@ -65,7 +65,7 @@ public final class ExceptionMessages {
             MessageFormat.format(RATE_LIMIT_EXCEEDED, String.valueOf(retryAfterSeconds)), Duration.ofSeconds(retryAfterSeconds));
     }
     /** {@code dependency} is our own name for the downstream (e.g. "foo"), never text from its response. */
-    public static UnavailableException dependencyUnavailable(String dependency, @Nullable @Nullable Throwable cause) {
+    public static UnavailableException dependencyUnavailable(String dependency, @Nullable Throwable cause) {
         return new UnavailableException(ERR_UNAVAILABLE, MessageFormat.format(DEPENDENCY_UNAVAILABLE, dependency), cause);
     }
     /** Unexpected non-2xx that is not an outage; the status is ours to log, the response body never goes in the message. */

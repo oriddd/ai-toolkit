@@ -1,5 +1,5 @@
 ---
-description: "`python-static-analysis` loads for a typical request, routed by its description alone"
+description: "`python-static-analysis` loads for a typical request (its description plus the plugin's routing hook)"
 tags: [trigger]
 plugins: ["../../../plugins/ai-toolkit-python-quality", "../../../plugins/ai-toolkit-python-design", "../../../plugins/ai-toolkit-python-build", "../../../plugins/ai-toolkit-quality"]
 max_turns: 4

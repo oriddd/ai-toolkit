@@ -9,7 +9,7 @@ depends_on: [python-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -29,14 +29,16 @@ pyproject.toml              # single source of tool configuration
 ## Dependencies
 ```toml
 [dependency-groups]
-dev = ["ruff>=0.6", "mypy>=1.11", "pre-commit>=3.8", "import-linter>=2.0"]
+dev = ["ruff>=0.12", "mypy>=1.11", "pre-commit>=3.8", "import-linter>=2.0"]
 ```
+Older ruff rejects `target-version = "py314"` or reports 3.14's lazily evaluated forward references as
+undefined names (F821).
 
 ## 1. Ruff: lint and format in one tool
 ```toml
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"   # = requires-python and the image's Python (py312 / py313 if you ship those)
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -61,7 +63,7 @@ ignore = ["PLR0913"]    # decide per project; keep the ignore list short and com
 ## 2. mypy strict
 ```toml
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"    # same version as ruff's target-version
 strict = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
@@ -99,6 +101,7 @@ layers = [
   "api",
   "(operations)",
   "services",
+  "(validation)",                 # rule objects: called by operations and services, may read repositories
   "(repositories) | (clients)",
   "(models)",                     # domain models may raise domain errors
   "(errors) | (config)",
@@ -107,7 +110,7 @@ layers = [
 
 Every module named in a contract must exist or `lint-imports` fails with "Module ... does not exist".
 A layer in parentheses is optional: list a package that does not exist yet that way, and add
-`my_service.operations` to the forbidden contract's `source_modules` only once that package is created (see
+`my_service.operations` and `my_service.validation` to the forbidden contract's `source_modules` only once that package is created (see
 `python-code-structure`: create only the packages you need). Packages outside `layers` (`messaging`, `security`,
 `observability`, `main`) are not checked by it; keep them out of `services` with the forbidden contract if needed.
 

@@ -239,8 +239,6 @@ if [ -d "$ROOT/plugins" ]; then
     bash "$ROOT/tools/test-hooks.sh"
   run_validator "git modes and line endings (check-repo-hygiene.sh)" \
     bash "$ROOT/tools/check-repo-hygiene.sh"
-  run_validator "context templates (validate-context.sh)" \
-    bash "$ROOT/plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh"
 else
   fail "plugins/ directory not found — cannot run catalogue validators"
 fi

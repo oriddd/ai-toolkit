@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # Validates that every .md file in context/ has content under each (REQUIRED) section.
+# Sections marked (REQUIRED for services) are required unless project-overview.md has a line
+# "Project type: library", "cli" or "mobile" (outside an HTML comment).
 # "Content" = at least one line that is not blank, not inside an HTML comment (comments may span lines), not a bare
 # code-fence delimiter (an empty ``` block is not content) and not a TODO/TBD placeholder.
 set -euo pipefail
 CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 errors=0
+project_type="$(sed -n 's/^[[:space:]]*[-*]*[[:space:]]*\**Project type:\**[[:space:]]*\([A-Za-z-]*\).*/\1/p' "$CONTEXT_DIR/project-overview.md" 2>/dev/null | head -n 1 | tr '[:upper:]' '[:lower:]' || true)"
+case "$project_type" in
+  library|cli|mobile) service=0 ;;
+  *) service=1 ;;
+esac
 for f in "$CONTEXT_DIR"/*.md; do
   [ -e "$f" ] || continue
   rel="$(basename "$f")"
-  out="$(awk -v rel="$rel" '
+  out="$(awk -v rel="$rel" -v service="$service" '
     function flush() {
       if (in_req && !has_content) printf "ERR: %s: section \047%s\047 is empty but required.\n", rel, header
     }
     !in_comment && /^[ \t]*(```|~~~)/ { in_fence = !in_fence; next }
-    !in_fence && !in_comment && /^##+/ { flush(); in_req = ($0 ~ /\(REQUIRED\)/); header = $0; has_content = 0; next }
+    !in_fence && !in_comment && /^##+/ { flush(); in_req = ($0 ~ /\(REQUIRED\)/) || (service && $0 ~ /\(REQUIRED for services\)/); header = $0; has_content = 0; next }
     in_req {
       line = $0; text = ""
       while (length(line) > 0) {

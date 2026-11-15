@@ -273,3 +273,39 @@ AGENT_SKILLS = {
     "react-native-test-writer": ["react-native-unit-tests"],
     "update-context": ["context-maintenance"],
 }
+
+# What each agent must produce. ("write", path regex): the subagent itself writes or edits a matching file.
+# ("report", regex): the final answer contains it (read-only agents).
+AGENT_OUTPUT = {
+    "code-review": ("report", r"Order(?:Service|Controller)\.java:\d+"),
+    "new-endpoint": ("write", r"src/test/java/\S+Test\.java"),
+    "new-feature": ("write", r"src/test/java/\S+Test\.java"),
+    "new-kafka-consumer": ("write", r"src/main/java/\S+Consumer\.java"),
+    "new-metric": ("write", r"src/main/java/\S+Recorder\.java"),
+    "new-microservice-client": ("write", r"src/main/java/\S+/client/inventory/\S+\.java"),
+    "new-validation": ("write", r"src/main/java/\S+Validator\.java"),
+    "refactor": ("write", r"src/main/java/\S+(?:Properties|OrderService)\.java"),
+    "test-writer": ("write", r"src/test/java/\S+Test\.java"),
+    "python-code-review": ("report", r"orders\.py:\d+"),
+    "python-new-endpoint": ("write", r"tests/\S+\.py"),
+    "python-new-feature": ("write", r"tests/\S+\.py"),
+    "python-refactor": ("write", r"src/orders/\S+\.py"),
+    "python-test-writer": ("write", r"tests/\S+\.py"),
+    "react-native-code-review": ("report", r"\w+\.tsx?:\d+"),
+    "react-native-new-feature": ("write", r"src/\S+\.tsx?"),
+    "react-native-new-screen": ("write", r"src/\S+Screen\.tsx"),
+    "react-native-refactor": ("write", r"src/\S+\.tsx?"),
+    "react-native-test-writer": ("write", r"\S+\.test\.tsx?"),
+    "update-context": ("write", r"(?:context/\S+\.md|CHANGELOG\.md)"),
+}
+
+# Delegation without naming the agent: the routing (parallel-delegation, the hooks) must pick it.
+UNNAMED = {
+    "ai-toolkit-java-agents": [
+        ("delegate-test-writer-unnamed", "java", "test-writer",
+         "The production code is done. Write JUnit tests for OrderService and for OrderController — they are "
+         "independent, so do them in parallel. OrderService also POSTs to the payment service through a RestTemplate "
+         "it creates itself; do not change production code — write characterisation tests through the HTTP API with "
+         "the payment service stubbed. The API is internal and needs no authorization."),
+    ],
+}

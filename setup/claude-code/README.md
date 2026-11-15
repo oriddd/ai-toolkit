@@ -22,7 +22,7 @@ install the phase plugins one by one.
 | `ai-toolkit-python` | `-python-design`, `-python-build`, `-python-quality`, `-python-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
 | `ai-toolkit-react-native` | `-react-native-design`, `-react-native-build`, `-react-native-quality`, `-react-native-ops`, `ai-toolkit-docs`, `ai-toolkit-workflow`, `ai-toolkit-quality` |
 | `ai-toolkit-<lang>-agents` | that language's design, build, quality and ops plugins, `ai-toolkit-docs`; the Java agents also `ai-toolkit-java-scaffold` |
-| `ai-toolkit-java-scaffold` | `-java-design`, `-java-ops`, `ai-toolkit-docs` |
+| `ai-toolkit-java-scaffold` | `-java-design`, `-java-build`, `-java-quality`, `-java-ops`, `ai-toolkit-docs` |
 | `ai-toolkit-docs` | `ai-toolkit-workflow` (and so `ai-toolkit-quality`) |
 | `ai-toolkit-workflow` | `ai-toolkit-quality` |
 | `ai-toolkit-quality` | — |
