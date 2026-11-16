@@ -44,7 +44,7 @@ actuator health/liveness/readiness/prometheus endpoints, `spring-boot-starter-va
 (`JwtDecoder` mocked with `@MockitoBean`, `IdentityProviderUnavailableFilter`, `SecurityConfig`, `ProblemDetailSecurityHandler`),
 `-data-jpa` (`BaseEntity`, `@EnableJpaAuditing` + `SecurityAuditorAware`, `OutboxEntity` against the outbox migration SQL with
 `ddl-auto: validate` on Postgres 16), `micrometer-registry-prometheus`, Lombok, `ArchitectureTest` (ArchUnit 1.4.1, 8 rules),
-the `component-test` profile with a no-op `PlatformTransactionManager`, request-metrics `Filter + Recorder + Parser`
+the `component-test` profile with a no-op `PlatformTransactionManager`, `GlobalExceptionHandler` with its `handleExceptionInternal` override (404 / 405 / 415 carry `errorCode`; `@Nullable` return and `body` are valid on both Spring 6.2 and 7), request-metrics `Filter + Recorder + Parser`
 (a recorder timer with generic and domain tags). The metrics filter records after the response is committed: a test that reads
 the registry right after the HTTP call must poll (Awaitility), it passed alone and failed in a full run without it.
 

@@ -147,6 +147,8 @@ by the readiness group in `application.yaml`. Keep them in sync.
 
 ### d) `application.yaml` (main)
 
+Merge into the existing `management:` / `spring:` keys of `application.yaml`; do not add a second block:
+
 ```yaml
 management:
   endpoints.web.exposure.include: prometheus,health,info   # see note below — merge, don't overwrite

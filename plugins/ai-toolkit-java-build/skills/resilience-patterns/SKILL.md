@@ -38,6 +38,8 @@ Prevent a failure in one part of the system from taking down the entire service 
 - **Semaphore Bulkhead**: Limit the number of concurrent calls to a dependency. Works on synchronous methods —
   the default choice for blocking (servlet) code.
 
+Merge under the single top-level `resilience4j:` key of `application.yaml` (resilience, rate-limiting and client skills all add instances to it):
+
 ```yaml
 resilience4j:
   bulkhead:
@@ -54,7 +56,7 @@ For dynamic environments, consider **Concurrency Limits** (e.g., Netflix's `conc
 Protects the system by failing fast when a dependency is unstable.
 
 ```yaml
-resilience4j:
+resilience4j:   # same single resilience4j: key as above
   circuitbreaker:
     instances:
       dependency-a:

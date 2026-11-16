@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure]
 ships_templates: false
 hitl: false
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -64,6 +64,8 @@ Spring Boot's profile mechanism (`spring.profiles.active`) allows for environmen
 1. **`application.yaml`**: Contains **all** keys with local-friendly defaults.
 2. **`application-{profile}.yaml`**: Overrides only what is different for that **class** of environment (e.g., `k8s`, `prod`) — shared infrastructure defaults, never values that differ between two concrete environments (staging vs prod hostnames, credentials).
 3. **Environment Variables**: values that differ per concrete environment come from env vars (set by the Helm chart). Use `${VAR_NAME:default}` for non-secret infrastructure values (hostnames, ports, pool sizes). **Secrets use `${VAR_NAME}` with no default** (or a secret store, see `security-hardening`) — a default such as `${DB_PASSWORD:changeme}` silently ships a known password when the variable is missing.
+
+**YAML snippets in the skills are fragments.** `application.yaml` has each top-level key once (`spring:`, `server:`, `management:`, `logging:`, `resilience4j:` …); a snippet that repeats one is merged under the existing key, or written with dotted keys (`spring.datasource.url:`). A second `spring:` block is a duplicate key and the application fails to start.
 
 **Reference Profile Strategy**:
 - `default`: Local development against a local DB / Docker Compose.

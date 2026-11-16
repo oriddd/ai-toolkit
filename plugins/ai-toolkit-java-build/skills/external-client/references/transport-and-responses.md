@@ -130,6 +130,8 @@ Spring Security fetch, cache and refresh it; the `Client` stays unaware of token
 </dependency>
 ```
 
+Merge under the existing top-level `spring:` key of `application.yaml`:
+
 ```yaml
 spring:
   security:

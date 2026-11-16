@@ -177,6 +177,9 @@ injection — **never** add `if/else` on `CallerContext` in the handler. Rules a
 
 ### 7. `application.yaml`
 
+Merge these under the existing top-level keys of `application.yaml` (the `code-structure` template already has `spring:`;
+a second `spring:` block is a duplicate key and the app fails to start), or write the `spring.security…` keys dotted:
+
 ```yaml
 permissions:
   service-account:

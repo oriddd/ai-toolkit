@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [ci]
 ships_templates: true
 hitl: false
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -56,8 +56,8 @@ sed -e 's/{{chartName}}/my-service/g' -e 's/{{appPort}}/8080/g' … deployment.y
 ```
 
 Do **not** render a `.tmpl` with Helm or Go templates directly (the placeholders are not valid actions), and do not
-unescape before substituting. Check the result with `helm lint --strict helm-chart` and `helm template helm-chart --set jwt.issuerUri=<issuer-url>`
-(without `jwt.*` for a service with no authentication; `helm lint` does not evaluate `required`, `helm template` does).
+unescape before substituting. Check the result with `helm lint --strict helm-chart` and `helm template helm-chart --set jwt.issuerUri=<issuer-url> --set database.url=<jdbc-url> --set database.username=<user>`
+(without `jwt.*` for a service with no authentication and without `database.*` for one with no database; `helm lint` does not evaluate `required`, `helm template` does).
 
 ## Inputs (ask if missing)
 
@@ -76,6 +76,11 @@ unescape before substituting. Check the result with `helm lint --strict helm-cha
 With create-repo auth = yes (`permissions` §7) the service does not start without `JWT_ISSUER_URI`, so `values.yaml`
 carries a `jwt` block (`issuerUri`, REQUIRED, and `audience`) that the Deployment turns into `JWT_ISSUER_URI` /
 `JWT_AUDIENCE`; `helm template` fails when `issuerUri` is empty. Delete the block when auth = no.
+
+With a SQL database (`persistence` §3b) `values.yaml` also carries a `database` block (`url`, `username`, both REQUIRED)
+that the Deployment turns into `DB_URL` / `DB_USER`; `DB_PASSWORD` is never in values: it is a key of the credentials
+Secret (`credentials.existingSecret`, or `credentials.values.DB_PASSWORD` on a dev cluster). Delete the block when there
+is no database.
 
 Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (list of `{name, value}` or
 `{name, valueFrom: {secretKeyRef: …}}`), `extraVolumes` / `extraVolumeMounts` (e.g. license files, fonts, certs),
@@ -102,7 +107,7 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
    - `serviceAccountName` from the `serviceAccountName` helper (`serviceAccount.create` / `serviceAccount.name`).
    - Standard `app.kubernetes.io/*` labels and a release-scoped name (`fullname` helper), so two releases — or two
      services inside one umbrella chart — never collide.
-   - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, `JWT_ISSUER_URI` / `JWT_AUDIENCE` from `jwt.*` (auth = yes), and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
+   - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, `JWT_ISSUER_URI` / `JWT_AUDIENCE` from `jwt.*` (auth = yes), `DB_URL` / `DB_USER` from `database.*` (SQL database), and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
    - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation), on by default and switched off with `appArmor.enabled: false`: on a node without AppArmor (kind on Colima/Docker Desktop, RHEL/OpenShift, Bottlerocket) the kubelet rejects every pod (`Cannot enforce AppArmor`) and the rollout never becomes Ready.
    - A `checksum/secret` pod annotation (sha256 of the rendered `secret.yaml`) when the chart renders the Secret, so
      changed credentials roll the pods — Spring reads env vars only at startup. With `credentials.existingSecret` the

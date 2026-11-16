@@ -321,4 +321,5 @@ AGENT_RULE = {
     "python-refactor": r"BaseSettings",
     "react-native-new-feature": r"accessibilityRole",
     "react-native-new-screen": r"accessibilityRole",
+    "update-context": r"## \d\. [^\\\x22]{3,60}\(REQUIRED",
 }

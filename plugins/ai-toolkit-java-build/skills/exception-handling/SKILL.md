@@ -9,7 +9,7 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure]
 ships_templates: true
 hitl: false
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -182,6 +182,10 @@ Rules:
   web layer, or a controller implementing an openapi-generator interface — the
   generated interface is `@Validated`). Spring's defaults answer only `"Invalid request content."` /
   `"Validation failure"` with no field or message.
+- **One error shape.** Errors Spring MVC builds itself (404 unknown path, 405, 406, 415, malformed JSON) go through
+  `handleExceptionInternal`; the template overrides it to add `errorCode` from the `ExceptionMessages` catalogue
+  (`ERR_NOT_FOUND`, `ERR_METHOD_NOT_ALLOWED`, `ERR_UNSUPPORTED_MEDIA_TYPE`, …) when the body has none, so every response
+  carries `errorCode`, domain or not. The override keeps `@Nullable` on the return and `body`: valid on Boot 3.5 and 4.
 - **Declaration order doesn't matter** — Spring picks the handler whose
   exception type is the closest match (by inheritance depth), so the
   `BaseDomainException` and `Exception` handlers only catch what nothing

@@ -115,6 +115,12 @@ spec:
             - name: JWT_AUDIENCE
               value: {{ "{{" }} .audience | quote {{ "}}" }}
             {{ "{{" }}- end {{ "}}" }}
+            {{ "{{" }}- with .Values.database {{ "}}" }}
+            - name: DB_URL
+              value: {{ "{{" }} required "database.url is required: the JDBC URL of the database" .url | quote {{ "}}" }}
+            - name: DB_USER
+              value: {{ "{{" }} required "database.username is required" .username | quote {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
             {{ "{{" }}- with .Values.extraEnv {{ "}}" }}
             {{ "{{" }}- toYaml . | nindent 12 {{ "}}" }}
             {{ "{{" }}- end {{ "}}" }}

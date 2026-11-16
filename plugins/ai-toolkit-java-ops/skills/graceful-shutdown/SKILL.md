@@ -18,6 +18,9 @@ during deploys". This skill removes that class of bug.
 
 ## 1. Enable Spring Boot graceful shutdown
 
+The `code-structure` `application.yaml` template already carries these keys; if you add them by hand, merge under the
+existing `server:` / `spring:` blocks (a second block is a duplicate key):
+
 ```yaml
 server:
   shutdown: graceful
@@ -79,7 +82,7 @@ ex.setAwaitTerminationSeconds(20);
 `@PreDestroy` → `shutdown()` → `awaitTermination(...)` → `shutdownNow()` if timeout.
 
 Boot's auto-configured `applicationTaskExecutor` (used when you define no `Executor` bean of your own — defining one
-switches it off) drains with:
+switches it off) drains with (merge under the existing `spring:` key):
 
 ```yaml
 spring:

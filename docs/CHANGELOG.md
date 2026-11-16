@@ -59,6 +59,34 @@ verified against the files and fixed, each change proven by a build, type-check 
     per key skill; Spring Boot 3.5's end of OSS support (2026-06-30) is stated in README and `create-repo`; the
     pre-push hook works without the private blocklist; CI actions bumped with Dependabot; `check-versions.sh` counts
     `plugin.json` description/dependency changes.
+- **Eval results (2026-11-16, Claude Code 2.1.311), measured on this release, not carried over from 2.3.0:**
+  - Routing: 112/112 (every skill's trigger case loads its skill; negatives, including the near-miss ones, load none).
+  - Agents (25 cases, one run each, with Write/Edit granted, graded on a successful subagent write and one skill rule in the
+    written file): 24 fully pass. React Native `new-screen` scores 0.80: it wrote a screen without `accessibilityRole`.
+    Two cases passed only after their prompts told the agent that nobody can answer questions (a subagent stops and asks
+    otherwise, by design).
+  - Behaviour (with vs without the plugin, 3 runs each arm): every case was last measured in this release and shows a lift;
+    cases whose graders or skills changed in the final rounds were re-run, unchanged ones were not repeated. Lifts quoted for
+    pruned graders are optimistic (scored on the same runs). Lowest: React Native `git-commit-conventions--react-native`
+    +0.25, `react-native-app-config-and-updates` and `react-native-permissions-and-push` below +0.30 before their graders were
+    rewritten; the trimmed `uml-diagram` +0.40 and `context-maintenance` +0.93 keep their lift.
+  - Not exercised by any eval: the commit guard and routing hooks (`tools/test-hooks.sh`, about 250 cases), `scaffold-repo`
+    (interactive), device/EAS/push behaviour, and the Boot 4 variants beyond the listed templates.
+- **Final independent review (Java 8, Python 8.5, React Native 7.5, neutral 7.5, repo 8); every finding fixed with a proof:**
+  - Java: with persistence the context-load test is a Testcontainers `ApplicationContextIT` (a default-profile test cannot
+    pass without a database); the datasource is defined end to end (`persistence` §3b, local profile, README rows, Helm
+    `database:` block); yaml snippets say to merge under the existing top-level keys (appending a second `spring:` block broke
+    every context); `spring-kafka` / `spring-boot-starter-amqp` are listed; every error body has an `errorCode` (404, 405, 415
+    included); auth=no + persistence compiles (`SystemAuditorAware`); `code-review` bans raw `RestClient` as well as `WebClient`.
+  - Python/React Native: `python-ci` SHA-pins every action like `react-native-ci`; the Python review/feature/refactor agents load
+    `python-cd` and `python-graceful-shutdown`; the `app.config.ts` snippet passes the skill's own ESLint gate.
+  - Neutral: Python and React Native variants of the completion-gate, git-commit-conventions, parallel-delegation and
+    pr-description evals; `commit-msg.sh` enforces length, trailing period and case; `pr-description` examples obey their
+    rules; `parallel-delegation` falls back to `general-purpose` when an agent plugin is absent; `completion-gate` has an
+    other-stack row; `update-context` bootstraps a missing `context/`; `uml-diagram` (580 → 203 lines) and
+    `context-maintenance` (475 → 232) keep their rules and templates, with the tutorial text moved to `references/` (grouped
+    section numbers and a few Java-flavoured example types reworded; the marketing headings are gone).
+  - Repo: the 400 KB guard timing test allows 10 s (it flaked at 3 s under load); the setup guide's token figures are measured.
 - **Executed, not just compiled** (Docker via Colima, a throwaway `kind` cluster; the shared cluster was never touched):
   - Java: 28 integration tests on real PostgreSQL, Kafka and Redis; the image runs non-root with a read-only root
     filesystem and drains an in-flight request on `docker stop`; the Helm chart installs on `kind`, rolls on a Secret
@@ -81,7 +109,7 @@ verified against the files and fixed, each change proven by a build, type-check 
 - **Neutral plugins** are language-neutral: Java commands and names are per-language rows (Java / Python / React
   Native) in `documentation-and-adr`, `context-maintenance`, `git-commit-conventions`, `parallel-delegation`,
   `pr-description`, `uml-diagram`, `completion-gate` and `update-context`; their examples obey their own rules (commit
-  subjects run through `commit-msg.sh`, workflows pass `actionlint`, Mermaid parses); the quality plugin says what to
+  subjects were run through `commit-msg.sh`, workflows through `actionlint` and Mermaid through its parser during review; CI does not enforce these); the quality plugin says what to
   do when installed alone.
 - **Evals measure quality:** 16 behaviour cases got graders for rules a model does not follow unprompted (graders the
   baseline passes were removed; lifts after pruning are optimistic because they were scored on the same runs);

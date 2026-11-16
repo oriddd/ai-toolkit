@@ -30,9 +30,12 @@ The app exposes:
 | --- | --- | --- |
 | `JWT_ISSUER_URI` | yes, when the service authenticates callers | OAuth2 issuer URL of the identity provider (Helm: `jwt.issuerUri`); the `local` profile sets a local default |
 | `JWT_AUDIENCE` | no, defaults to `{{artifactId}}` | audience a token must carry (Helm: `jwt.audience`) |
+| `DB_URL` | yes, when the service has a SQL database | JDBC URL, e.g. `jdbc:postgresql://<host>:5432/<db>` (Helm: `database.url`); the `local` profile points at the docker-compose Postgres |
+| `DB_USER` | yes, when the service has a SQL database | database user (Helm: `database.username`) |
+| `DB_PASSWORD` | yes, when the service has a SQL database | database password, no default; from the credentials Secret (Helm: `credentials.existingSecret`, key `DB_PASSWORD`) |
 | `LOG_LEVEL` | no, defaults to `INFO` | application log level |
 
-Remove the two `JWT_*` rows for a service without authentication.
+Remove the two `JWT_*` rows for a service without authentication and the three `DB_*` rows for one without a database.
 
 ## Project layout
 
@@ -46,7 +49,7 @@ The Helm chart lives in [`helm-chart/`](./helm-chart/). Lint it with:
 
 ```sh
 helm lint helm-chart
-helm template helm-chart --set jwt.issuerUri=<issuer-url> | less
+helm template helm-chart --set jwt.issuerUri=<issuer-url> --set database.url=<jdbc-url> --set database.username=<user> | less
 ```
 
 ## CI/CD

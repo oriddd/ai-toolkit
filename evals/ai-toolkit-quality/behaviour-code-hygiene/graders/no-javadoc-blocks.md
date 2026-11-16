@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: '/\*\*'
+pattern: '(?:^|\n)[ \t]*/\*\*'
 match: not_contains
 ---

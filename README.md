@@ -110,5 +110,6 @@ See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) and [`docs/AUTHORING.md`](.
 bash tools/validate-skills.sh && python3 tools/build-indexes.py --check && python3 tools/build-evals.py --check \
   && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh && bash tools/check-versions.sh
 # maintainers, before a release: bash prepare-for-publish.sh   (confidential-term checks need a local .publication-blocklist)
+#   it also scans local git objects: if it reports unreachable objects you never pushed, run `git gc --prune=now` and re-run
 # or run it on every push: pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
 ```

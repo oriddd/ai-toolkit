@@ -87,8 +87,8 @@ Only move copies you did not customise: an old copy you edited yourself is still
 ## Context budget
 
 Every installed skill and agent adds its description to the session's skill listing, which Claude Code caps at about 1 %
-of the context window. With everything installed that is roughly 9–10k tokens, so **install only the languages you use**
-(about 2.5–6k tokens per language plus the neutral plugins). If descriptions are cut short in your setup, raise
+of the context window. With everything installed that is roughly 6–7k tokens (measured from names plus descriptions at about 4 characters per token),
+so **install only the languages you use** (about 3–4k tokens for Java, 1–1.5k each for Python and React Native, under 1k for the neutral plugins). If descriptions are cut short in your setup, raise
 `skillListingBudgetFraction` in your settings or install fewer plugins.
 
 Skill *bodies* are not part of this budget: a body loads only when the skill is invoked, and the largest skills keep their

@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [code-hygiene, sonar-quality-gate]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -34,6 +34,10 @@ after each fix the gate makes you do. It decides "done"; the language skills def
   `mvn release:*|deploy`, `gradle publish`) in Claude's Bash tool.
   It cannot see aliases, scripts that commit internally, or other tools — it is a backstop, not a guarantee, and a prompt
   does not replace the developer's request. The rule is yours to follow.
+
+A quality-only install (`ai-toolkit-quality` without `ai-toolkit-workflow`) has no commit-guard hook and no routing
+hook: nothing asks for confirmation before `git commit` / `git push`, and nothing points you at the language skills. Follow
+§1 yourself, state in the evidence table that the guard is not installed, and still run the gate with the §3 commands.
 
 ## 2. The gate
 
@@ -60,8 +64,10 @@ Prefer the project's own wrapper (`make verify`, `npm run verify`) when it exist
 | Java / Maven | `mvn -B clean verify` (Spotless, Checkstyle, SpotBugs, ArchUnit, JaCoCo run in the build) and the project's PIT mutation run, e.g. `mvn org.pitest:pitest-maven:mutationCoverage` (non-negotiable 12, score ≥ 75 %) | `diff-cover target/site/jacoco/jacoco.xml --compare-branch=origin/<default-branch> --src-roots src/main/java`; Sonar new-code coverage |
 | Python | the verify sequence from `python-static-analysis` §5: `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"` (+ `uv run pytest -m integration` when Docker is available) | `uv run pytest -m "not integration" --cov --cov-report=xml` + `diff-cover coverage.xml --compare-branch=origin/<default-branch>` |
 | React Native | `npm run verify` (`tsc --noEmit`, `eslint . --max-warnings 0`, `prettier --check .`, `jest --ci --coverage` — see `react-native-static-analysis`) | `jest --coverage` + changed files from `git diff` |
+| Other stack (Go, .NET, Rust, …) | the project's own verify target (`make verify`, `make check`, CI script, `go test ./... && go vet ./...`, `dotnet build && dotnet test`) — read the Makefile / CI config to find it | the stack's coverage tool on changed files; if none is configured, say so |
 
 If a command does not exist for the project, say so — do not invent a substitute and call it passing.
+For an other stack no language skill exists: use the project's own verify target, and report every check you could not find a command for (lint, coverage, mutation, Sonar) as **not verified — no command found**, never as pass.
 
 **Blocked by the environment.** When Docker (Testcontainers integration tests) or the PIT run cannot run here —
 no Docker daemon, no network, sandbox limits — do not report the build as passing:

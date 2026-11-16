@@ -12,38 +12,31 @@ last_reviewed: 2026-11-15
 
 # UML Diagram Skill (Mermaid)
 
-Create and maintain Mermaid diagrams to visualize system architecture, components, and interactions. Mermaid diagrams render natively on GitHub, GitLab, and many modern documentation platforms - no external tools needed!
+Create and maintain Mermaid diagrams to visualize system architecture, components, and interactions. Mermaid diagrams render natively on GitHub, GitLab, Azure DevOps and many documentation platforms; no external tool is needed.
 
 ## Why Mermaid?
 
-### Advantages ✅
-- **Native Rendering**: GitHub, GitLab, Azure DevOps all render Mermaid directly
-- **No Build Step**: No need to generate images - diagrams render from markdown
-- **Easy Editing**: Edit directly on GitHub web interface
-- **Version Control**: Just markdown text, perfect for git
-- **Live Preview**: Most IDEs support Mermaid preview
-- **Simpler**: Easier syntax than PlantUML
-- **Modern**: Active development, growing ecosystem
-
-### vs PlantUML
-PlantUML is more feature-rich but requires:
-- A Java runtime (PlantUML itself runs on the JVM)
-- External tool to generate images
-- Committing generated images to git
-- Regenerating on every change
-
-**Verdict**: Mermaid is better for modern GitHub-based projects.
+- **Native rendering** on GitHub, GitLab and Azure DevOps; **no build step** and no generated images to commit.
+- **Plain markdown text**: edit it in the web UI, review it in a diff, preview it in most IDEs.
+- **vs PlantUML**: more features, but it needs a Java runtime, an external tool to generate images, committed images and regeneration on every change. Mermaid is better for GitHub-based projects.
 
 ## When to Use
 
-Apply this skill when:
-- ✅ Documenting new system architecture
-- ✅ Explaining component relationships
-- ✅ Visualizing sequence flows
-- ✅ Creating technical documentation
-- ✅ Onboarding new team members
-- ✅ Reviewing system design
-- ✅ Planning architecture changes
+Apply this skill when documenting new system architecture, explaining component relationships, visualizing sequence flows, creating technical documentation, onboarding new team members, reviewing system design, or planning architecture changes.
+
+## Reference map
+
+Load only the file you need. Section numbers match the original skill.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| 2b | Async-processing and loop sequence patterns | the flow has a queue, a worker or iteration | [`references/diagram-types.md`](./references/diagram-types.md) |
+| 3-7 | Class, state, ERD, flowchart and Gantt templates | the diagram is not a context, container or sequence diagram | [`references/diagram-types.md`](./references/diagram-types.md) |
+| Patterns | Strategy, event-driven and repository diagrams | visualising one of those patterns | [`references/patterns-and-styling.md`](./references/patterns-and-styling.md) |
+| Styling | Themes, node styling | the diagram needs colour or a theme | [`references/patterns-and-styling.md`](./references/patterns-and-styling.md) |
+| Integration | Linking diagrams from README, ADRs and context docs | placing a diagram in a document | [`references/patterns-and-styling.md`](./references/patterns-and-styling.md) |
+| Setup | Where Mermaid renders, IDE preview, CLI, online editors | the developer asks how to preview or export | [`references/setup-and-tooling.md`](./references/setup-and-tooling.md) |
+| Validation | Syntax check, CI step, troubleshooting, resources | a diagram does not render or CI must validate | [`references/setup-and-tooling.md`](./references/setup-and-tooling.md) |
 
 ## Diagram Types
 
@@ -56,13 +49,13 @@ Apply this skill when:
 ````markdown
 ```mermaid
 graph TB
-    User(("👤 User<br/>Description"))
-    App["📦 Main System<br/><i>What it does</i>"]
-    External["🔒 External System<br/><i>What it does</i>"]
-    
+    User(("User<br/>Description"))
+    App["Main System<br/><i>What it does</i>"]
+    External["External System<br/><i>What it does</i>"]
+
     User -->|"Uses<br/>Protocol"| App
     App -->|"Integrates with<br/>Protocol"| External
-    
+
     style App fill:#1168bd,stroke:#0b4884,color:#ffffff
     style External fill:#999999,stroke:#666666,color:#ffffff
 ```
@@ -80,16 +73,16 @@ graph TB
 ````markdown
 ```mermaid
 graph TB
-    subgraph system["📦 System Name"]
-        web["🌐 Web Application<br/><i>HTTP service (e.g. Spring Boot, FastAPI)</i>"]
-        db[("💾 Database<br/><i>PostgreSQL</i>")]
-        worker["⚙️ Background Worker<br/><i>Worker process</i>"]
+    subgraph system["System Name"]
+        web["Web Application<br/><i>HTTP service (e.g. Spring Boot, FastAPI)</i>"]
+        db[("Database<br/><i>PostgreSQL</i>")]
+        worker["Background Worker<br/><i>Worker process</i>"]
     end
-    
+
     User -->|"Uses<br/>HTTPS"| web
     web -->|"Reads/Writes<br/>SQL"| db
     web -->|"Enqueues jobs<br/>RabbitMQ"| worker
-    
+
     style system fill:#e1f5ff,stroke:#1168bd
 ```
 ````
@@ -100,24 +93,21 @@ graph TB
 
 **Purpose**: Show interactions over time between components
 
-**Template**:
+**Template** (generic names; use the project's own component names, whatever its layering):
 ````markdown
 ```mermaid
 sequenceDiagram
     actor User
-    participant Controller
-    participant Service
-    participant Repository
-    participant Database
-    
-    User->>+Controller: POST /api/endpoint
-    Controller->>+Service: processRequest(data)
-    Service->>+Repository: save(entity)
-    Repository->>+Database: INSERT
-    Database-->>-Repository: success
-    Repository-->>-Service: savedEntity
-    Service-->>-Controller: result
-    Controller-->>-User: 200 OK
+    participant Api as API
+    participant Orders as Order service
+    participant Store as Data store
+
+    User->>+Api: POST /orders
+    Api->>+Orders: create(order)
+    Orders->>+Store: insert(order)
+    Store-->>-Orders: saved
+    Orders-->>-Api: order
+    Api-->>-User: 201 Created
 ```
 ````
 
@@ -127,238 +117,34 @@ sequenceDiagram
 ````markdown
 ```mermaid
 sequenceDiagram
-    Service->>Repository: process()
-    
+    Orders->>Store: insert(order)
+
     alt Success Path
-        Repository-->>Service: result
-        Service-->>Controller: success
+        Store-->>Orders: saved
+        Orders-->>Api: order
     else Error Path
-        Repository-->>Service: Exception
-        Service-->>Controller: Error
-        Controller-->>User: 500 Error
+        Store-->>Orders: Exception
+        Orders-->>Api: Error
+        Api-->>User: 500 Error
     end
 ```
 ````
 
-**Async Processing**:
-````markdown
-```mermaid
-sequenceDiagram
-    Service->>+Queue: enqueue(job)
-    Queue-->>-Service: accepted
-    
-    Note over Service,Queue: Later...
-    
-    Worker->>+Queue: dequeue()
-    Queue-->>-Worker: job
-    Worker->>Worker: process()
-```
-````
-
-**Loops**:
-````markdown
-```mermaid
-sequenceDiagram
-    Service->>Repository: getItems()
-    
-    loop For each item
-        Repository->>Service: item
-        Service->>Service: process(item)
-    end
-```
-````
+Async processing and loops: [`references/diagram-types.md`](./references/diagram-types.md) §2b.
 
 **Where it lives**: `context/domain-flow.md` (blank template in [`context-maintenance`](../context-maintenance/templates/context/domain-flow.md))
 
-### 3. Class Diagrams
+### 3-7. Class, state, ERD, flowchart and Gantt diagrams
 
-**Purpose**: Show class structure and relationships
+Templates live in [`references/diagram-types.md`](./references/diagram-types.md). Pick the type by purpose:
 
-**Template**:
-````markdown
-```mermaid
-classDiagram
-    class ProcessRequest {
-        -String requestId
-        -String type
-        -byte[] payload
-        +validate() boolean
-    }
-
-    class ProcessingStrategy {
-        <<interface>>
-        +supports(request) boolean
-        +process(request) Result
-    }
-
-    class CsvProcessor {
-        +supports(request) boolean
-        +process(request) Result
-    }
-
-    class ProcessorRegistry {
-        -List~ProcessingStrategy~ strategies
-        +getProcessor(type) ProcessingStrategy
-    }
-
-    ProcessingStrategy <|.. CsvProcessor : implements
-    ProcessorRegistry --> ProcessingStrategy : uses
-    ProcessRequest ..> ProcessingStrategy : uses
-```
-````
-
-**Relationship Types**:
-- `<|--` : Inheritance
-- `*--` : Composition
-- `o--` : Aggregation
-- `-->` : Association
-- `..|>` : Realization/Implementation
-- `..>` : Dependency
-
-### 4. State Diagrams
-
-**Purpose**: Show state transitions
-
-**Template**:
-````markdown
-```mermaid
-stateDiagram-v2
-    [*] --> Pending : submit
-    
-    Pending --> Processing : start
-    Processing --> Completed : success
-    Processing --> Failed : error
-    
-    Failed --> Pending : retry
-    Failed --> [*] : abandon
-    
-    Completed --> [*]
-```
-````
-
-### 5. Entity Relationship Diagrams (ERD)
-
-**Purpose**: Database schema visualization
-
-**Template**:
-````markdown
-```mermaid
-erDiagram
-    USER ||--o{ CONVERSION : creates
-    USER {
-        bigint id PK
-        string email
-        string name
-        timestamp created_at
-    }
-    CONVERSION {
-        bigint id PK
-        bigint user_id FK
-        string source_format
-        string target_format
-        string status
-        timestamp created_at
-    }
-```
-````
-
-### 6. Flowcharts
-
-**Purpose**: Process flows and decision trees
-
-**Template**:
-````markdown
-```mermaid
-flowchart TD
-    Start([Start]) --> Input[/Get Input/]
-    Input --> Validate{Valid?}
-    
-    Validate -->|Yes| Process[Process Data]
-    Validate -->|No| Error[Show Error]
-    
-    Process --> Save[(Save to DB)]
-    Save --> End([End])
-    Error --> End
-```
-````
-
-### 7. Gantt Charts
-
-**Purpose**: Project timelines and schedules
-
-**Template**:
-````markdown
-```mermaid
-gantt
-    title Project Timeline
-    dateFormat YYYY-MM-DD
-    
-    section Phase 1
-    Foundation           :2026-06-01, 14d
-    Core Functionality   :2026-06-15, 21d
-    
-    section Phase 2
-    Testing & Quality    :2026-07-06, 14d
-    Observability        :2026-07-20, 7d
-```
-````
-
-## Mermaid Setup
-
-### No Installation Required! 🎉
-
-Mermaid renders automatically on:
-- ✅ **GitHub** - Native support in markdown files
-- ✅ **GitLab** - Native support in markdown files
-- ✅ **Azure DevOps** - Native support
-- ✅ **Notion** - Supports Mermaid blocks
-- ✅ **Confluence** - Via Mermaid plugin
-- ✅ **VS Code** - Via extensions
-- ✅ **IntelliJ IDEA** - Via plugins
-
-### IDE Integration
-
-**VS Code**:
-1. Install "Markdown Preview Mermaid Support" extension
-2. Or install "Mermaid Editor" for dedicated view
-3. Open any `.md` file with Mermaid diagram
-4. Press `Ctrl+Shift+V` (Cmd+Shift+V on Mac) to preview
-
-**IntelliJ IDEA**:
-1. Install "Mermaid" plugin from marketplace
-2. Open `.md` file → preview shows automatically
-3. Or use built-in markdown preview (supports Mermaid natively in newer versions)
-
-**Eclipse**:
-1. Install "Markdown Editor" with Mermaid support
-2. Open `.md` file → preview renders Mermaid
-
-### Online Editors
-
-- **Mermaid Live Editor**: https://mermaid.live/
-- **Draw.io**: Supports Mermaid import
-- **GitHub**: Edit directly in web interface and preview
-
-### CLI Tool (Optional)
-
-If you need to generate static images:
-
-```bash
-# Install globally
-npm install -g @mermaid-js/mermaid-cli@<pinned-version>   # developer-run / CI, pinned — an agent does not install tools
-
-# From a .md input, mmdc writes one image per mermaid block (diagram-1.png, diagram-2.png, …)
-# Generate PNG
-mmdc -i diagram.md -o diagram.png
-
-# Generate SVG
-mmdc -i diagram.md -o diagram.svg
-
-# Generate PDF
-mmdc -i diagram.md -o diagram.pdf
-```
-
-But usually **not needed** - just commit the `.md` files!
+| Type | Use for |
+| --- | --- |
+| Class | class structure and relationships (types follow the project's language) |
+| State | lifecycle transitions of one entity |
+| ERD | database schema |
+| Flowchart | process flows and decision trees |
+| Gantt | project timelines |
 
 ## Best Practices
 
@@ -388,168 +174,13 @@ But usually **not needed** - just commit the `.md` files!
 - No need to commit generated images (reduces repo size/noise)
 - Keep diagrams close to code they document
 
-## Common Patterns
-
-### Strategy Pattern Visualization
-
-````markdown
-```mermaid
-classDiagram
-    class Strategy {
-        <<interface>>
-        +execute()
-    }
-    class ConcreteStrategyA
-    class ConcreteStrategyB
-    class Context {
-        -Strategy strategy
-        +executeStrategy()
-    }
-    Strategy <|.. ConcreteStrategyA
-    Strategy <|.. ConcreteStrategyB
-    Context --> Strategy
-```
-````
-
-### Event-Driven Architecture
-
-````markdown
-```mermaid
-sequenceDiagram
-    participant Producer
-    participant Bus as Event Bus
-    participant ConsumerA
-    participant ConsumerB
-
-    Producer->>Bus: publish(event)
-    Bus->>ConsumerA: event
-    Bus->>ConsumerB: event
-```
-````
-
-### Repository Pattern
-
-````markdown
-```mermaid
-classDiagram
-    class Service {
-        -Repository repository
-    }
-    class Repository {
-        <<interface>>
-        +findById(id) Entity
-    }
-    class JpaRepository
-    class Entity
-    
-    Repository <|.. JpaRepository
-    Service --> Repository
-    Repository --> Entity
-```
-````
-
-## Styling and Theming
-
-Mermaid supports styling individual nodes and overall themes.
-
-### Themes
-You can set themes at the top of the mermaid block:
-````markdown
-```mermaid
-%%{init: {'theme': 'dark'}}%%
-graph TD
-    A --> B
-```
-````
-Available themes: `default`, `forest`, `dark`, `neutral`, `base`.
-
-### Custom Node Styling
-````markdown
-```mermaid
-graph TD
-    A[Start] --> B{Process}
-    B -->|Success| C[End]
-    
-    style A fill:#f9f,stroke:#333,stroke-width:4px
-    style B fill:#bbf,stroke:#f66,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
-```
-````
-
 ## Documentation Integration
 
-### In README.md
-
-````markdown
-## Architecture
-
-See our architecture diagrams:
-
-- [System Context](context/system-context.md)
-- [Component Diagram](context/component-diagram.md)
-
-Diagrams are rendered natively in the browser on GitHub.
-````
-
-### In ADRs
-
-````markdown
-# ADR-0001 — Use Event-Driven Architecture
-
-## Decision
-We will use event-driven architecture.
-
-## Interaction Flow
-```mermaid
-sequenceDiagram
-    Producer->>Bus: event
-    Bus->>Consumer: event
-```
-````
-
-### In Context Documentation
-
-Simply wrap the Mermaid code in a fenced code block with the `mermaid` language identifier.
+Link diagrams from the README and ADRs by path; in context documentation wrap the Mermaid code in a fenced code block with the `mermaid` language identifier. Examples: [`references/patterns-and-styling.md`](./references/patterns-and-styling.md).
 
 ## Validation
 
-### Syntax Check
-
-The best way to validate is:
-1. **IDE Preview**: Most markdown plugins show errors if syntax is invalid.
-2. **Mermaid Live Editor**: Paste your code into https://mermaid.live/ to verify.
-3. **CLI**: Use `mmdc` to verify it compiles to image if needed.
-
-### CI/CD Integration
-
-You can use the Mermaid CLI in your pipeline to validate syntax:
-
-**GitHub Actions**:
-```yaml
-- name: Validate Mermaid Syntax
-  run: |
-    # CI step, pinned — an agent does not install tools. mmdc rejects -o /dev/null, so render into a temp dir;
-    # headless Chromium in a container needs --no-sandbox.
-    tmp="$(mktemp -d)"; echo '{"args":["--no-sandbox"]}' > "$tmp/puppeteer.json"
-    for f in context/*.md; do
-      grep -q '^```mermaid' "$f" || continue
-      npx -y @mermaid-js/mermaid-cli@<pinned-version> -p "$tmp/puppeteer.json" \
-        -i "$f" -o "$tmp/$(basename "$f" .md).svg" || exit 1
-    done
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue**: Diagram doesn't render on GitHub
-**Solution**: Ensure you used the ` ```mermaid ` identifier and closed it with ` ``` `. Also ensure it's in a `.md` file.
-
-**Issue**: "Maximum text size in diagram exceeded" or "Edge limit exceeded"
-**Solution**: The diagram is over Mermaid's `maxTextSize` (50,000 characters) or, for flowcharts, `maxEdges` (500) limit (defaults in Mermaid 11). Split it into
-smaller diagrams (one concept each, see Best Practices) rather than raising the limits.
-
-**Issue**: Sequence diagram arrows looking weird
-**Solution**: Check the arrow syntax (`->>` for solid, `-->>` for dashed). Avoid mixing them if not intended.
+Check the syntax in an IDE preview or https://mermaid.live/. A CI step can render every `context/*.md` block with the pinned Mermaid CLI; the step and the troubleshooting list (GitHub not rendering, size limits, arrow syntax) are in [`references/setup-and-tooling.md`](./references/setup-and-tooling.md).
 
 ## Examples
 
@@ -565,16 +196,8 @@ System Context template (§1), saved in `context/system-context.md` ([blank temp
 ### Example 3: Component Structure
 Component/Container template (§1), saved in `context/component-diagram.md` ([blank template](../context-maintenance/templates/context/component-diagram.md)).
 
-## Resources
-
-- **Mermaid Official**: https://mermaid.js.org/
-- **Mermaid Live Editor**: https://mermaid.live/
-- **C4 with Mermaid**: https://mermaid.js.org/syntax/c4.html
-- **Mermaid Cheat Sheet**: https://mermaid.js.org/syntax/flowchart.html
-
 ## Related Skills
 
 - [context-maintenance](../context-maintenance/SKILL.md) - Maintain context docs
 - [documentation-and-adr](../documentation-and-adr/SKILL.md) - General documentation
 - `api-design` (Java) - API design documentation
-

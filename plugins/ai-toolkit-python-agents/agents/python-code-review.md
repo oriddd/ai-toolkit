@@ -37,6 +37,8 @@ from memory.
 10. `ai-toolkit-python-build:python-security` — routes, authentication, CORS, secrets or untrusted input in the diff.
 11. `ai-toolkit-python-build:python-external-client` — only if the diff adds or changes an outbound HTTP client.
 12. `ai-toolkit-python-build:python-messaging` — only if the diff publishes or consumes events.
+13. `ai-toolkit-python-ops:python-cd` — only if the diff touches `helm-chart/` or Kubernetes manifests: probes, security context, HPA/PDB, migration Job, `FORWARDED_ALLOW_IPS`.
+14. `ai-toolkit-python-ops:python-graceful-shutdown` — only if the diff touches a worker entrypoint, the app lifespan, uvicorn/shutdown settings or the Deployment's grace period and `preStop`: SIGTERM drain, budget, closing clients and pools.
 
 Also apply `ai-toolkit-quality:code-hygiene` to the diff: needless comments/docstrings, dead code, speculative abstraction,
 redundant or meaningless tests.
@@ -96,7 +98,8 @@ caller asks for a different layout.
    `verify_signature: False` — BLOCKER.
 8. An `httpx.AsyncClient` created per call or at module level; retries on a non-idempotent `POST` — MAJOR.
 9. A broker `send` inside a use case or transaction instead of the outbox; a consumer without idempotency — MAJOR.
-10. Classes > ~100 lines or functions > ~30 lines (the `ai-toolkit-python-design:python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
+10. A chart or worker change that breaks the `python-cd` / `python-graceful-shutdown` rules (probes pointing at a dependency check, grace period shorter than the drain budget, worker ignoring SIGTERM, missing security context) — MAJOR.
+11. Classes > ~100 lines or functions > ~30 lines (the `ai-toolkit-python-design:python-code-structure` LEGO-brick limits) — suggest extraction (MINOR).
 
 ## Rules
 

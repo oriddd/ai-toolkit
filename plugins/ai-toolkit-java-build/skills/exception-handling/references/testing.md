@@ -17,6 +17,8 @@ setup. A `@WebMvcTest` slice runs Boot's default security unless you `@Import` y
 - `ProblemDetail.detail` equals the formatted message constant (4xx) or the
   generic text (5xx other than 503); `errorCode` equals the catalogue code.
 - `ProblemDetail.title` / `status` are populated by the advice.
+- Spring MVC's own errors carry `errorCode` too: a request to an unknown path (`ERR-NOT-FOUND`), a wrong verb (`ERR-METHOD-NOT-ALLOWED`)
+  and a wrong `Content-Type` (`ERR-UNSUPPORTED-MEDIA-TYPE`) in a `@SpringBootTest` / component test.
 
 For each thrown-exception path inside services, assert in unit tests that
 the **correct subclass** is thrown (`assertThatThrownBy(…).isInstanceOf(ForbiddenException.class)`),

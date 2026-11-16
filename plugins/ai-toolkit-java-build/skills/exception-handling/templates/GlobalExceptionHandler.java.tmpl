@@ -87,6 +87,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .toList();
         return handleExceptionInternal(e, validationProblem(errors), headers, status, request);
     }
+    /** Every error Spring MVC builds itself (404 / 405 / 406 / 415 / 400 …) passes through here: it gets the same errorCode as a domain error. */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleExceptionInternal(Exception e, @Nullable Object body, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        ResponseEntity<Object> response = super.handleExceptionInternal(e, body, headers, status, request);
+        if (response != null && response.getBody() instanceof ProblemDetail pd) {
+            Map<String, Object> properties = pd.getProperties();
+            if (properties == null || !properties.containsKey("errorCode")) {
+                pd.setProperty("errorCode", errorCodeFor(status));
+            }
+        }
+        return response;
+    }
     // [validation:begin]
     /**
      * Constraints checked through the @Validated AOP proxy: a bean outside the web layer, or a controller implementing an
@@ -134,6 +147,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
         return pd;
+    }
+    private static String errorCodeFor(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 401 -> ExceptionMessages.ERR_UNAUTHORIZED;
+            case 403 -> ExceptionMessages.ERR_FORBIDDEN;
+            case 404 -> ExceptionMessages.ERR_NOT_FOUND;
+            case 405 -> ExceptionMessages.ERR_METHOD_NOT_ALLOWED;
+            case 406 -> ExceptionMessages.ERR_NOT_ACCEPTABLE;
+            case 409 -> ExceptionMessages.ERR_CONFLICT;
+            case 415 -> ExceptionMessages.ERR_UNSUPPORTED_MEDIA_TYPE;
+            case 429 -> ExceptionMessages.ERR_TOO_MANY_REQUESTS;
+            case 503 -> ExceptionMessages.ERR_UNAVAILABLE;
+            default -> status.is5xxServerError() ? ExceptionMessages.ERR_INTERNAL : ExceptionMessages.ERR_BAD_REQUEST;
+        };
     }
     private ProblemDetail build(HttpStatus status, BaseDomainException e) {
         // 5xx: never echo the message (it may carry downstream details) — log it with the cause, return a generic detail.

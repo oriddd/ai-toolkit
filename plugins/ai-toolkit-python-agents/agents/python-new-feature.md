@@ -27,6 +27,8 @@ IF new validation rule:      → python-input-validation
 IF callers are authenticated:→ python-security (scope dependency, object-level checks)
 IF events published/consumed:→ python-messaging (outbox, idempotent consumer)
 IF new metric / trace span:  → python-observability
+IF chart / probes / HPA change: → python-cd
+IF worker entrypoint, lifespan or shutdown change: → python-graceful-shutdown (and python-cd for the Deployment)
 ```
 
 ## Always apply
@@ -50,6 +52,7 @@ IF new metric / trace span:  → python-observability
    - Who may call it?            (→ python-security)
    - Which validation rules?     (→ python-input-validation)
    - Which metrics?              (→ python-observability)
+   - Chart, probes or a worker process? (→ python-cd, python-graceful-shutdown)
 
 2. READ the relevant skills in apply-order.
 

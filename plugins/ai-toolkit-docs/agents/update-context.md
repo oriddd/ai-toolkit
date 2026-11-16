@@ -35,6 +35,12 @@ Load each with the Skill tool by its qualified name before editing.
 
 ```
 1. READ  the diff or description of the change provided by the caller.
+1b. BOOTSTRAP when context/ does not exist (Glob context/*.md finds nothing): the templates are in
+   `templates/context/` under the base directory printed when you loaded `ai-toolkit-docs:context-maintenance`.
+   Read each template there and Write it to `context/<same name>` (including `validate-context.sh`), keeping the
+   section headings and their `(REQUIRED)` markers, then fill the sections the change touches (step 3). Leave
+   sections you have no facts for as the template's comment — never invent content to fill them.
+   When some context/ files exist but others are missing, create only the ones the change affects.
 2. IDENTIFY which context files are affected:
    - project-overview.md  → feature list, purpose or tech stack changed
    - architecture.md      → structural / component / dependency change
@@ -69,7 +75,8 @@ Load each with the Skill tool by its qualified name before editing.
 6. If a component or sequence diagram changed, regenerate the Mermaid
    block in component-diagram.md or domain-flow.md.
 7. You have no shell: do not claim the docs are validated. End your result
-   with "Run: bash context/validate-context.sh" so the caller runs it.
+   with "Run: bash context/validate-context.sh" so the caller runs it; after a bootstrap say it is expected to
+   report the sections you left empty.
 ```
 
 ## Output format

@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
-version: 1.3
+version: 1.4
 last_reviewed: 2026-11-15
 ---
 
@@ -108,11 +108,7 @@ Execute the following skills in order. Each one is documented in its own
    profiles, validation, springdoc OpenAPI, the `Clock` bean and the
    `TaskExecutor` config. Adds `@ConfigurationPropertiesScan` to the
    application class.
-3a. **`api-design`** (+ **`openapi-first-codegen`** if the developer
-   wants the spec to drive the code) → URL, status-code and error-format
-   conventions for the first endpoints.
-3b. **`input-validation`** → `validation/` package and `ValidationConfig` for
-   the first request types.
+3a. **`api-design`**, 3b. **`input-validation`** (before step 4), 11. **`integration-tests`**, 13. **`quality-review`** (an unresolved `FAIL` blocks Phase 6): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
 4. **`exception-handling`** → the unchecked domain exception hierarchy in `{{basePackage}}.exception`
    (`BaseDomainException` with `errorCode`, one subclass per HTTP status), the `ExceptionMessages` catalogue in
    `exception.constants` and the `@RestControllerAdvice` `GlobalExceptionHandler` in `exception.handler`, extending
@@ -161,7 +157,8 @@ Execute the following skills in order. Each one is documented in its own
    (#15), `resources.*` (#12), `autoscaling.maxReplicas` (#13). The `ci`
    Dockerfile also uses `runAsUser` / `runAsGroup` (#15) and
    `extraSystemPackages` (#17); the Jenkinsfile uses `registryCredentialsId` and `nvdApiKeyCredentialsId` (#19).
-   Keep the `values.yaml` `jwt` block only when #9 = yes (`jwt.issuerUri` is required, `permissions` §7).
+   Keep the `values.yaml` `jwt` block only when #9 = yes (`jwt.issuerUri` is required, `permissions` §7) and the `database` block
+   only with a SQL database (`database.url` / `database.username` are required, `persistence` §3b).
 9. **`unit-tests`** → for every class produced in the previous steps,
    generate a meaningful `*Test.java` next to it. The `ArchitectureTest`
    (step 2) and the PIT / Jacoco gates (`ci` pom, step 1) already exist —
@@ -171,25 +168,23 @@ Execute the following skills in order. Each one is documented in its own
     `ComponentTestConfiguration` (and any opt-out `@TestConfiguration`s for
     heavy `@PostConstruct` beans) with deterministic fakes for every
     collaborator added in the previous steps.
-    With Phase 1 #9 = yes, also generate `ApplicationContextTest`: `@SpringBootTest` in the **default** profile with
+    With Phase 1 #9 = yes, also generate a context-load test in the **default** profile with
     `@MockitoBean JwtDecoder` and `spring.security.oauth2.resourceserver.jwt.issuer-uri` set in `properties` — the
     component tests exclude `SecurityConfig`, so this is the only test that boots the production security chain.
+    Without a SQL dependency it is `ApplicationContextTest` (`mvn test`). **With one it must be `ApplicationContextIT`**:
+    `@Container @ServiceConnection` `PostgreSQLContainer` (add the `integration-tests` test dependencies now), because a
+    database-free default-profile context cannot start (no `DB_URL`; excluding the DataSource fails `AuditConfig`) —
+    `component-tests` §3b.
     With #9 = yes, `application-component-test.yaml` also sets `jwt.issuer-uri` (`component-tests` §3).
-11. **`integration-tests`** *(if any external dependency was added)* →
-    produces `*IT.java` Testcontainer / WireMock tests under
-    `@Tag("integration")` (Failsafe is already in the `ci` pom).
 12. **`sdk-publishing`** *(library only)* and steps 15–17 (`release-versioning`, `documentation-and-adr`,
     `context-maintenance`): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
 12a. **`static-analysis`** → Spotless, SpotBugs (+ the starter
     `spotbugs-exclude.xml`), Error Prone / NullAway, `checkstyle.xml`, and
     `.mvn/jvm.config`.
-13. **`quality-review`** → run the SOLID / conventions audit (every
-    checklist item A–F, including quantitative thresholds) on the whole
-    generated repo; surface the report to the developer. Block the hand-off
-    (Phase 6) if there are unresolved `FAIL`s.
 14. **`local-dev-experience`** → docker-compose for the Phase 1 #16
     dependencies, Makefile, pre-commit hooks; dev settings in
-    `application-local.yaml` (the `local` profile), including a local `jwt.issuer-uri` when #9 = yes.
+    `application-local.yaml` (the `local` profile), including a local `jwt.issuer-uri` when #9 = yes and the compose
+    `spring.datasource.url` / `username` / `password` with a SQL database (`persistence` §3b).
 ## Phase 4 – Common project infrastructure
 
 Always create the repo-root files — `README.md`, `.gitignore`, `renovate.json`, `.editorconfig`, `CODEOWNERS`, the Maven
@@ -208,8 +203,8 @@ Run, in order, and surface output to the user:
    and Error Prone gates — the same build CI runs. (ITs need Docker; if it is
    not available, report them as not verified rather than skipping silently.)
 3. `helm lint --strict helm-chart` – verify the chart is valid (services only).
-4. `helm template helm-chart --set jwt.issuerUri=https://issuer.example.test` – verify the manifests render
-   (services only; omit `--set` when auth = no).
+4. `helm template helm-chart --set jwt.issuerUri=https://issuer.example.test --set database.url=jdbc:postgresql://db:5432/app --set database.username=app` –
+   verify the manifests render (services only; omit the `jwt.*` / `database.*` flags when there is no auth / no database).
 
 If any step fails, **stop and report** – do not try to silently patch.
 

@@ -46,6 +46,8 @@ Bind the block with one `FooProperties` `@ConfigurationProperties` record
 
 > **Boot 4 note:** the AOP starter is named `spring-boot-starter-aspectj` there.
 
+Merge under the single top-level `resilience4j:` key of `application.yaml`:
+
 ```yaml
 resilience4j:
   circuitbreaker.instances.foo-service:

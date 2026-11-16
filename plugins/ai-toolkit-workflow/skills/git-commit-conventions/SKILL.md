@@ -237,7 +237,7 @@ Before requesting review:
 ## Tools
 
 ### Git Hooks
-Add a commit-msg hook to enforce prefix. Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
+Add a commit-msg hook that enforces the prefix and the subject rules (≤ 72 characters, no trailing period, lowercase after the colon). Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
 `pre-commit` rather than copying it into the unversioned `.git/hooks/`:
 ```yaml
 # .pre-commit-config.yaml — then run once: pre-commit install --hook-type commit-msg
@@ -254,14 +254,29 @@ repos:
 #!/bin/sh
 # scripts/commit-msg.sh (chmod +x) — receives the message file as $1
 
-commit_msg=$(head -n 1 "$1")   # check the subject line only, not the body
-# Merge commits and the fixup!/squash!/amend! commits that `git rebase --autosquash` relies on are allowed through
-pattern="^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: |Revert \"|Merge |fixup! |squash! |amend! )"
+subject=$(head -n 1 "$1")   # check the subject line only, not the body
+# Merge commits, auto-generated reverts and the fixup!/squash!/amend! commits that `git rebase --autosquash` relies on are allowed through
+case "$subject" in
+    "Merge "*|"Revert \""*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
 
-if ! echo "$commit_msg" | grep -qE "$pattern"; then
-    echo "ERROR: Commit message must start with a valid prefix, optional (scope) and optional ! for breaking changes:"
+prefix="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: ."
+if ! echo "$subject" | grep -qE "$prefix"; then
+    echo "ERROR: Commit message must start with a valid prefix, optional (scope), optional ! for breaking changes, then a summary:"
     echo "  feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert   e.g. feat(api)!: drop v1"
     echo "  (mark breaking changes with ! and/or a BREAKING CHANGE: footer — see release-versioning)"
+    exit 1
+fi
+if [ "${#subject}" -gt 72 ]; then
+    echo "ERROR: Subject line is ${#subject} characters; the limit is 72."
+    exit 1
+fi
+if echo "$subject" | grep -q '\.$'; then
+    echo "ERROR: Subject line must not end with a period."
+    exit 1
+fi
+if echo "$subject" | grep -qE ": [A-Z]"; then
+    echo "ERROR: Start the summary with a lowercase letter after the colon (feat: add x, not feat: Add x)."
     exit 1
 fi
 ```

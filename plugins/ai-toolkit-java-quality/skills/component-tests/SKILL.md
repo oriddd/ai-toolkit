@@ -9,7 +9,7 @@ applies_to: [rest, monolith]
 depends_on: [unit-tests]
 ships_templates: true
 hitl: false
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -168,50 +168,12 @@ the canonical template.
 
 ### 3b. Services with persistence
 
-Keep the database out of the component-test context and replace the repositories at the boundary:
-
-```yaml
-# src/test/resources/application-component-test.yaml
-spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
-      # Keep ALL SIX lines: the three names above are Boot 3.5, the three below are Boot 4. Each set is ignored by the other
-      # version, not an error. Dropping a set silently starts Hikari + H2 in the component-test context on that version.
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
-      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
-      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
-  kafka:                              # services with messaging: no broker in component tests
-    listener.auto-startup: false
-    admin.auto-create: false
-```
-
-- Excluding JPA also removes the `PlatformTransactionManager`, so `@Transactional` and an injected
-  `TransactionTemplate` fail. Register a no-op `AbstractPlatformTransactionManager` bean in
-  `ComponentTestConfiguration` (its `doGetTransaction` returns a new `Object()`, `doBegin`/`doCommit`/`doRollback` do
-  nothing) — the fakes hold the state, so there is nothing to roll back.
-- With messaging, also drop listener startup and topic creation (above) and fake the `KafkaTemplate` /
-  publisher port; `@RetryableTopic` and `@KafkaListener` containers otherwise retry `localhost:9092` in every context.
-
-- Without a `DataSource` Boot creates no `EntityManagerFactory` and no Spring Data repositories, so each repository
-  the service injects needs a bean in `ComponentTestConfiguration` — an in-process fake when the repository is a
-  narrow domain interface, otherwise a deterministic mock (a `JpaRepository` has too many methods to fake by hand):
-
-  ```java
-  @Bean
-  public InvoiceRepository invoiceRepository() {   // the only InvoiceRepository: none is created without a DataSource
-      final InvoiceRepository mock = mock(InvoiceRepository.class);
-      doAnswer(inv -> "inv-1".equals(inv.getArgument(0))
-              ? Optional.of(new Invoice("inv-1", "acme")) : Optional.empty())
-          .when(mock).findById(anyString());
-      return mock;
-  }
-  ```
-- `@EnableJpaAuditing` fails without JPA ("JPA metamodel must not be empty"): the `persistence` `AuditConfig` carries
-  `@Profile("!component-test")`. Any other configuration that needs the `EntityManager` gets the same profile guard.
-- Repository queries, mappings and migrations are proved against a real database in `*IT` tests (`integration-tests`).
+Keep the database out of the component-test context: exclude the DataSource / JPA / Flyway auto-configuration in
+`application-component-test.yaml` (all six Boot 3.5 and Boot 4 names), replace every repository with a deterministic
+mock or fake in `ComponentTestConfiguration`, register a no-op transaction manager, and switch Kafka listeners off.
+`AuditConfig` is `@Profile("!component-test")`. A **default-profile** context test (`ApplicationContextTest`, auth = yes)
+cannot use that guard: with persistence it is a Testcontainers-backed `ApplicationContextIT`. Full recipe:
+[`references/persistence.md`](./references/persistence.md) (load only when the service has persistence).
 
 ## Test design rules
 
@@ -320,6 +282,14 @@ filter chain shown above (prove the security wiring in a separate
 replace it with an in-process fake so component tests run on a laptop with
 no infra. Anything that needs a real Testcontainer is an `*IT` integration
 test (`integration-tests`), never part of `mvn test`.
+
+## Reference map — load only the part you are working on
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3b | database-free component context, repository fakes, `ApplicationContextIT` | the service has persistence | [`persistence.md`](./references/persistence.md) |
+| Authenticated paths | `*SecurityTest` slice | proving the production security chain | [`security-slice-test.md`](./references/security-slice-test.md) |
+| Response assertions | JsonPath, golden files | asserting bodies | [`response-assertions.md`](./references/response-assertions.md) |
 
 ## 4. Templates
 

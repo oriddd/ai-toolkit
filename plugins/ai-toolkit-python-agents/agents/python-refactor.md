@@ -41,6 +41,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 | `requests` / a new `httpx` client per call, no timeout, ad-hoc retry loops | `ai-toolkit-python-build:python-external-client` |
 | Hand-parsed `Authorization` headers, identity from the body, missing ownership checks | `ai-toolkit-python-build:python-security` |
 | Broker `send` inside the transaction, consumers that are not idempotent | `ai-toolkit-python-build:python-messaging` |
+| Worker without SIGTERM handling, lifespan that leaks clients or pools, shutdown timeout unrelated to the grace period | `ai-toolkit-python-ops:python-graceful-shutdown` |
+| Helm chart without hardened security context, wrong probes, no PDB/HPA | `ai-toolkit-python-ops:python-cd` |
 | Tests that need a real DB but use mocks | `ai-toolkit-python-quality:python-integration-tests` |
 
 ## Step-by-step procedure

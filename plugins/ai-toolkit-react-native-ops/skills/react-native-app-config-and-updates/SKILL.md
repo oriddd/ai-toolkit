@@ -62,7 +62,7 @@ const VARIANTS = {
 type Variant = keyof typeof VARIANTS;
 
 const isVariant = (v: string | undefined): v is Variant => v !== undefined && Object.hasOwn(VARIANTS, v);
-const raw = process.env.APP_VARIANT;
+const raw = process.env.APP_VARIANT as string | undefined;
 if (raw !== undefined && !isVariant(raw)) throw new Error(`Unknown APP_VARIANT "${raw}"`);
 const variant: Variant = raw ?? 'development';
 const { name, id, scheme } = VARIANTS[variant];

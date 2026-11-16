@@ -9,7 +9,7 @@ applies_to: [rest, worker, cli, library]
 depends_on: [python-static-analysis, python-unit-tests]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -60,8 +60,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # vN.N.N: third-party, so SHA-pinned to the latest stable release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "<uv-version>"  # latest stable uv, same as the Dockerfile image tag
           enable-cache: true
@@ -75,8 +75,8 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m "not integration" --cov   # fail_under lives in [tool.coverage.report]
@@ -84,8 +84,8 @@ jobs:
   integration:
     runs-on: ubuntu-latest          # Docker available for testcontainers
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m integration || [ $? -eq 5 ]   # exit 5 = no integration test collected yet
@@ -94,9 +94,9 @@ jobs:
     needs: [quality, unit, integration]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@<commit-sha>   # third-party: SHA of the latest stable release
-      - uses: docker/build-push-action@<commit-sha>     # third-party: SHA of the latest stable release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
@@ -115,7 +115,8 @@ job with `uv run pytest -m "not integration" --cov --cov-report=xml`, then scan 
 Pass the token only through the `SONAR_TOKEN` environment variable (from a CI secret); never as
 `-Dsonar.token=...` on the command line, where it leaks into logs and process lists.
 
-Pin actions to a major version at minimum (a SHA for third-party ones). Matrix over Python versions
+Pin every action to a full commit SHA with the version in a trailing comment (a moved tag cannot swap code in a job
+that holds registry credentials); let Renovate or Dependabot raise the SHA bumps. Matrix over Python versions
 only for libraries; services test the one version they ship. Push the image only from the default branch, in a
 separate step with registry credentials scoped to that job.
 
@@ -173,7 +174,7 @@ Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic 
 ## 4. Reproducibility and supply chain
 - Commit `uv.lock`; `uv sync --locked` (or `uv lock --check`) fails CI on drift.
 - Pin uv to one exact version in both places (`setup-uv` `version:` and the `ghcr.io/astral-sh/uv:<tag>` image) and bump them together.
-  `<uv-version>` and `<commit-sha>` above are placeholders: pin the latest stable release when you generate the file (never copy an old example pin), and let Renovate/Dependabot bump them.
+  `<uv-version>` is a placeholder, and the action SHAs above were the latest releases on 2026-11-15: re-resolve them (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag> 'refs/tags/<tag>^{}'`, the peeled `^{}` line when it exists) when you generate the file, and let Renovate/Dependabot bump them.
 - Pin the base image by major.minor (digest for release builds).
 - Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` as a scheduled job and on every `uv.lock` change (`.github/workflows/audit.yml`, below); Dependabot/Renovate keep the lock current but do not replace the audit.
 
@@ -194,8 +195,8 @@ jobs:
   pip-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in ci.yml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pip-audit         # audits the locked environment; the project itself is skipped (not on PyPI)

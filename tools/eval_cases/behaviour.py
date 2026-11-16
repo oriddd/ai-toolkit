@@ -377,8 +377,9 @@ NEUTRAL = {
             "        assertEquals(new BigDecimal(\"117.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"100.00\")));\n    }\n"
             "    @Test void total_200_returns234() {\n"
             "        assertEquals(new BigDecimal(\"234.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"200.00\")));\n    }\n}\n```",
-            [("no-internal-javadoc", r"/\*\*", "not_contains"),
-             ("getter-test-removed", r"\.getTaxRate\(\)", "not_contains")]),
+            [("no-javadoc-blocks", r"(?:^|\n)[ \t]*/\*\*", "not_contains"),
+             ("no-noise-comments", r"(?:^|\n)[ \t]*(?:/\*\*|\*)[ \t]*(?:Service for order totals|The tax rate\.?|Constructor\.?|Gets the tax rate)|(?:^|\n)[ \t]*(?:/?\*+)?[ \t]*@author|(?:^|\n)[ \t]*//[ \t]*public BigDecimal oldTotal|(?:^|\n)[ \t]*//[ \t]*calculate total|return net\.add\([^\n]*;[ \t]*//", "not_contains"),
+             ("getter-test-removed", r"assert\w*\([^\n]*\.getTaxRate\(\)", "not_contains")]),
         "sonar-quality-gate": (
             "SonarQube's quality gate fails on pull request #482 of my Spring Boot Maven service (Sonar project key "
             "shop-orders, base branch main): new-code coverage is 72% against a gate of 80%. Show me the exact commands "
@@ -394,7 +395,7 @@ NEUTRAL = {
             "endpoint, a new Jakarta validator for SKU format, and unit tests for the existing InvoiceService. Plan how "
             "you would split this across subagents and write the brief you would send to each. Do not create files.",
             [("files-owned", r"Files:\s*\S"), ("done-when", r"Done when:"), ("return-section", r"Return:"),
-             ("qualified-test-writer", r"ai-toolkit-java-agents:test-writer"),
+             ("qualified-test-writer-or-fallback", r"ai-toolkit-java-agents:test-writer|general-purpose"),
              ("no-builds-in-subagents", r"[Dd]o not run (?:any )?(?:the )?(?:builds?|tests)|[Nn]ever run (?:the )?build")]),
     },
 }
@@ -422,6 +423,75 @@ NEUTRAL_DOCS = {
 }
 
 for _plugin, _cases in NEUTRAL_DOCS.items():
+    BEHAVIOUR.setdefault(_plugin, {}).update(_cases)
+
+NEUTRAL_VARIANTS = {
+    "ai-toolkit-quality": {
+        "completion-gate--python": (
+            "I have finished adding a discount feature to my FastAPI service (uv-managed) and the new "
+            "test_discount_service.py passes locally. I'm done, wrap it up. Do not create files.",
+            [("evidence-table", r"\|\s*Check\s*\|\s*Command\s*\|\s*Result"),
+             ("full-suite", r"uv run pytest"),
+             ("static-analysis", r"uv run ruff check[^\n]*(?:uv run ruff format|uv run mypy)|uv run mypy"),
+             ("changed-code-coverage", r"diff-cover"),
+             ("no-commit-command", r"git commit -m", "not_contains")]),
+        "completion-gate--react-native": (
+            "I have finished adding a discount badge to the cart screen of my Expo React Native app and the new "
+            "DiscountBadge.test.tsx passes locally. I'm done, wrap it up. Do not create files.",
+            [("evidence-table", r"\|\s*Check\s*\|\s*Command\s*\|\s*Result"),
+             ("verify-script", r"npm run verify"),
+             ("static-analysis", r"tsc --noEmit|eslint[^\n]*--max-warnings 0"),
+             ("changed-code-coverage", r"diff-cover|jest[^\n]*--coverage|--changedSince"),
+             ("no-commit-command", r"git commit -m", "not_contains")]),
+    },
+    "ai-toolkit-workflow": {
+        "git-commit-conventions--python": (
+            "Write the git commit message for this change and show it in your reply (do not run git): in our published "
+            "Python client library I renamed the public function get_user to fetch_user, since it now calls the remote "
+            "profile API, and updated the three call sites inside the library.",
+            [("breaking-marker", r"\b(?:refactor|feat|fix)(?:\([\w-]+\))?!:"), ("breaking-footer", r"BREAKING CHANGE:"),
+             ("migration-in-footer", r"BREAKING CHANGE:[^\n]*(?:fetch_user|get_user)"),
+             ("subject-limits", r"(?:^|\n)(?:refactor|feat|fix)(?:\([\w-]+\))?!?: [^\n]{0,55}[A-Za-z0-9`)]\n")]),
+        "git-commit-conventions--react-native": (
+            "Write the git commit message for this change and show it in your reply (do not run git): in our published "
+            "React Native utilities package I renamed the public function formatPrice to formatCurrency, since it now takes "
+            "a locale, and updated the three call sites inside the package.",
+            [("breaking-marker", r"\b(?:refactor|feat|fix)(?:\([\w-]+\))?!:"), ("breaking-footer", r"BREAKING CHANGE:"),
+             ("migration-in-footer", r"BREAKING CHANGE:[^\n]*(?:formatCurrency|formatPrice)"),
+             ("subject-limits", r"(?:^|\n)(?:refactor|feat|fix)(?:\([\w-]+\))?!?: [^\n]{0,55}[A-Za-z0-9`)]\n")]),
+        "parallel-delegation--python": (
+            "I need three independent additions to my FastAPI service: a new Prometheus metrics recorder for the export "
+            "endpoint, a new Pydantic validator for SKU format, and unit tests for the existing InvoiceService. Plan how "
+            "you would split this across subagents and write the brief you would send to each. Do not create files.",
+            [("files-owned", r"Files:\s*\S"), ("done-when", r"Done when:"), ("return-section", r"Return:"),
+             ("qualified-test-writer-or-fallback", r"ai-toolkit-python-agents:python-test-writer|general-purpose"),
+             ("no-builds-in-subagents", r"[Dd]o not run (?:any )?(?:the )?(?:builds?|tests)|[Nn]ever run (?:the )?(?:build|tests?)|[Dd]o not run (?:pytest|uv run)")]),
+        "parallel-delegation--react-native": (
+            "I need three independent additions to my Expo React Native app: a new analytics tracker hook for the export "
+            "screen, a new zod schema for SKU format, and unit tests for the existing InvoiceList component. Plan how "
+            "you would split this across subagents and write the brief you would send to each. Do not create files.",
+            [("files-owned", r"Files:\s*\S"), ("done-when", r"Done when:"), ("return-section", r"Return:"),
+             ("qualified-test-writer-or-fallback", r"ai-toolkit-react-native-agents:react-native-test-writer|general-purpose"),
+             ("no-builds-in-subagents", r"[Dd]o not run (?:any )?(?:the )?(?:builds?|tests)|[Nn]ever run (?:the )?(?:build|tests?)|[Dd]o not run (?:jest|npm)")]),
+        "pr-description--python": (
+            "Write the pull request description for my branch. It adds retry with exponential backoff to "
+            "PaymentClient (max 3 attempts) in our FastAPI service, makes the backoff configurable through the "
+            "PAYMENT_BACKOFF_SECONDS environment variable, and adds tests/test_payment_client_retry.py. Show it in your "
+            "reply; do not call any git host.",
+            [("problem", r"## Problem"), ("solution", r"## Solution"), ("key-changes", r"## Key Changes"),
+             ("testing", r"## Testing"), ("names-test", r"test_payment_client_retry"),
+             ("config-in-notes", r"## Notes[\s\S]*PAYMENT_BACKOFF_SECONDS")]),
+        "pr-description--react-native": (
+            "Write the pull request description for my branch. It adds an optimistic update to the add-to-cart button "
+            "on CartScreen through a new useAddToCart mutation hook, makes the retry count configurable in "
+            "app.config.ts, and adds useAddToCart.test.tsx. Show it in your reply; do not call any git host.",
+            [("problem", r"## Problem"), ("solution", r"## Solution"), ("key-changes", r"## Key Changes"),
+             ("testing", r"## Testing"), ("names-test", r"useAddToCart\.test\.tsx"),
+             ("config-in-notes", r"## Notes[\s\S]*app\.config\.ts")]),
+    },
+}
+
+for _plugin, _cases in NEUTRAL_VARIANTS.items():
     BEHAVIOUR.setdefault(_plugin, {}).update(_cases)
 
 REACT_NATIVE_2 = {

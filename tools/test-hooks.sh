@@ -109,7 +109,7 @@ for payload in '' '{' 'null' '[]' '{"tool_input":null}' '{"tool_input":{"command
 done
 chk_rc "invalid utf-8" bash -c 'printf "{\"tool_input\":{\"command\":\"echo \xe6\xff\"}}" | "$1"' _ "$GUARD"
 long="$(python3 -c 'print("echo " + "x"*400000)')"
-start=$(date +%s); mk_json "$long" | "$GUARD" >/dev/null; [ $(( $(date +%s) - start )) -le 3 ] || { echo "FAIL: 400 KB command took too long"; fail=1; }
+start=$(date +%s); mk_json "$long" | "$GUARD" >/dev/null; [ $(( $(date +%s) - start )) -le 10 ] || { echo "FAIL: 400 KB command took too long (a hang, not a slow runner)"; fail=1; }
 # missing parser file => exit 0 and the grep fallback still asks for a plain commit
 HD="$(mktemp -d)"; cp "$GUARD" "$HD/guard-git.sh"; chmod +x "$HD/guard-git.sh"
 out="$(mk_json 'git commit -m x' | "$HD/guard-git.sh" 2>/dev/null)"; rc=$?

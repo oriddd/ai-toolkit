@@ -128,6 +128,9 @@ Spring Security writes HSTS only on HTTPS requests. Behind a TLS-terminating ing
 
 ## 7. Actuator lockdown
 
+These **replace** the template's `management.endpoints.web.exposure.include` / `management.endpoint.health.*` keys:
+edit them in place instead of adding a second `management:` block.
+
 ```yaml
 management:
   endpoints.web.exposure.include: health,info,prometheus

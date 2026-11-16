@@ -123,6 +123,9 @@ its extra encoder options.
 </dependency>
 ```
 
+Merge under the existing top-level `management:` / `spring:` keys of `application.yaml` (the template has `spring:`, and
+`management.endpoints…` as dotted keys), never as second blocks:
+
 ```yaml
 management:
   tracing:

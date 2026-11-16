@@ -33,7 +33,7 @@ How was the problem solved? High-level — save detail for the "Key Changes" sec
 
 ## Key Changes
 Bullet list, one item per logical change. Each item names the file / component and explains
-what it does differently now. Group related items. Aim for 5–12 bullets.
+what it does differently now. Group related items. Aim for 5–12 bullets; fewer only when the change really is that small.
 
 ## Testing
 How was this verified? Unit tests, integration tests, manual steps, mocked dependencies.
@@ -103,7 +103,10 @@ Moves the export to a background job; the request returns a job id and the clien
 
 ## Key Changes
 - `ExportJobRunner` — runs the export off the request thread and writes progress to the job record
+- `ExportJob` entity — stores status, row count and result location; created by migration `V012__export_job.sql`
+- `POST /exports` — validates the filter, enqueues a job and returns `202` with the job id
 - `GET /exports/{id}` — returns job status and, when done, a download link
+- `ExportProperties` — makes the page size and job timeout configurable instead of hard-coded
 
 ## Testing
 - `ExportJobRunnerTest` covers success, empty account and failure mid-export
@@ -115,8 +118,7 @@ Follow-up: delete finished jobs after 7 days (TICKET-123).
 
 ### ✅ Good Key Changes bullet
 ```
-- `OrderSyncOrchestrator` — new shared sync engine; replaces two divergent
-  implementations; driven by `SyncMode` (BATCH for scheduled runs, ON_DEMAND for reads)
+- `OrderSyncOrchestrator` — one sync engine replacing two divergent paths, driven by `SyncMode` (BATCH, ON_DEMAND)
 ```
 
 ### ❌ Bad Key Changes bullet

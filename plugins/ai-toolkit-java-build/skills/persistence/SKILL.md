@@ -9,7 +9,7 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure, pluggable-architecture]
 ships_templates: true
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -138,10 +138,11 @@ Rules:
   that reads `SecurityContextHolder`; `AuditConfig` in `config/` only enables
   auditing. It records an opaque subject id, falls back to `"system"` only
   outside an HTTP request (schedulers, consumers), and returns empty for an
-  unauthenticated request. `AuditConfig` carries `@Profile("!component-test")`:
+  unauthenticated request. Without Spring Security (create-repo auth = no) it does not compile: use `SystemAuditorAware` instead. `AuditConfig` carries `@Profile("!component-test")`:
   component tests that exclude the DataSource / JPA auto-configuration would
   otherwise fail at startup (`JPA metamodel must not be empty`); remove it if
-  your component tests run against a real database.
+  your component tests run against a real database. A default-profile test cannot use this guard, so it
+  needs a real database too (`ApplicationContextIT`, `component-tests` §3b).
 - **Soft delete** with `@SQLRestriction("deleted_at is null")` (Hibernate 6.3+; `@Where` is deprecated) and an `@SQLDelete` that sets `deleted_at`,
   if hard-delete is forbidden by domain rules; otherwise hard-delete.
   A soft-deleted row still holds its PII: on a right-to-be-forgotten request
@@ -205,30 +206,35 @@ Rules:
 
 ## 3a. Multi-tenancy
 
-When a service must manage data for multiple tenants (e.g., different organizations or customers), choose one of the following patterns:
+A shared schema (Hibernate `@TenantId` discriminator, with a test that tenant A cannot read tenant B's id),
+schema-per-tenant or database-per-tenant; start with the discriminator column. Full comparison and rules, load only
+when the service is multi-tenant: [`references/multi-tenancy.md`](./references/multi-tenancy.md).
 
-1. **Discriminator Column (Shared Schema)**:
-   - Add a `tenant_id` column to every table.
-   - Mark it with Hibernate 6 `@TenantId` and register a `CurrentTenantIdentifierResolver`
-     that reads the tenant from the request (via `permission/`). Hibernate then adds the
-     tenant to every entity query **including `findById` / `getReferenceById`** and sets it on insert.
-   - Do **not** rely on Hibernate `@Filter` alone: filters do not apply to `find` by id,
-     `getReferenceById`, native queries or bulk updates, so tenants' data leaks.
-   - Native and bulk queries still bypass `@TenantId`: add `tenant_id` to them by hand, or
-     enforce isolation in the database with Postgres row-level security (RLS).
-   - Add a test that tenant A's `findById` on tenant B's id returns empty.
-   - **Pro**: Simple, low infra cost. **Con**: Risk of data leakage if filters are bypassed.
+## 3b. Datasource configuration
 
-2. **Separate Schema (per tenant)**:
-   - Every tenant has their own Postgres schema.
-   - Use a `MultiTenantConnectionProvider` to switch schemas based on a tenant identifier in the request.
-   - **Pro**: Stronger isolation. **Con**: Harder to run migrations across all schemas (Flyway needs a loop).
+Nothing else defines the connection, so add it to `application.yaml` — **merge under the existing top-level `spring:`
+key**, never a second `spring:` block (duplicate key, `code-structure` template):
 
-3. **Separate Database**:
-   - Every tenant has their own DB instance.
-   - **Pro**: Maximum isolation, no noisy neighbor. **Con**: Highest cost and complexity.
+```yaml
+spring:
+  datasource:
+    url: ${DB_URL}              # jdbc:postgresql://<host>:5432/<db> — no default: it differs per environment
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}    # secret: NO default (spring-boot-conventions §2)
+  jpa:
+    hibernate.ddl-auto: validate
+```
 
-**Recommendation**: Start with **Discriminator Column** unless strict regulatory requirements demand otherwise.
+- The base file carries no credentials (golden-path #16), so a plain `mvn spring-boot:run` fails on the unresolved
+  `${DB_URL}`; the `local` profile supplies the docker-compose values (`local-dev-experience`) in `application-local.yaml`:
+  `spring.datasource.url: jdbc:postgresql://localhost:5432/foo`, `username: foo`, `password: foo`.
+- Kubernetes: `cd` turns `database.url` / `database.username` (REQUIRED in `values.yaml`) into `DB_URL` / `DB_USER`;
+  `DB_PASSWORD` comes from the credentials Secret (`credentials.existingSecret` with key `DB_PASSWORD`; `credentials.values`
+  only for dev clusters).
+- README: add `DB_URL`, `DB_USER` and `DB_PASSWORD` rows to the Configuration table (`create-repo` template).
+- Tests need no values: component tests exclude the DataSource (`component-tests` §3b); the context-load and repository
+  tests are `*IT` classes on a Testcontainers Postgres, whose `@ServiceConnection` supplies the connection
+  (`integration-tests`).
 
 ## 4. Transactions
 
@@ -274,9 +280,16 @@ Rules:
    or via the [datasource-proxy](https://github.com/jdbc-observations/datasource-proxy)
    spy in integration tests.
 
+## Reference map — load only the part you are working on
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3a | multi-tenancy patterns | the service serves several tenants | [`multi-tenancy.md`](./references/multi-tenancy.md) |
+
 ## 6. Templates
 
 - [`BaseEntity.java.tmpl`](./templates/BaseEntity.java.tmpl) — Base class with ID and auditing.
 - [`AuditConfig.java.tmpl`](./templates/AuditConfig.java.tmpl) — Enables JPA auditing (in `config/`).
 - [`SecurityAuditorAware.java.tmpl`](./templates/SecurityAuditorAware.java.tmpl) — The `AuditorAware` bean (in `permission/`).
+- [`SystemAuditorAware.java.tmpl`](./templates/SystemAuditorAware.java.tmpl) — Replaces `SecurityAuditorAware` when the service has no Spring Security (auth = no).
 - [`ExampleSpecifications.java.tmpl`](./templates/ExampleSpecifications.java.tmpl) — Reference implementation for Specification pattern.

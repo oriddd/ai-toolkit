@@ -9,7 +9,7 @@ applies_to: [event, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -29,6 +29,16 @@ src/main/java/<basePackage>/
 ```
 
 The `code-structure` ArchUnit test layers `..messaging.consumer..` and `..messaging.producer..` as separate slices.
+
+## Dependencies
+
+```xml
+<dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka</artifactId></dependency>   <!-- version from the Boot BOM -->
+<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-amqp</artifactId></dependency>   <!-- RabbitMQ instead of Kafka -->
+```
+
+The templates also need the `persistence` dependencies (outbox entity, `TransactionTemplate`). Boot 4 names the Kafka
+starter `spring-boot-starter-kafka` (`spring-boot-conventions` `references/spring-boot-4.md`).
 
 ## 1. Events as immutable records
 
@@ -56,21 +66,8 @@ public record InvoiceCreatedEvent(
 
 ## 2. Schema management
 
-| Format | Use when |
-| --- | --- |
-| **Avro + Schema Registry** | Strict schema evolution, long-lived events, large fanout. |
-| **Protobuf** | Polyglot consumers (Go/Rust), gRPC nearby. |
-| **JSON Schema** | Small org, no schema registry, accept evolution risk. |
-
-Rules:
-- Schemas are **forward + backward compatible** during normal evolution. A
-  consumer must be able to consume yesterday's event; a producer must be
-  able to produce today's event without breaking yesterday's consumer.
-- Add fields with **defaults**; never remove required fields without a major
-  version bump.
-- Schemas live in `messaging/schemas/` and are published as a separate
-  artifact (see `sdk-publishing`) so cross-team consumers can depend on a
-  versioned jar.
+Avro + Schema Registry, Protobuf or JSON Schema; always forward + backward compatible, shipped as a versioned artifact.
+Table and rules: [`references/schema-management.md`](./references/schema-management.md).
 
 ## 3. Producer — transactional outbox
 
@@ -228,7 +225,8 @@ through the same `StringSerializer` `KafkaTemplate`, so a consumer that
 deserializes to the event record (`JsonDeserializer`) makes every DLT/retry
 publish fail with `SerializationException` — the record is redelivered forever,
 the partition is blocked and nothing reaches the DLT. Configure both sides
-explicitly (topic and group come from properties, never literals):
+explicitly (topic and group come from properties, never literals). Merge under the existing top-level keys of
+`application.yaml` (one `spring:` block, with the §5 listener keys):
 
 ```yaml
 kafka:
@@ -260,7 +258,8 @@ to the DLT instead of looping or burning the retry topics.
 After **N retries** with exponential backoff, send to a `<topic>-dlt` (Spring Kafka's default suffix) and
 emit a **metric + alert** so an operator notices. Default values: 5 attempts, 1s initial delay, multiplier 2,
 max delay 30s — the `kafka.retry.*` keys of §4, applied by `@RetryableTopic` on the listener (non-blocking retry
-topics `<topic>-retry-0..n`, then `<topic>-dlt`; the `DlqHandler` template is the same recipe).
+topics `<topic>-retry-0..n`, then `<topic>-dlt`; the `DlqHandler` template is the same recipe). Merge `listener` under the
+`spring.kafka` block of §4:
 
 ```yaml
 spring:
@@ -290,6 +289,7 @@ Sections below keep their names and numbers but live in `references/` so this fi
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
+| §2 | schema formats and compatibility rules | choosing or evolving the event schema | [`schema-management.md`](./references/schema-management.md) |
 | §3 Outbox Performance & Clean-up, §5a, §5b, §7 | outbox indexes / partitioning / retention, exactly-once scope, retry topology and DLT headers, testing | tuning the outbox, choosing blocking vs non-blocking retries, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
 
 ## Do / Don't

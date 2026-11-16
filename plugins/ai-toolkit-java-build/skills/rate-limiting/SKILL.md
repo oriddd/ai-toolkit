@@ -31,6 +31,8 @@ expensive method. A Resilience4j `RateLimiter` instance is one shared limit per 
 limits calls per period, not concurrency (use a bulkhead for that, `resilience-patterns`). For per-client limits
 on inbound requests use Bucket4j (§2b, §3).
 
+Merge under the single top-level `resilience4j:` key of `application.yaml` (resilience, rate-limiting and client skills all add instances to it):
+
 ```yaml
 resilience4j:
   ratelimiter:

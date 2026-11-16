@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: []
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -81,6 +81,10 @@ as a question — hand over the task.
   language's code-review agent (`ai-toolkit-java-agents:code-review`, `ai-toolkit-python-agents:python-code-review`,
   `ai-toolkit-react-native-agents:react-native-code-review` — not the built-in `/code-review` skill);
   `general-purpose` only for generation that has no dedicated agent.
+- **Agent not installed.** Qualified agents come from other plugins (`ai-toolkit-<lang>-agents`, `ai-toolkit-docs`). When
+  the Agent tool does not list one, dispatch `general-purpose` with the same brief (§4), naming the skills it must apply
+  (for a test-writer the language's unit-test skill; for docs `context-maintenance`), or do that unit inline. Never invent a
+  qualified name that is not in the Agent tool's list.
 - Tell every test-writer in its brief: **do not run builds or tests — the main thread owns builds** (concurrent runs
   corrupt shared build output and coverage files).
 - A subagent can spawn subagents (one more level) when the Agent tool is available to it; if it is not, do the same
