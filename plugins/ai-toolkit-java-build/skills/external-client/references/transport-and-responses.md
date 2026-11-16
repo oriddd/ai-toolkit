@@ -240,7 +240,7 @@ public class FooResponseParser {
 
     /** Extracts a field value from nested products; empty if absent. */
     public Optional<String> parseFieldFromNested(final FooProductDto doc, final String fieldName) {
-        if (doc == null || StringUtils.isBlank(fieldName)) {
+        if (doc == null || fieldName == null || fieldName.isBlank()) {
             log.warn("Cannot parse field '{}' from null product", fieldName);
             return Optional.empty();
         }
@@ -248,7 +248,7 @@ public class FooResponseParser {
                 .orElse(Collections.emptyList()).stream()
                 .filter(Objects::nonNull)
                 .map(nested -> nested.getFieldValueAsStr(fieldName))
-                .filter(StringUtils::isNotBlank)
+                .filter(value -> value != null && !value.isBlank())
                 .findFirst();
     }
 }

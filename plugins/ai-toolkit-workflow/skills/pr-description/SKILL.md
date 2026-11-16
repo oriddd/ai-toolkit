@@ -10,7 +10,7 @@ depends_on: [git-commit-conventions]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # PR Description Skill
@@ -37,7 +37,7 @@ what it does differently now. Group related items. Aim for 5–12 bullets.
 
 ## Testing
 How was this verified? Unit tests, integration tests, manual steps, mocked dependencies.
-Mention test class names or scenarios if noteworthy.
+Mention test names (class, file or case) or scenarios if noteworthy.
 
 ## Notes  *(optional)*
 Breaking changes, follow-up tickets, known limitations, deployment steps, config changes.
@@ -93,6 +93,26 @@ When asked to update a PR description:
 
 ## 4. Examples
 
+### ✅ Complete description (all four required sections plus Notes)
+```
+## Problem
+Exports time out for accounts with more than 10k invoices because the request thread builds the whole file before replying.
+
+## Solution
+Moves the export to a background job; the request returns a job id and the client polls for the result.
+
+## Key Changes
+- `ExportJobRunner` — runs the export off the request thread and writes progress to the job record
+- `GET /exports/{id}` — returns job status and, when done, a download link
+
+## Testing
+- `ExportJobRunnerTest` covers success, empty account and failure mid-export
+- Manual: exported a 20k-invoice account locally; the download link returned the full file
+
+## Notes
+Follow-up: delete finished jobs after 7 days (TICKET-123).
+```
+
 ### ✅ Good Key Changes bullet
 ```
 - `OrderSyncOrchestrator` — new shared sync engine; replaces two divergent
@@ -126,7 +146,7 @@ Before calling the PR "described":
 - [ ] Solution section explains the approach at a glance
 - [ ] Every changed component has a bullet in Key Changes
 - [ ] Bullets say what the component *does differently*, not just what file changed
-- [ ] Testing section names at least the test class(es) added or the manual steps taken
+- [ ] Testing section names at least the tests (class, file or case) added or the manual steps taken
 - [ ] Any state machine, non-trivial algorithm, or data flow has a diagram or numbered walkthrough
 - [ ] Notes lists any breaking changes, config changes, or follow-up work
 - [ ] After the developer approved, the description was written to the PR (fields you did not change sent back unchanged, no conflict) — or handed to the developer to paste

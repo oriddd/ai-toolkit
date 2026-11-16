@@ -21,6 +21,9 @@ autoscaling:
 podDisruptionBudget:
   maxUnavailable: 1   # rendered only when autoscaling.minReplicas > 1
 
+appArmor:
+  enabled: true       # false on nodes without AppArmor (kind/Colima, RHEL/OpenShift, Bottlerocket): the kubelet rejects the pod
+
 topologySpread:
   enabled: true       # spread replicas across zones and nodes (ScheduleAnyway: a preference, never a scheduling blocker)
 

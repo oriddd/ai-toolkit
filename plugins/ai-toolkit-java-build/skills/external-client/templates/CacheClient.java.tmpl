@@ -31,7 +31,7 @@ class CacheClient {
     }
     void store(CacheEntryResponse entry) {
         call(() -> restClient.put().uri(props.entryPath(), entry.key()).body(entry)
-                .exchange((request, response) -> { failOnError(response.getStatusCode()); return null; }));
+                .exchange((request, response) -> { failOnError(response.getStatusCode()); return Boolean.TRUE; }));
     }
     void evict(String key) {
         call(() -> restClient.delete().uri(props.entryPath(), key)
@@ -39,7 +39,7 @@ class CacheClient {
                     if (!response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {   // evicting a miss is fine
                         failOnError(response.getStatusCode());
                     }
-                    return null;
+                    return Boolean.TRUE;
                 }));
     }
     private static void failOnError(HttpStatusCode status) {

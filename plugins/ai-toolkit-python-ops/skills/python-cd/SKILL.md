@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-ci, python-graceful-shutdown]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -144,7 +144,9 @@ spec:
 - PDB `minAvailable: 1`, rendered only when the api runs more than one replica (a PDB on one replica blocks drains).
 - ServiceMonitor scrapes `path: /metrics/` (the mounted app answers `/metrics` with a 307,
   `python-fastapi-conventions` §7). The worker has no Service: a PodMonitor scrapes `/metrics` on its `metrics`
-  port. Without the Prometheus Operator set `metrics.serviceMonitor.enabled=false` and `metrics.podMonitor.enabled=false`.
+  port. Both are rendered only when the cluster serves `monitoring.coreos.com/v1` (`.Capabilities.APIVersions.Has`), so
+  an install without the Prometheus Operator skips them instead of failing with "no matches for kind"; `helm template`
+  and `helm lint` do not query a cluster, so pass `--api-versions monitoring.coreos.com/v1` to render them in CI.
 - NetworkPolicy on the api pods: traffic only from the ingress controller's namespace, the monitoring namespace
   and pods of the same namespace. A NetworkPolicy cannot filter by path, so `/metrics` and `/docs` also stay off
   the Ingress rules (route only `/v1/...`).
@@ -153,7 +155,7 @@ spec:
 ```sh
 helm lint --strict helm-chart --set forwardedAllowIps=10.0.0.0/8
 helm template my-service helm-chart -n orders --set forwardedAllowIps=10.0.0.0/8 > /tmp/rendered.yaml
-kubectl apply --dry-run=server -f /tmp/rendered.yaml   # only against a dev cluster you are allowed to use
+kubectl apply -n orders --dry-run=server -f /tmp/rendered.yaml   # only against a dev cluster you are allowed to use
 ```
 `helm lint` does not evaluate `required` (it exits 0 without `forwardedAllowIps`); only `helm template` fails on a
 missing value. Run `helm template` with the values file of every environment in CI, so a missing `required` value

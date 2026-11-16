@@ -9,7 +9,7 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure]
 ships_templates: true
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 

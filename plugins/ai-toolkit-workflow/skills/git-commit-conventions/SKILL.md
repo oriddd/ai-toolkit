@@ -45,13 +45,13 @@ Use conventional commit prefixes from https://www.conventionalcommits.org/ and c
 | Prefix      | Usage                                                                 | Examples                                              |
 |-------------|-----------------------------------------------------------------------|-------------------------------------------------------|
 | `feat`      | New feature for the user                                              | `feat: add user authentication`                       |
-| `fix`       | Bug fix                                                               | `fix: resolve null pointer in login handler`          |
+| `fix`       | Bug fix                                                               | `fix: resolve crash in login handler on empty password`          |
 | `docs`      | Documentation only changes                                            | `docs: update README with new installation steps`     |
 | `style`     | Code formatting, whitespace, missing semi-colons (no logic change)    | `style: format CSS according to style guide`          |
-| `refactor`  | Code change that neither fixes a bug nor adds a feature               | `refactor: extract validation logic to helper class`  |
+| `refactor`  | Code change that neither fixes a bug nor adds a feature               | `refactor: extract validation logic to helper`        |
 | `perf`      | Performance improvement                                               | `perf: optimize database query with index`            |
 | `test`      | Adding or updating tests                                              | `test: add edge case tests for parser`                |
-| `build`     | Changes to build system or external dependencies                      | `build: upgrade spring-boot to <version>`             |
+| `build`     | Changes to build system or external dependencies                      | `build: upgrade web framework to <version>`           |
 | `ci`        | Changes to CI/CD configuration                                        | `ci: add SonarQube analysis to pipeline`              |
 | `chore`     | Other changes that don't modify src or test files                     | `chore: remove unused dependencies`                   |
 | `revert`    | Reverts a previous commit                                             | `revert: revert commit abc1234`                       |
@@ -88,7 +88,7 @@ Fixes: #123
 Before coding, mentally outline the logical commit sequence:
 ```
 1. feat: add domain model
-2. feat: add repository layer  
+2. feat: add repository layer
 3. feat: add service layer
 4. feat: add REST controller
 5. test: add integration tests
@@ -100,13 +100,13 @@ a separate `test` commit is for tests added on top (integration tests, extra edg
 ### Step 2: Stage Changes Incrementally
 ```bash
 # Stage only files for commit 1
-git add src/main/model/
+git add src/domain/user.<ext>
 
 # Verify what's staged
 git diff --cached
 
 # Commit
-git commit -m "feat: add User domain model"
+git commit -m "feat: add user domain model"
 ```
 
 ### Step 3: Verify It Builds
@@ -115,14 +115,14 @@ does not contain. Build the **committed snapshot** in a throw-away worktree (nev
 ```bash
 # After EACH commit, verify the commit itself builds (and the fast tests pass)
 git worktree add --detach ../verify-commit HEAD
-(cd ../verify-commit && mvn -q clean compile)   # Java
-#   python -m compileall src  (or: mypy / pytest -x)   # Python
-#   npm ci && npm run typecheck                        # TypeScript / React Native
-#   cargo build                                        # Rust
+(cd ../verify-commit && <build command>)
+#   Java:                  mvn -q clean compile
+#   Python:                uv run mypy && uv run pytest -x -m "not integration"
+#   TypeScript / RN:       npm ci && npm run typecheck
 git worktree remove --force ../verify-commit
 ```
-For a whole branch the developer can run `git rebase -x 'mvn -q clean compile' <base>` (developer-run: it rewrites
-history and the commit guard asks first).
+For a whole branch the developer can run `git rebase -x '<build command>' <base>` (e.g. `-x 'mvn -q clean compile'`,
+`-x 'npm run typecheck'`, `-x 'uv run mypy'`; developer-run: it rewrites history and the commit guard asks first).
 
 If compilation fails, the commit is incomplete. Add the missing dependency or split differently.
 
@@ -130,7 +130,7 @@ If compilation fails, the commit is incomplete. Add the missing dependency or sp
 Only when the developer asked for the amend, and never on a commit that is already pushed:
 ```bash
 # Fix and amend the last commit (before pushing)
-git add missing-file.java
+git add path/to/missing-file
 git commit --amend --no-edit
 ```
 
@@ -198,13 +198,13 @@ Committing incomplete work that breaks the build:
 ```
 ✅ Commit both together or commit in correct order:
 ```bash
-git add src/repository/UserRepository.java
+git add src/repository/user_repository.<ext>
 git commit -m "feat: add user repository"
 
-git add src/service/UserService.java
+git add src/service/user_service.<ext>
 git commit -m "feat: add user service"
 
-mvn clean compile  # ✅ Compiles!
+<build command>  # ✅ Compiles at each commit
 ```
 
 ### 3. Vague Messages
@@ -215,7 +215,7 @@ mvn clean compile  # ✅ Compiles!
 ```
 ✅ Be specific:
 ```bash
-✅ "fix: prevent NPE when user email is null"
+✅ "fix: prevent crash when user email is null"
 ✅ "refactor: extract duplicate validation logic to shared utility"
 ✅ "chore: remove deprecated config properties"
 ```
@@ -230,9 +230,9 @@ mvn clean compile  # ✅ Compiles!
 Before requesting review:
 - [ ] Each commit has a proper prefix
 - [ ] Each commit message is clear and explains WHY
-- [ ] Each commit compiles independently (developer-run: `git rebase -i --exec "mvn clean compile"` — interactive rebases are not for agents, and the commit guard asks before any rebase)
+- [ ] Each commit compiles independently (developer-run: `git rebase -x '<build command>' <base>` — it rewrites history, so agents run it only when asked, and the commit guard asks before any rebase)
 - [ ] Commits are in logical order
-- [ ] No "fix typo" or "oops" commits (squash them with `git rebase -i` — developer-run; agents never rewrite history unless asked)
+- [ ] No "fix typo" or "oops" commits (squash them with `git rebase -i` — developer-run, it needs an editor; agents never rewrite history unless asked)
 
 ## Tools
 

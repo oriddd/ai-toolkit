@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-My Spring Boot 3 service reads payment.base-url, payment.timeout and payment.retries with @Value in three different classes. Show me, in your reply, the Java code you would replace that with. Do not create files.
+My Spring Boot 3 service reads payment.base-url, payment.timeout and payment.retries with @Value in three different classes. Show me, in your reply, the Java code you would replace that with, and the pom.xml changes it needs (the pom already uses Lombok). Do not create files.

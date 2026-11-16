@@ -24,8 +24,10 @@ spec:
     spec:
       enableServiceLinks: false
       securityContext:
+        {{ "{{" }}- if .Values.appArmor.enabled {{ "}}" }}
         appArmorProfile:
           type: RuntimeDefault
+        {{ "{{" }}- end {{ "}}" }}
         fsGroup: {{fsGroup}}
         fsGroupChangePolicy: OnRootMismatch
         runAsGroup: {{runAsGroup}}

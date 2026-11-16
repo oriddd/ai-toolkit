@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [uml-diagram]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -31,7 +31,7 @@ points at a language skill, use the one for your stack:
 
 Must answer in under 60 seconds:
 1. What the service does (one paragraph).
-2. How to run it locally (`make up && make run`).
+2. How to run it locally — the one or two commands from the language's local-dev skill (table above), e.g. `make up && make run`, `uv run fastapi dev`, `npm start`.
 3. Where the API contract lives (link to the OpenAPI document, generated or hand-written — see the table above).
 4. Where the architecture overview lives (link to `docs/ARCHITECTURE.md`).
 5. Where ADRs live (link to `docs/adr/`).
@@ -96,7 +96,7 @@ Mermaid diagrams need neither step.
 ## 4. `docs/adr/` — Architecture Decision Records
 
 Capture *why*, not *what*. One file per decision, immutable once accepted (the only later edit is the `Status`
-line when it is superseded).
+line when it is superseded or deprecated).
 
 File name: `docs/adr/NNNN-<kebab-case-slug>.md`, numbered in sequence (e.g. `docs/adr/0007-use-kafka-for-events.md`);
 the title inside is `ADR-NNNN — <Title>`. Template — copy it to `docs/adr/template.md` when the repo is created:
@@ -123,14 +123,15 @@ A, B, C — each with one paragraph on why not.
 ```
 
 When to write an ADR:
-- Choosing one technology over another (Kafka vs RabbitMQ, JPA vs jOOQ, ORM vs query builder).
+- Choosing one technology over another (Kafka vs RabbitMQ, ORM vs query builder, Redux vs Zustand).
 - Introducing a new cross-cutting pattern.
 - Choosing a wire format.
 - Disabling a security default.
 - Deviating from a toolkit skill.
 
-ADRs are **append-only**. Superseding an old ADR creates a new one; the old ADR's `Status` line is changed to
-`SUPERSEDED by ADR-MMMM` and nothing else in it.
+ADRs are **append-only**. Superseding an old ADR creates a new one that names the old one in its Context; the old
+ADR's `Status` line is changed to `SUPERSEDED by ADR-MMMM` and nothing else in it. Check before finishing: `git diff`
+of an accepted ADR shows at most that one line.
 
 ## 5. `docs/SLO.md`
 

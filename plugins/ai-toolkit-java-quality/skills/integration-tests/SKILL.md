@@ -9,8 +9,8 @@ applies_to: [rest, event, monolith]
 depends_on: [component-tests]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Integration Tests Skill
@@ -84,6 +84,11 @@ names; the toolkit targets 3.5.)
     <artifactId>postgresql</artifactId>
     <scope>test</scope>
 </dependency>
+<dependency>                                    <!-- Kafka only -->
+    <groupId>org.testcontainers</groupId>
+    <artifactId>kafka</artifactId>
+    <scope>test</scope>
+</dependency>
 ```
 
 Preferred wiring (Boot 3.1+): `@ServiceConnection` derives the connection
@@ -129,10 +134,17 @@ static void props(DynamicPropertyRegistry reg) {
 
 Available canonical containers:
 - `PostgreSQLContainer`, `MySQLContainer`, `MongoDBContainer`
-- `KafkaContainer`, `RabbitMQContainer`
+- `KafkaContainer` — two classes with the same name: `org.testcontainers.containers.KafkaContainer` for
+  `confluentinc/cp-kafka` images, `org.testcontainers.kafka.KafkaContainer` for `apache/kafka` images (the Confluent
+  class rejects an Apache image at startup). Both work with `@ServiceConnection`. `RabbitMQContainer`
 - `LocalStackContainer` (for S3/SQS/SNS); `MinIOContainer` only with an image you pin and trust — MinIO stopped
   publishing community images in late 2025 (`local-dev-experience` §1), so prefer LocalStack for S3
 - `GenericContainer` for anything else
+
+A service that also has Kafka wired in needs a broker even for a database-only IT: without one, `KafkaAdmin` creating the
+retry topics blocks startup (about 40 s in the verified project). Add
+`spring.kafka.admin.auto-create=false`, `spring.kafka.listener.auto-startup=false` and a long `outbox.relay.delay` to such
+tests (about 10 s afterwards), or start the Kafka container too.
 
 Rules:
 - **One container per `@Testcontainers` class** when possible.
@@ -169,7 +181,7 @@ class FooClientIT {
 
     static WireMockServer wm;
 
-    @BeforeAll static void up()   { wm = new WireMockServer(0); wm.start(); }
+    @BeforeAll static void up()   { wm = new WireMockServer(options().dynamicPort().http2PlainDisabled(true)); wm.start(); }
     @AfterAll  static void down() { wm.stop(); }
 
     @DynamicPropertySource
@@ -199,6 +211,10 @@ class FooClientIT {
     }
 }
 ```
+
+`http2PlainDisabled(true)` is required with Boot's default JDK `HttpClient`: it offers an `h2c` upgrade on every cleartext
+request, and WireMock's HTTP/2 handling then drops the request body, so `withRequestBody(...)` verifications fail
+(verified: PUT body empty without it, present with it).
 
 WireMock can **record** responses from a real instance via
 `wm.startRecording(...)` — useful for capturing fixtures from a staging

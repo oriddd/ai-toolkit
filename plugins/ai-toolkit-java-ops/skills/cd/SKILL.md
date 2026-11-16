@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [ci]
 ships_templates: true
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -103,7 +103,7 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
    - Standard `app.kubernetes.io/*` labels and a release-scoped name (`fullname` helper), so two releases — or two
      services inside one umbrella chart — never collide.
    - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, `JWT_ISSUER_URI` / `JWT_AUDIENCE` from `jwt.*` (auth = yes), and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
-   - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation).
+   - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation), on by default and switched off with `appArmor.enabled: false`: on a node without AppArmor (kind on Colima/Docker Desktop, RHEL/OpenShift, Bottlerocket) the kubelet rejects every pod (`Cannot enforce AppArmor`) and the rollout never becomes Ready.
    - A `checksum/secret` pod annotation (sha256 of the rendered `secret.yaml`) when the chart renders the Secret, so
      changed credentials roll the pods — Spring reads env vars only at startup. With `credentials.existingSecret` the
      chart cannot see the content: let the secret operator (or a reloader controller) restart the Deployment on rotation.

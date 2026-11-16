@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [git-commit-conventions]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -198,6 +198,8 @@ into `main` if relevant.
 ✅ The git tag is the release's source of truth; the version file follows it.
 ✅ One bot generates the CHANGELOG (or, with no bot, only `[Unreleased]` is hand-edited); humans review.
 ✅ Conventional Commits enforced by CI, not by reviewer goodwill.
+✅ Every `uses:` in a release or lint workflow is pinned to a full commit SHA with the release in a comment; `actions/checkout` sets `persist-credentials: false` unless the job pushes.
+❌ Never use a floating tag (`@v4`, `@main`) in a workflow that holds a release token.
 ❌ Never tag the same SHA twice with different versions.
 ❌ Never publish a `1.x.y` after a `2.0.0` exists without explicit hotfix
 process (and an entry in CHANGELOG).

@@ -7,4 +7,4 @@ timeout_seconds: 600
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-SonarQube's quality gate fails on my Spring Boot pull request: new-code coverage is 72% against a gate of 80%, and there are 3 cognitive-complexity code smells in PricingService. Get the gate green. Show the code in your reply. Do not create files.
+SonarQube's quality gate fails on pull request #482 of my Spring Boot Maven service (Sonar project key shop-orders, base branch main): new-code coverage is 72% against a gate of 80%. Show me the exact commands you would use to read the gate result and the open new-code issues, and to re-run the analysis from my machine if that is needed. Do not run anything and do not create files.

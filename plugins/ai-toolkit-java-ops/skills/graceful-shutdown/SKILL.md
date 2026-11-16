@@ -201,7 +201,7 @@ class GracefulShutdownComponentTest {
             }
         });
         final SlowTestController controller = app.getBean(SlowTestController.class);
-        final int port = ((WebServerApplicationContext) app).getWebServer().getPort();
+        final int port = Objects.requireNonNull(((WebServerApplicationContext) app).getWebServer()).getPort();
         final String contextPath = app.getEnvironment().getProperty("server.servlet.context-path", "");
         final CompletableFuture<HttpResponse<String>> inFlight = HttpClient.newHttpClient().sendAsync(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + contextPath + "/test/slow")).build(),

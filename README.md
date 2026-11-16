@@ -41,12 +41,18 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 The Java skills' examples and templates use Lombok (`@Slf4j`, `@RequiredArgsConstructor`, `@Builder`, …). The
 `create-repo` and `ci` POM templates already include it; add it to an existing project before applying the skills.
 
-**Spring Boot 3.5 is a deliberate baseline, not an oversight.** Boot 4 is out, but the Java skills, templates and
-evals are built and tested on 3.5, and moving them is a reviewed migration of its own (Jackson 3, modular starters,
-removed APIs), not a version bump. Until that review lands, `create-repo` generates 3.5 and accepts 4.x only as an
-explicit opt-in. **Open-source support for 3.5 ended on 2026-06-30** ([support window](https://spring.io/projects/spring-boot#support)):
-new 3.5 patches need commercial support. Use the 3.5 baseline knowingly, with commercial support or a planned Boot 4 move;
-`create-repo` says so when it asks for the Boot version.
+**Spring Boot 3.5 is the default, tested baseline; Boot 4.1 is a verified second target.** `create-repo` generates 3.5 and
+accepts 4.x as a supported variant. A service rendered from the `ci` POM (Error Prone + NullAway at ERROR, JDK 21) with the
+exception-handling, permissions, `external-client` HTTP adapter, persistence (`BaseEntity`, auditing, outbox entity on Postgres),
+messaging (compile only), request-metrics, graceful-shutdown, component-test and `ArchitectureTest` templates was built on 3.5.16
+and on 4.1.2 and passed the same 26 tests on both. A few edits are dual-compatible and already in the templates; the rest
+differ on 4.x (Jackson 3, modular starters, renamed packages and auto-configuration classes, Hibernate 7 `hibernate-processor`,
+Testcontainers 2, `TestRestTemplate` module): see
+[`spring-boot-4.md`](./plugins/ai-toolkit-java-design/skills/spring-boot-conventions/references/spring-boot-4.md). Not verified
+on 4.x: Flyway on Postgres, outbound OAuth2 client, springdoc, openapi-generator, Resilience4j, Bucket4j, ShedLock, Kafka retry/DLT
+against a broker, the JPA metamodel generation, and the Spotless/SpotBugs/JaCoCo/PIT gates. **Open-source support for 3.5 ended on 2026-06-30**
+([support window](https://spring.io/projects/spring-boot#support)): new 3.5 patches need commercial support, so plan the
+Boot 4 move; `create-repo` says so when it asks for the Boot version.
 Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see
 [`docs/AUTHORING.md` §9](./docs/AUTHORING.md#9-freshness-policy).
 

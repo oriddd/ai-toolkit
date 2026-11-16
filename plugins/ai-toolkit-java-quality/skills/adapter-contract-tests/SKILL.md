@@ -218,6 +218,8 @@ many delegates are active.
 
 - TCK + in-memory adapter contracts run on every `mvn test`.
 - Real-backend adapter contracts run on `mvn verify` (Failsafe + Testcontainers).
+- The `external-client` HTTP cache adapter (`HttpCacheAdapter`) is an adapter too: the coverage check below fails until it has an
+  `HttpCacheAdapterContractTest` (an in-process fake server is enough, so Surefire runs it).
 - Treat a missing adapter contract as a **build gap**: an ArchUnit / custom
   check can assert that every class ending in `Adapter` has a matching
   `*ContractTest` (or `*ContractIT` for real-backend adapters).

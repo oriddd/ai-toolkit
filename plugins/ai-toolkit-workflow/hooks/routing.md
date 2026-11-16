@@ -10,6 +10,7 @@ load the task's skills before asking clarifying questions.
 | Creating a commit or splitting work into commits | `ai-toolkit-workflow:git-commit-conventions` |
 | Writing or updating a PR description | `ai-toolkit-workflow:pr-description` |
 | Releases, changelog, versioning | `ai-toolkit-workflow:release-versioning` |
+| ADRs, README/CONTRIBUTING, Mermaid diagrams, `context/` upkeep (needs `ai-toolkit-docs`; otherwise say it is not installed) | `ai-toolkit-docs:documentation-and-adr`, `ai-toolkit-docs:context-maintenance`, `ai-toolkit-docs:uml-diagram` |
 | Work spanning 2+ independent units (layers, tests, docs, review) | `ai-toolkit-workflow:parallel-delegation` |
 
 **Never commit, push or tag until the developer asks.** A best-effort hook asks for confirmation on direct git commands;

@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: 'void getTaxRate_'
+pattern: '\.getTaxRate\(\)'
 match: not_contains
 ---

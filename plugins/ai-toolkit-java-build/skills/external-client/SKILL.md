@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: true
-version: 2.2
+version: 2.3
 last_reviewed: 2026-11-15
 ---
 

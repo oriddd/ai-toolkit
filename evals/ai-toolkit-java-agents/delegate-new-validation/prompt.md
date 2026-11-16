@@ -7,4 +7,4 @@ timeout_seconds: 2400
 allowed_tools: [Agent, Skill, Read, Glob, Grep, Write, Edit]
 ---
 
-Use the new-validation agent: Add a validation rule to this service: an order's quantity must be between 1 and 100, and its sku must match the format ABC-12345 (three capital letters, a dash, five digits). Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.
+Use the new-validation agent: Add a validation rule to this service: an order's quantity must be between 1 and 100, and its sku must match the format ABC-12345 (three capital letters, a dash, five digits). Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization. Nobody can answer questions during this run: accept every default and write the files.

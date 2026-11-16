@@ -176,10 +176,16 @@ def main():
                 sys.exit(1)
             print("Eval suites are up to date.")
             return
+        kept = os.path.join(tmp, ".kept-results")
+        for d in glob.glob(os.path.join(evals, "*", "results")):
+            os.makedirs(os.path.join(kept, os.path.basename(os.path.dirname(d))), exist_ok=True)
+            shutil.move(d, os.path.join(kept, os.path.basename(os.path.dirname(d)), "results"))
         for d in glob.glob(os.path.join(evals, "*")):
             if os.path.basename(d) != "results":
                 shutil.rmtree(d)
-        shutil.copytree(tmp, evals, dirs_exist_ok=True)
+        shutil.copytree(tmp, evals, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".kept-results"))
+        for d in glob.glob(os.path.join(kept, "*", "results")):
+            shutil.move(d, os.path.join(evals, os.path.basename(os.path.dirname(d)), "results"))
     print("Eval suites written to evals/.")
 
 

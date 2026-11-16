@@ -7,4 +7,4 @@ timeout_seconds: 2400
 allowed_tools: [Agent, Skill, Read, Glob, Grep, Write, Edit]
 ---
 
-Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed.
+Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed. Nobody can answer questions during this run: accept every default you would propose (add what is missing, keep the existing folder layout), state each assumption in your final answer, and implement.

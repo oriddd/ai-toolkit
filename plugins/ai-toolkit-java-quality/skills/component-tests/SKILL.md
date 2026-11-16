@@ -9,7 +9,7 @@ applies_to: [rest, monolith]
 depends_on: [unit-tests]
 ships_templates: true
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -178,6 +178,11 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
       - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+      # Keep ALL SIX lines: the three names above are Boot 3.5, the three below are Boot 4. Each set is ignored by the other
+      # version, not an error. Dropping a set silently starts Hikari + H2 in the component-test context on that version.
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
   kafka:                              # services with messaging: no broker in component tests
     listener.auto-startup: false
     admin.auto-create: false

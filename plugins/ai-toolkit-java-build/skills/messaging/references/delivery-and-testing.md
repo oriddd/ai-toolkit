@@ -29,7 +29,7 @@ properties: those cannot list non-retryable exceptions (a missing header would b
 them with `doNotAutoCreateRetryTopics()`, so on a cluster without broker-side auto-creation the retry and DLT topics
 do not exist. `@RetryableTopic` creates them (`autoCreateTopics`, default `true`); where the platform forbids that,
 create the retry topics (`<topic>-retry-0`, `-1`, … one per retry) and `<topic>-dlt` together with the topic itself.
-The partition keeps moving while a record waits in a retry topic, so **per-key ordering is lost** for retried records.
+With a constant delay (multiplier 1) Spring Kafka reuses a single `<topic>-retry` topic instead of `-retry-0..n`; the indexed names appear with an exponential back-off (verified against Confluent and Apache Kafka images). The partition keeps moving while a record waits in a retry topic, so **per-key ordering is lost** for retried records.
 
 **Blocking (order-sensitive consumers).** When events of one aggregate must be applied in order, retry in place and
 dead-letter at the end — the partition waits, order holds:
@@ -100,6 +100,10 @@ CREATE TABLE shedlock (
   embedded brokers, so broker behaviour is tested only with Testcontainers.)
 - **Integration tests** use a **Testcontainer** (`KafkaContainer` /
   `RabbitMQContainer`) — see `integration-tests`.
+- Verified recipe (Postgres + Kafka containers, `@SpringBootTest`, `@ServiceConnection` on both, short `kafka.retry.*`
+  overrides): outbox row → relay → record with the `event-id` header → consumer effect, row marked published, ShedLock row
+  created; the same `event-id` twice → one effect; missing header or invalid JSON → `<topic>-dlt` without retries; a failing
+  effect → retry topics, then DLT, and no `processed_events` row left behind.
 - The outbox relay is unit-tested with a fake clock; the at-least-once
   consumer is integration-tested by publishing the same event twice and
   asserting one effect.

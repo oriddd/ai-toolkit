@@ -109,8 +109,8 @@ When adding a caching layer:
 
 #### Redis (New)
 - **Purpose**: Distributed caching
-- **Configuration**: `spring.data.redis.*` properties (Spring Boot 3+; the old `spring.redis.*` keys are ignored) / `cache.redis.*` settings
-- **Usage**: `@Cacheable` annotations (Spring), or via the cache port — never the client directly
+- **Configuration**: the settings the code reads — Java `spring.data.redis.*` (Spring Boot 3+; the old `spring.redis.*` keys are ignored), Python `REDIS_URL` in the settings class, React Native none (no client-side Redis)
+- **Usage**: the entry point code must use — the project's cache port or wrapper, never the client directly
 ```
 
 ### 4. Sprint Completion
@@ -282,10 +282,8 @@ How it fits into the system:
 
 ### Usage
 Code examples showing how to use it:
-\```java
-public class Example {
-    // Code example (use the project's language)
-}
+\```<language>
+<code example in the project's language>
 \```
 
 ### Configuration
@@ -438,7 +436,7 @@ repos:
 #!/bin/bash
 # scripts/context-reminder.sh (chmod +x) — never fails the commit, only reminds
 
-if git diff --cached --name-only | grep -qE "^(src/main/java|src|app|lib)/"; then
+if git diff --cached --name-only | grep -qE "^(src|app|lib)/"; then
     echo "📝 Remember to update context/ documentation if needed!"
     echo "   - architecture.md for new components"
     echo "   - code-standards.md for new patterns"

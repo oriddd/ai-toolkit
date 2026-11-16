@@ -2,7 +2,7 @@
 
 Back to [`SKILL.md`](../SKILL.md). Every file of `helm-chart/`, verbatim; with `forwardedAllowIps` set it passes
 `helm lint --strict` and `helm template` as written (`helm lint` does not enforce the `required` value; only
-`helm template` fails without it). Replace `my-service` in `Chart.yaml`, `values.yaml` and the commands
+`helm template` fails without it; the two monitors render only on a cluster, or with `--api-versions monitoring.coreos.com/v1`). Replace `my-service` in `Chart.yaml`, `values.yaml` and the commands
 (`my-service-worker`, `my_service.liveness`) with the project's names; change nothing else without a reason.
 
 ## `Chart.yaml`
@@ -414,7 +414,7 @@ spec:
 ## `templates/servicemonitor.yaml`
 
 ```yaml
-{{- if .Values.metrics.serviceMonitor.enabled }}
+{{- if and .Values.metrics.serviceMonitor.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -433,7 +433,7 @@ spec:
 ## `templates/podmonitor.yaml`
 
 ```yaml
-{{- if and .Values.worker.enabled .Values.metrics.podMonitor.enabled }}
+{{- if and .Values.worker.enabled .Values.metrics.podMonitor.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:

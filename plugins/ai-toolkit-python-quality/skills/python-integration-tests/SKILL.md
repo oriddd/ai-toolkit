@@ -9,7 +9,7 @@ applies_to: [rest, worker]
 depends_on: [python-unit-tests, python-persistence]
 ships_templates: false
 hitl: false
-version: 1.0
+version: 1.1
 last_reviewed: 2026-11-15
 ---
 
@@ -128,7 +128,8 @@ def run_migrations_online() -> None:
 ```
 
 Read the URL in `env.py` from the same settings class the app uses, and only when no connection was
-passed (`if config.attributes.get("connection") is None: config.set_main_option("sqlalchemy.url", ...)`).
+passed (`if config.attributes.get("connection") is None: config.set_main_option("sqlalchemy.url", ...)`); render the
+URL with `url.render_as_string(hide_password=False)`, because `str(url)` masks the password as `***`.
 Move the generated module-level `fileConfig(config.config_file_name)` into that CLI branch too: run from a test,
 it would reset logging (`disable_existing_loggers=True`) in the middle of the session.
 
@@ -205,6 +206,23 @@ handled once.
 ## 4. Other dependencies
 HTTP downstreams are stubbed with `respx` (unit/integration) or a WireMock container; brokers and caches
 use their testcontainers module. Use `wait_for_logs`/the module's readiness strategy, never `sleep`.
+
+Kafka: import from `testcontainers.community.kafka` (`testcontainers.kafka` is deprecated); it needs no extra beyond
+`testcontainers`. KRaft mode starts without ZooKeeper:
+```python
+from testcontainers.community.kafka import KafkaContainer
+
+@pytest.fixture(scope="session")
+def bootstrap_servers() -> Iterator[str]:
+    with KafkaContainer().with_kraft() as kafka:
+        yield kafka.get_bootstrap_server()
+```
+Give every test its own consumer `group_id` (and `auto_offset_reset="earliest"`) so one test's committed offsets never
+hide another's records. A worker built on `AppSettings` takes the database password from `DB_PASSWORD`, not from the
+URL: `monkeypatch.setenv("DB_URL", postgres_url)` and `monkeypatch.setenv("DB_PASSWORD", "<the container's password>")`
+(`PostgresContainer` defaults to `test`). The end-to-end test commits an order, runs `run_relay` and the consumer loop on the
+real containers, waits (polling with a deadline, not `sleep`) for the handler's row, then sets `stop` and asserts both loops
+return within a few seconds and left their heartbeat files (`monkeypatch.setattr(liveness, "HEARTBEAT_DIR", tmp_path)`).
 
 ## 5. Speed and isolation
 Reuse the session container, isolate tests with transaction rollback or per-test schema, and run

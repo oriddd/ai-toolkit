@@ -24,7 +24,8 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 1. `ai-toolkit-java-quality:refactoring-playbook` —
    identify which anti-patterns are present and the migration path for each.
 2. `ai-toolkit-java-quality:quality-review` — SOLID audit
-   before and after each refactoring step.
+   before and after each refactoring step. Load 1 and 2 with the Skill tool before you read or edit any class: the audit's
+   'before' pass cannot happen after the first edit.
 3. Then, for each anti-pattern found, apply the target skill:
 
 | Anti-pattern | Target skill |

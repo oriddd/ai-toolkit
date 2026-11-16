@@ -81,13 +81,13 @@ graph TB
 ```mermaid
 graph TB
     subgraph system["📦 System Name"]
-        web["🌐 Web Application<br/><i>Spring Boot</i>"]
+        web["🌐 Web Application<br/><i>HTTP service (e.g. Spring Boot, FastAPI)</i>"]
         db[("💾 Database<br/><i>PostgreSQL</i>")]
-        worker["⚙️ Background Worker<br/><i>Java</i>"]
+        worker["⚙️ Background Worker<br/><i>Worker process</i>"]
     end
     
     User -->|"Uses<br/>HTTPS"| web
-    web -->|"Reads/Writes<br/>JDBC"| db
+    web -->|"Reads/Writes<br/>SQL"| db
     web -->|"Enqueues jobs<br/>RabbitMQ"| worker
     
     style system fill:#e1f5ff,stroke:#1168bd

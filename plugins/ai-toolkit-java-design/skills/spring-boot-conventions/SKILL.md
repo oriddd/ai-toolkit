@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure]
 ships_templates: false
 hitl: false
-version: 1.1
+version: 1.2
 last_reviewed: 2026-11-15
 ---
 
@@ -169,6 +169,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
+| Boot 4.x | Verified second target: what compiles unchanged, the dual-compatible changes, the 4.x variants (Jackson 3, modular starters, Hibernate 7, Testcontainers 2) and what is not verified | the project runs Spring Boot 4.x | [`spring-boot-4.md`](./references/spring-boot-4.md) |
 | §7, §7b, §8 | `@Async` with a named `TaskExecutor` (rejection policy, shutdown draining, interrupts, virtual threads); `@Scheduled` jobs (config-driven interval, never throws, metrics, ShedLock); caching (`CachePort` default, `@Cacheable` shortcut, per-cache TTL, self-invocation) | adding async work, a scheduled job or a cache | [`async-scheduling-and-caching.md`](./references/async-scheduling-and-caching.md) |
 
 ## 9. Idempotency

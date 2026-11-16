@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-15
 ---
 
 # Code Hygiene Skill
@@ -54,7 +54,7 @@ such a test; every other test must justify itself the same way.
 ## 3. Dead and speculative code
 
 - No unused imports, parameters, fields, methods, classes, config keys or dependencies you introduced.
-- No abstraction for a second implementation that does not exist (see `pattern-selection` (Java; the principle applies to every language): smallest pattern that fits).
+- No abstraction for a second implementation that does not exist (use the smallest pattern that fits; Java projects load `pattern-selection`, Python and React Native have no such skill — apply the same rule from their `*-code-structure` skill).
 - No flags, hooks or generic parameters "for later".
 - No catch-and-ignore, no swallowed exceptions, no leftover `printStackTrace` / `print` / `console.log`.
 
@@ -75,11 +75,11 @@ such a test; every other test must justify itself the same way.
 
 ## Anti-patterns
 
-- ❌ Javadoc/docstring on every method "for completeness".
+- ❌ Javadoc / docstring / JSDoc on every method "for completeness".
 - ❌ A test per getter to hit a coverage number.
 - ❌ Keeping a redundant test "just in case".
 - ✅ Small diff, self-explanatory names, each test pins a behaviour.
 
 ## Cross-references
 
-`completion-gate`, and per language its testability, unit-test and review skills (Java `testable-code-principles`, `unit-tests`, `quality-review`; `python-unit-tests`, `python-static-analysis`; `react-native-unit-tests`, `react-native-static-analysis`).
+`completion-gate` (same plugin; with this plugin alone no other skill is needed), and per language its testability, unit-test and review skills (Java `testable-code-principles`, `unit-tests`, `quality-review`; `python-unit-tests`, `python-static-analysis`; `react-native-unit-tests`, `react-native-static-analysis`).

@@ -59,6 +59,34 @@ verified against the files and fixed, each change proven by a build, type-check 
     per key skill; Spring Boot 3.5's end of OSS support (2026-06-30) is stated in README and `create-repo`; the
     pre-push hook works without the private blocklist; CI actions bumped with Dependabot; `check-versions.sh` counts
     `plugin.json` description/dependency changes.
+- **Executed, not just compiled** (Docker via Colima, a throwaway `kind` cluster; the shared cluster was never touched):
+  - Java: 28 integration tests on real PostgreSQL, Kafka and Redis; the image runs non-root with a read-only root
+    filesystem and drains an in-flight request on `docker stop`; the Helm chart installs on `kind`, rolls on a Secret
+    change and served a looping client with 0 failures across two rollouts. Defects found by running and fixed: the
+    chart's hard-coded AppArmor profile made the kubelet reject every pod (`appArmor.enabled` toggle); WireMock with
+    Boot's default HTTP client sent an empty PUT body (`http2PlainDisabled`); a skill example used `StringUtils`
+    without its dependency; a database-only integration test blocked ~45 s on an absent Kafka broker; the Kafka
+    container class and retry-topic naming were undocumented.
+  - Python: 22 integration tests on real PostgreSQL and Kafka (two relays keep per-aggregate order; the test fails
+    without the lock); the image builds and drains on `docker stop`; the `python-cd` chart installs on `kind` with its
+    migration hook (a failed migration leaves the old pods serving). Defects fixed: the chart failed to install on a
+    cluster without Prometheus CRDs (monitors are now guarded by capability); `testcontainers.kafka` is deprecated
+    (use `testcontainers.community.kafka`); `str(url)` masks the Alembic password. Unproven: HPA scaling, NetworkPolicy
+    enforcement, the real `ghcr.io` pull, one transient 503 in 917 requests during one of three rolling updates.
+- **Spring Boot 4.1.2 is a verified second target** (3.5 stays the default): the same rendered service passes the same
+  26 tests on both (component tests, ArchUnit, default-profile boot, Postgres IT); the differences are in
+  `spring-boot-conventions/references/spring-boot-4.md`. A real defect surfaced: with only the 3.5 class names, Boot 4
+  silently started a database in component tests (the skill now lists both name sets). Not built on 4.x: Flyway,
+  outbound OAuth2, springdoc, openapi-generator, Resilience4j, Bucket4j, ShedLock, Kafka retry against a broker.
+- **Neutral plugins** are language-neutral: Java commands and names are per-language rows (Java / Python / React
+  Native) in `documentation-and-adr`, `context-maintenance`, `git-commit-conventions`, `parallel-delegation`,
+  `pr-description`, `uml-diagram`, `completion-gate` and `update-context`; their examples obey their own rules (commit
+  subjects run through `commit-msg.sh`, workflows pass `actionlint`, Mermaid parses); the quality plugin says what to
+  do when installed alone.
+- **Evals measure quality:** 16 behaviour cases got graders for rules a model does not follow unprompted (graders the
+  baseline passes were removed; lifts after pruning are optimistic because they were scored on the same runs);
+  `sonar-quality-gate` got a self-contained prompt; four graders threw on a JavaScript-regex incompatibility; the
+  build no longer deletes eval results; `new-validation` now loads `validation-pattern`.
 - **Final review (Java 7.5, Python 7.5, React Native 7.5, repo 7.5), every finding fixed with a before/after proof:**
   - Java: the static-analysis pom block is well-formed XML (a `--` inside a comment made Maven reject it); generated
     component tests set an issuer URI; `application-local.yaml`, the README and the Helm chart carry `JWT_ISSUER_URI` /

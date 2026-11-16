@@ -20,10 +20,11 @@ BEHAVIOUR = {
     "ai-toolkit-java-design": {
         "spring-boot-conventions": (
             "My Spring Boot 3 service reads payment.base-url, payment.timeout and payment.retries with @Value in three "
-            "different classes. Show me, in your reply, the Java code you would replace that with. Do not create files.",
-            [("configuration-properties", r"@ConfigurationProperties"), ("record", r"record\s+\w*Properties"),
-             ("validated", r"@Validated"), ("registered", r"@ConfigurationPropertiesScan|@EnableConfigurationProperties"),
-             ("duration-type", r"Duration\s+\w*[tT]imeout"), ("keys-in-constants", r"ConfigurationConstants")]),
+            "different classes. Show me, in your reply, the Java code you would replace that with, and the pom.xml "
+            "changes it needs (the pom already uses Lombok). Do not create files.",
+            [("keys-in-constants", r"ConfigurationConstants"),
+             ("constant-prefix", r"prefix\s*=\s*ConfigurationConstants\.\w+"),
+             ("notnull-duration", r"@NotNull\s+Duration")]),
     },
     "ai-toolkit-java-quality": {
         "unit-tests": (
@@ -38,10 +39,8 @@ BEHAVIOUR = {
             "            case SILVER -> amount.multiply(new BigDecimal(\"0.05\"));\n"
             "            case NONE -> BigDecimal.ZERO;\n"
             "        };\n    }\n}\n```",
-            [("naming", r"void\s+[a-z]\w*_[a-zA-Z]\w*_[a-zA-Z]\w*\s*\("), ("assertj", r"assertThat\("),
-             ("assertj-throws", r"assertThatThrownBy|assertThatIllegalArgumentException"),
-             ("mockito-extension", r"@ExtendWith\(MockitoExtension\.class\)"),
-             ("every-tier", r"(?=[\s\S]*GOLD)(?=[\s\S]*SILVER)(?=[\s\S]*NONE)")]),
+            [("naming", r"void\s+[a-z]\w*_[a-zA-Z]\w*_[a-zA-Z]\w*\s*\("),
+             ("case-record", r"record\s+\w*Case\b")]),
     },
     "ai-toolkit-workflow": {
         "git-commit-conventions": (
@@ -61,15 +60,16 @@ MORE = {
         "input-validation": (
             "In my Spring Boot 3 API, CreateOrderRequest has orderDate, deliveryDate and sku. deliveryDate must be after "
             "orderDate, and sku must be a code the injected SkuCatalogue bean recognises. Add these validation rules." + TAIL,
-            [("constraint-validator", r"ConstraintValidator<"), ("custom-message-safe", r"disableDefaultConstraintViolation|^(?![\s\S]*buildConstraintViolationWithTemplate)"),
-             ("rule-bean", r"class\s+\w+Rule\b"), ("cross-field-validator", r"@InitBinder|implements\s+(org\.springframework\.validation\.)?Validator\b"),
-             ("constraint-annotation", r"@Constraint\(")]),
+            [("scoped-initbinder", r"@InitBinder\(\s*\x22\w+\x22\s*\)"),
+             ("validation-config", r"class\s+ValidationConfig"),
+             ("reject-value", r"\.rejectValue\("),
+             ("package-layout", r"validation(?:/|\.)(?:annotation|validator|rule|config)\b")]),
         "persistence": (
             "Add persistence for an Invoice (number, customerId, amount, status) to my Spring Boot 3 service: the JPA "
             "entity, the Spring Data repository with a query listing a customer's invoices, and the database migration." + TAIL,
-            [("optimistic-lock", r"@Version"), ("paged-query", r"Pageable|Page<|Slice<"),
-             ("flyway", r"V0*\d+__\w+\.sql"), ("auditing", r"@CreatedDate|@LastModifiedDate|AuditingEntityListener"),
-             ("entity", r"@Entity")]),
+            [("assigned-uuid-id", r"@GeneratedValue", "not_contains"),
+             ("extends-base-entity", r"extends\s+BaseEntity"),
+             ("flyway-three-digit", r"V0\d{2}__\w+\.sql"),]),
         "messaging": (
             "When an order is created in my Spring Boot 3 order service, publish an OrderPlaced event to Kafka; the "
             "shipping service consumes it. Make sure no event is lost if the database commit succeeds, and that "
@@ -97,8 +97,10 @@ MORE = {
         "api-design": (
             "Design the REST API for invoices in our Spring Boot service: list a customer's invoices, get one invoice, "
             "and export an invoice as PDF. Give the endpoints with methods, status codes and an example error body.",
-            [("versioned-uri", r"/api/v1/"), ("export-sub-resource", r"/invoices/\{\w+\}/exports"),
-             ("paginated", r"page=|size=|cursor"), ("problem-detail", r"ProblemDetail|problem\+json")]),
+            [("export-sub-resource", r"/invoices/\{\w+\}/exports"),
+             ("async-operation-location", r"Operation-Location"),
+             ("idempotency-key", r"Idempotency-Key"),
+             ("no-verb-export-url", r"(?:^|\n)\W*(?:GET|POST)\s+\S*/invoices/\{\w+\}/(?:export|pdf)\b(?!s)", "not_contains")]),
         "strategy-registry-pattern": (
             "My Spring Boot 3 PaymentService has a growing if/else on paymentType (CARD, PAYPAL, BANK_TRANSFER) and a new "
             "type arrives every quarter. Restructure it so adding a type never touches the dispatching code." + TAIL,
@@ -108,9 +110,8 @@ MORE = {
         "domain-modeling": (
             "Model the Order aggregate for our Spring Boot service: order lines, a total in Money, an OrderPlaced domain "
             "event when the order is placed, and a rule that a placed order cannot get new lines." + TAIL,
-            [("id-value-object", r"record\s+OrderId"), ("money-value-object", r"record\s+Money"),
-             ("domain-event", r"record\s+OrderPlaced"), ("event-registration", r"registerEvent|AbstractAggregateRoot|domainEvents"),
-             ("invariant", r"throw\s+new\s+\w+Exception")]),
+            [("clock-injected", r"Instant\.now\(\s*clock\s*\)"),
+             ("event-implements-domain-event", r"record\s+OrderPlaced\w*\([^)]*\)\s*implements\s+DomainEvent"),]),
         "feature-flags": (
             "We want to ship a new invoice-pricing algorithm in our Spring Boot service switched off, then enable it for "
             "some tenants without redeploying, and remove the old algorithm later." + TAIL,
@@ -125,24 +126,25 @@ MORE = {
         "graceful-shutdown": (
             "During Kubernetes rolling updates our Spring Boot 3.5 pods drop in-flight HTTP requests and @Async tasks, and "
             "the Kafka listener in the same service sometimes stops mid-batch. The pod spec has "
-            "terminationGracePeriodSeconds: 30. Show the application and Kubernetes configuration that fixes it.",
-            [("native-sleep", r"preStop:\s*\n\s*sleep:"), ("kafka-container-timeout", r"setShutdownTimeout\("),
-             ("budgeted-grace", r"terminationGracePeriodSeconds:\s*(?:8[5-9]|9\d|[1-9]\d{2,})\b"),
-             ("budget-sum", r"\d+(?:\s*s)?\s*\+\s*[A-Za-z ]{0,25}\d+(?:\s*s)?\s*\+\s*[A-Za-z ]{0,25}\d+"),
-             ("per-phase", r"(?:[Ee]ach|EACH|[Pp]er|[Ee]very)\s+(?:waiting\s+|lifecycle\s+|shutdown\s+)*phase"),
-             ("no-invented-property", r"listener\.shutdown-timeout\s*[=:]|listener:\s*\n\s*shutdown-timeout:", "not_contains")]),
+            "terminationGracePeriodSeconds: 30. Show the application and Kubernetes configuration that fixes it, and a "
+            "test that proves the shutdown behaviour.",
+            [
+             ("readiness-refusing", r"REFUSING_TRAFFIC"),
+             ("no-thread-sleep", r"Thread\.sleep\(", "not_contains"),]),
     },
     "ai-toolkit-java-quality": {
         "component-tests": (
             "Write a component test for my Spring Boot 3 service: boot the whole application, call POST /orders over HTTP, "
-            "and replace the downstream InventoryClient with a deterministic fake." + TAIL,
-            [("shared-test-config", r"ComponentTestConfiguration"), ("random-port", r"@LocalServerPort|RANDOM_PORT"),
-             ("url-format", r"MessageFormat"), ("http-client", r"TestRestTemplate|RestClient|WebTestClient"),
-             ("test-profile", r"@ActiveProfiles")]),
+            "and replace the downstream InventoryClient with a deterministic fake. The service stores orders through a "
+            "Spring Data JPA OrderRepository on PostgreSQL, and the test must run without a database: show the test "
+            "profile yaml as well." + TAIL,
+            [("shared-test-config", r"ComponentTestConfiguration"), ("url-format", r"MessageFormat"),
+             ("both-datasource-excludes", r"(?=[\s\S]*org\.springframework\.boot\.jdbc\.autoconfigure\.DataSourceAutoConfiguration)(?=[\s\S]*org\.springframework\.boot\.autoconfigure\.jdbc\.DataSourceAutoConfiguration)"),
+             ("noop-transaction-manager", r"AbstractPlatformTransactionManager")]),
         "integration-tests": (
             "Write an integration test for my Spring Boot 3 InvoiceRepository against a real PostgreSQL." + TAIL,
-            [("tagged", r"@Tag\(\"integration\"\)"), ("it-suffix", r"class\s+\w+IT\b"),
-             ("container", r"PostgreSQLContainer"), ("wiring", r"@ServiceConnection|@DynamicPropertySource")]),
+            [("tagged", r"@Tag\(\x22integration\x22\)"),
+             ("no-ddl-auto-create", r"ddl-auto\s*[=:]\s*(?:create|create-drop|update)\b", "not_contains")]),
     },
     "ai-toolkit-workflow": {
         "pr-description": (
@@ -191,9 +193,10 @@ REACT_NATIVE = {
              ("unused-directives", r"reportUnusedDisableDirectives")]),
         "react-native-e2e-tests": (
             "Write a Maestro end-to-end flow for the sign-up journey of our React Native app." + TAIL_RN,
-            [("clean-state", r"clearState:\s*true"), ("clear-keychain", r"clearKeychain:\s*true"), ("stable-ids", r"id:\s*[\x22\x27]?signup-"),
-             ("waits", r"extendedWaitUntil|assertVisible"), ("env-secrets", r"\$\{MAESTRO_"),
-             ("subflows", r"runFlow")]),
+            [
+             ("env-secrets", r"\$\{MAESTRO_"),
+             ("critical-tag", r"tags:\s*\[?\s*critical"),
+             ("subflows-dir", r"\.maestro/subflows/"),]),
     },
     "ai-toolkit-react-native-design": {
         "react-native-state-and-data": (
@@ -257,9 +260,9 @@ PYTHON = {
         "python-security": (
             "Protect POST /v1/orders in my Python FastAPI service with JWT bearer tokens from our Keycloak; only callers "
             "with scope orders:write may create, and customers may read only their own orders." + TAIL_PY,
-            [("alg-allowlist", r"algorithms\s*=\s*(\[|[A-Z_]*ALG)"), ("www-authenticate", r"WWW-Authenticate"),
-             ("bearer-no-autoerror", r"HTTPBearer\(auto_error=False\)"), ("required-claims", r'"require"\s*:'),
-             ("ownership-not-found", r"NotFoundError")]),
+            [("jwks-outage-503", r"PyJWKClientConnectionError"),
+             ("ownership-not-found", r"NotFoundError"),
+             ("scope-dependency-class", r"class\s+RequireScope"),]),
         "python-messaging": (
             "Publish an OrderPlaced event to Kafka when an order is created in my Python FastAPI/SQLAlchemy service, and "
             "consume it in the billing service." + TAIL_PY,
@@ -289,8 +292,9 @@ PYTHON = {
         "python-code-structure": (
             "Lay out a new Python 3.12 FastAPI orders service: folders, settings, and how services get their "
             "collaborators." + TAIL_PY,
-            [("src-layout", r"src/\w+/"), ("settings", r"BaseSettings"), ("secret", r"SecretStr"),
-             ("protocol", r"Protocol"), ("import-linter", r"import-linter|lint-imports|importlinter")]),
+            [("operations-layer", r"operations/"),
+             ("frozen-settings", r"SettingsConfigDict\([^)]*frozen\s*=\s*True"),
+             ("uv-build-package", r"uv_build|uv init --package"),]),
         "python-fastapi-conventions": (
             "Add a paginated GET /orders endpoint to my Python FastAPI service." + TAIL_PY,
             [("query-model", r"Annotated\[\w+,\s*Query\(\)\]"), ("bounded", r"le\s*=\s*\d+"), ("cursor", r"next_cursor"),
@@ -373,16 +377,16 @@ NEUTRAL = {
             "        assertEquals(new BigDecimal(\"117.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"100.00\")));\n    }\n"
             "    @Test void total_200_returns234() {\n"
             "        assertEquals(new BigDecimal(\"234.00\"), new OrderTotals(new BigDecimal(\"0.17\")).total(new BigDecimal(\"200.00\")));\n    }\n}\n```",
-            [("no-internal-javadoc", r"/\*\*", "not_contains"), ("getter-test-removed", r"void getTaxRate_", "not_contains"),
-             ("parameterised", r"@ParameterizedTest"), ("no-inline-what-comments", r";\s*//\s*add tax|\n\s*//\s*calculate total", "not_contains")]),
+            [("no-internal-javadoc", r"/\*\*", "not_contains"),
+             ("getter-test-removed", r"\.getTaxRate\(\)", "not_contains")]),
         "sonar-quality-gate": (
-            "SonarQube's quality gate fails on my Spring Boot pull request: new-code coverage is 72% against a gate of "
-            "80%, and there are 3 cognitive-complexity code smells in PricingService. Get the gate green." + TAIL,
-            [("token-from-env", r"SONAR_TOKEN"),
-             ("confirm-before-upload", r"[Cc]onfirm|go-ahead|your (?:OK|approval)|before I (?:run|upload|push)"),
-             ("not-verified-reporting", r"not (?:yet )?verified"),
-             ("no-nosonar-usage", r"[;{)]\s*//\s*NOSONAR", "not_contains"),
-             ("no-exclusions-usage", r"sonar\.(?:coverage\.)?exclusions\s*[=:>]|<sonar\.(?:coverage\.)?exclusions>", "not_contains")]),
+            "SonarQube's quality gate fails on pull request #482 of my Spring Boot Maven service (Sonar project key "
+            "shop-orders, base branch main): new-code coverage is 72% against a gate of 80%. Show me the exact commands "
+            "you would use to read the gate result and the open new-code issues, and to re-run the analysis from my "
+            "machine if that is needed. Do not run anything and do not create files.",
+            [("no-token-on-cmdline", r"-Dsonar\.(?:token|login)=[\x22$\w]", "not_contains"),
+             ("pr-scanner-params", r"sonar\.pullRequest\.key"),
+             ("new-code-issues", r"inNewCodePeriod=true")]),
     },
     "ai-toolkit-workflow": {
         "parallel-delegation": (
@@ -425,18 +429,18 @@ REACT_NATIVE_2 = {
         "react-native-app-config-and-updates": (
             "Set up app.config.ts with dev/preview/production variants and a GitHub Actions workflow that publishes EAS "
             "updates for our Expo SDK 58 React Native app." + TAIL_RN,
-            [("app-variant", r"process\.env\.APP_VARIANT"), ("fingerprint", r"policy:\s*[\x22\x27]fingerprint"),
-             ("update-environment", r"eas update[\s\S]{0,200}--environment"), ("expo-doctor", r"expo-doctor"),
-             ("no-auto", r"eas update --auto", "not_contains")]),
+            [
+             ("fingerprint-compare-gate", r"fingerprint:compare"),
+             ("gradual-rollout", r"--rollout-percentage"),
+             ("no-appversion-policy", r"(?:^|\n)\s*runtimeVersion:\s*(?:[\x22\x27]\d|\{\s*policy:\s*[\x22\x27]appVersion)", "not_contains")]),
     },
     "ai-toolkit-react-native-build": {
         "react-native-permissions-and-push": (
             "Add push notification registration and a 'scan receipt' camera button to our Expo React Native app, and "
             "show how the backend sends the push." + TAIL_RN,
-            [("can-ask-again", r"canAskAgain"), ("open-settings", r"openSettings\("),
-             ("channel", r"setNotificationChannelAsync\("), ("project-id", r"getExpoPushTokenAsync\(\{\s*projectId"),
-             ("receipts", r"getReceipts|getPushNotificationReceiptsAsync"),
-             ("no-deprecated-alert", r"shouldShowAlert:", "not_contains")]),
+            [("can-ask-again", r"canAskAgain"),
+             ("microphone-off", r"microphonePermission:\s*false|blockedPermissions"),
+             ("token-rotation", r"addPushTokenListener"),]),
     },
 }
 

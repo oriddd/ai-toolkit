@@ -21,11 +21,13 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 
 1. `ai-toolkit-java-build:input-validation` — the full
    pattern: annotation → validator → rule bean.
-2. `ai-toolkit-java-build:exception-handling` — the
+2. `ai-toolkit-java-build:validation-pattern` — the foundational
+   separation of concerns (annotation, validator, rule bean), messaging and test strategy that `input-validation` applies.
+3. `ai-toolkit-java-build:exception-handling` — the
    400 ProblemDetail mapping must be in place.
-3. `ai-toolkit-java-quality:unit-tests` — rule bean (plain
+4. `ai-toolkit-java-quality:unit-tests` — rule bean (plain
    POJO), validator (mock ConstraintValidatorContext).
-4. `ai-toolkit-java-quality:component-tests` — end-to-end
+5. `ai-toolkit-java-quality:component-tests` — end-to-end
    400 HTTP response assertion.
 
 ## Decision: which style to use?

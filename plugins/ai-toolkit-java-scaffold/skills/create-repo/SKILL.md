@@ -9,7 +9,7 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
-version: 1.2
+version: 1.3
 last_reviewed: 2026-11-15
 ---
 
@@ -41,7 +41,7 @@ single round if your tool supports it.
 | 4 | Spring Boot `server.servlet.context-path` (e.g. `/foo-service`)? | `contextPath` |
 | 5 | Container port (default `8800`)? | `appPort` |
 | 6 | Codeowner email for CI notifications? | `codeowner` |
-| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** is an explicit opt-in only: warn that the skills are tested on 3.5 and their examples need porting (Jackson 3, modular starters); tell the developer 3.5's free OSS support ended 2026-06-30 (patches need commercial support). Reject anything older than 3.5. | `springBootVersion` |
+| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** (4.1.x) is a supported variant: the listed templates build and pass their tests on 4.1.2, but they need the 4.x changes in `spring-boot-4.md` (spring-boot-conventions `references/`; Jackson 3, modular starters, renamed packages) and areas it lists as unverified are not covered; tell the developer 3.5's free OSS support ended 2026-06-30 (patches need commercial support). Reject anything older than 3.5. | `springBootVersion` |
 | 8 | Target Kubernetes image registry (default `your-registry.example.com/<org>`)? | `imageRegistry` |
 | 9a | Is this a **deployable service** or a **reusable library / SDK** (`project-types` Type D)? | `projectKind` (`service` / `library`) |
 
