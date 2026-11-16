@@ -16,11 +16,13 @@ last_reviewed: 2026-11-15
 # Exception Handling Skill
 This skill enforces a project-wide error contract:
 
-- Internal code throws **domain exceptions** — typed subclasses of the unchecked
-  `BaseDomainException`, never a raw `RuntimeException`.
+- Internal code throws **domain exceptions** — typed subclasses of the checked
+  `BaseDomainException`, never a raw `RuntimeException`. Callers declare or handle them, so a failure path is never
+  forgotten.
 - A single `@RestControllerAdvice` translates every exception (domain or
   third-party) into an [RFC 9457 `ProblemDetail`](https://www.rfc-editor.org/rfc/rfc9457)
-  with a stable HTTP status.
+  with a stable HTTP status. The advice handles checked and unchecked exceptions alike: domain exceptions get their
+  mapped status, anything else becomes a logged `500`.
 - All user-facing messages live in `exception/constants/ExceptionMessages`
   and are formatted with `java.text.MessageFormat` — never inlined.
 
@@ -37,7 +39,7 @@ The skill uses **only stock Spring Boot 3 primitives**:
 
 ```
 exception/
-├── BaseDomainException.java              # base – unchecked (extends RuntimeException), carries errorCode
+├── BaseDomainException.java              # base – checked (extends Exception), carries errorCode
 ├── BadRequestException.java              # extends base – maps to 400
 ├── ForbiddenException.java               # extends base – maps to 403
 ├── NotFoundException.java                # extends base – maps to 404
@@ -56,7 +58,7 @@ These names and packages are the **single source** for every other skill
 (permissions, persistence, messaging, external-client, input-validation,
 rate-limiting …): import `{{basePackage}}.exception.*` and
 `{{basePackage}}.exception.constants.ExceptionMessages`; never define a
-parallel hierarchy (e.g. a `CacheClientException extends RuntimeException`).
+parallel hierarchy (e.g. a `CacheClientException extends Exception`).
 If you prefer a domain prefix (`FooNotFoundException`), apply it to the
 whole hierarchy consistently.
 
@@ -65,18 +67,19 @@ whole hierarchy consistently.
 | # | Question | Default |
 | - | -------- | ------- |
 | 1 | Domain prefix for the exceptions (e.g. `Foo` → `FooNotFoundException`)? | none (`BaseDomainException`, `NotFoundException`, …) |
-| 2 | Which HTTP statuses must be mapped? | `400`, `403`, `404`, `406`, `409`, `429`, `500`, `503` |
-| 3 | Third-party exceptions that must also be mapped (FQCN → status)? | none |
+| 2 | Checked or unchecked base exception? | **checked** |
+| 3 | Which HTTP statuses must be mapped? | `400`, `403`, `404`, `406`, `409`, `429`, `500`, `503` |
+| 4 | Third-party exceptions that must also be mapped (FQCN → status)? | none |
 
-The base exception is always **unchecked**: no `throws` clauses for domain
-exceptions, and `@Transactional` rolls back on them by default.
+The templates ship the **checked** base. Choosing unchecked means `extends RuntimeException` in
+`BaseDomainException` and dropping every `throws` clause and `rollbackFor` described in §1a; the advice is the same.
 
 ## Generation rules
 
 ### 1. Base + subclass exceptions
 
 ```java
-public abstract class BaseDomainException extends RuntimeException {
+public abstract class BaseDomainException extends Exception {
     private final String errorCode;
     protected BaseDomainException(String errorCode, String message)                  { super(message); this.errorCode = errorCode; }
     protected BaseDomainException(String errorCode, String message, @Nullable Throwable cause) { super(message, cause); this.errorCode = errorCode; }
@@ -102,6 +105,14 @@ Rules:
   `Retry-After` header — the thrower (a rate limiter, an open circuit
   breaker) is the only one that knows how long to wait. Without it the
   advice sends its default (30 s).
+
+### 1a. Checked-exception rules
+
+Methods that throw a domain exception declare it (`throws NotFoundException`, or `throws BaseDomainException` at a
+boundary). It cannot cross a lambda, `ConstraintValidator.isValid` or a servlet `Filter`: throw after the lambda, wrap in
+the validator, write the response in the filter. Spring rolls back `@Transactional` on unchecked exceptions only, so
+**every `@Transactional` declares `rollbackFor = Exception.class`** (the `ArchitectureTest` template enforces it).
+Details: [`references/checked-exceptions.md`](./references/checked-exceptions.md).
 
 ### 2. `ExceptionMessages`
 
@@ -216,7 +227,7 @@ Rules:
 | Programmer error (precondition violation inside the service) | `IllegalStateException` / `IllegalArgumentException` (not handled by `ResponseEntityExceptionHandler`, which only covers Spring MVC exceptions — they reach the catch-all handler and become a logged `500`, which is right for a bug) |
 
 > **About the shipped templates.** They implement exactly the model above:
-> unchecked `BaseDomainException` with an `errorCode`, the
+> checked `BaseDomainException` with an `errorCode`, the
 > `ExceptionMessages` catalogue (codes, `MessageFormat` templates, factory
 > methods) and one `GlobalExceptionHandler` in `exception/handler/`.
 
@@ -224,6 +235,7 @@ Rules:
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
+| §1a | declaring, wrapping and rolling back checked domain exceptions | writing or reviewing code that throws or catches them | [`checked-exceptions.md`](./references/checked-exceptions.md) |
 | Tests | slice / standalone tests of the advice, subclass assertions, component-test status matrix | testing the error contract | [`testing.md`](./references/testing.md) |
 
 ## Do / Don't
@@ -239,6 +251,7 @@ in services.
 `ProblemDetail`.
 ❌ Never throw `RuntimeException` from business code for expected failures —
 that defeats the typed advice mapping.
+❌ Never write `@Transactional` without `rollbackFor = Exception.class` — a checked domain exception would commit.
 ❌ Never inline error messages — add a constant in `ExceptionMessages` and
 `MessageFormat` it.
 ❌ Never put HTTP types (`HttpStatus`, `ResponseEntity`) anywhere except the

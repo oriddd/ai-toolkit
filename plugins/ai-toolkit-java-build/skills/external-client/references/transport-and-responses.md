@@ -5,7 +5,7 @@ Part of the [`external-client`](../SKILL.md) skill. Section numbers are stable; 
 ## 6. The transport — `<Dep>Client` + `<Dep>ClientConfig`
 
 > Every pattern uses the synchronous `RestClient` from `spring-boot-starter-web` (`spring-boot-conventions`:
-> `RestClient` for blocking calls, `WebClient` only for reactive callers). The Full 5-Layer transport below and the
+> `RestClient` for blocking calls, `WebClient` for reactive callers or when the developer picks it in SKILL.md §0). The Full 5-Layer transport below and the
 > Simple Wrapper / Lite templates (§12) share the same rules. A **reactive** (WebFlux) service uses `WebClient`
 > instead — see the note at the end of this section.
 
@@ -63,24 +63,35 @@ public class FooClient {
         this.searchEndpoint = props.searchEndpoint();
     }
 
-    public FooSearchResponseDto search(final FooSearchRequestDto request) {
+    public FooSearchResponseDto search(final FooSearchRequestDto request)
+            throws UnavailableException, DependencyException {
         log.debug("Foo search request sent (queryId={})", request.getQueryId());   // never log the request or response body: it carries PII
+        final Reply<FooSearchResponseDto> reply;
         try {
-            return fooRestClient.post()
+            reply = fooRestClient.post()
                     .uri(searchEndpoint)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
-                    .exchange((req, response) -> handleResponse(response, FooSearchResponseDto.class));
+                    .exchange((req, response) -> readReply(response, FooSearchResponseDto.class));
         } catch (ResourceAccessException e) {   // connect / read timeout, connection refused
             throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, e);
         }
+        return bodyOrThrow(reply);
     }
 
-    private <T> T handleResponse(final ConvertibleClientHttpResponse response, final Class<T> type)
+    private record Reply<T>(HttpStatusCode status, @Nullable T body) {}
+
+    /** Runs inside the exchange lambda, which cannot throw a checked domain exception: read the status, decide outside. */
+    private <T> Reply<T> readReply(final ConvertibleClientHttpResponse response, final Class<T> type)
             throws IOException {
         final HttpStatusCode status = response.getStatusCode();
+        return new Reply<>(status, status.is2xxSuccessful() ? response.bodyTo(type) : null);   // 1xx / 3xx / 4xx: never parse as a body
+    }
+
+    private <T> T bodyOrThrow(final Reply<T> reply) throws UnavailableException, DependencyException {
+        final HttpStatusCode status = reply.status();
         if (status.is2xxSuccessful()) {
-            final T body = response.bodyTo(type);
+            final T body = reply.body();
             if (body == null) {   // an empty 2xx where a body is required is a broken contract, never a silent null
                 throw ExceptionMessages.dependencyCallFailed(DEPENDENCY, status.value());
             }
@@ -89,7 +100,7 @@ public class FooClient {
         if (status.is5xxServerError()) {   // transient — the exception Retry is configured for (§10)
             throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, null);
         }
-        // 1xx / 3xx / 4xx: never parse as a body. The body can hold PII — only the status goes in the message.
+        // The body can hold PII — only the status goes in the message.
         throw ExceptionMessages.dependencyCallFailed(DEPENDENCY, status.value());
     }
 }
@@ -98,22 +109,24 @@ public class FooClient {
 `ConvertibleClientHttpResponse` is `RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse`.
 
 Rules:
-- Use `exchange` + a private `handleResponse` method — this lets you read the status **and**, when a decision needs
-  it, the error body before throwing the domain exception. (`retrieve()` + `onStatus(...)` is the equivalent for a
-  one-off call; it must still map every non-2xx.)
+- Use `exchange` + a private `readReply` method — this lets you read the status **and**, when a decision needs
+  it, the error body, then throw the domain exception **after** the lambda (it cannot declare a checked exception).
+  (`retrieve()` + `onStatus(...)` is the equivalent for a one-off call; its handler cannot throw a checked exception
+  either, so it must record the status and throw afterwards.)
 - **Every call has a timeout**: set the connect and read timeouts on the request factory (see `FooClientConfig`),
   never rely on the defaults (none).
 - **Always translate non-2xx to a domain exception** before it escapes the
   `client/` package — anything that is not 2xx is an error, including 1xx/3xx. 5xx and timeouts become
   `UnavailableException` (retryable, → 503 + `Retry-After`), any other status `DependencyException` (→ 500), both
-  built by `ExceptionMessages` (`exception-handling`). Both are unchecked, so the facade stays free of `throws`.
+  built by `ExceptionMessages` (`exception-handling`). Both are checked: `Client`, `CoreService` and `Service` methods declare
+  `throws UnavailableException, DependencyException`.
 - The `Client` boundary is **synchronous** — callers see plain return values. `RestClient` blocks on the calling
   (servlet) thread, so there is no `.block()` to place.
 - Endpoint URLs come from the `<Dep>Properties` record injected into the constructor (never
   inline strings, never `@Value`); mirror them in `*Constants` as documentation anchors.
 
 **Reactive callers (WebFlux) only:** build a `WebClient` from Boot's `WebClient.Builder` (`.clone()`, timeouts on the
-connector), use `exchangeToMono` + the same `handleResponse` mapping (`response.createException()` / `releaseBody()`),
+connector), use `exchangeToMono` + the same status mapping (`response.createException()` / `releaseBody()`),
 translate `WebClientRequestException` to `UnavailableException`, and expose `Mono<T>` consistently. Never `.block()`
 inside a reactive pipeline — on a Reactor thread it throws `IllegalStateException`. Never add
 `spring-boot-starter-webflux` to a servlet service just to get `WebClient`.
@@ -222,7 +235,7 @@ public class FooResponseVerifier {
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class FooResponseParser {
     private final FooResponseVerifier verifier;

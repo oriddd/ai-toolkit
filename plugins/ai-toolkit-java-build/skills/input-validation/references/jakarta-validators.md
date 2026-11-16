@@ -48,7 +48,7 @@ shares it across threads.
 
 ```java
 // validator/EditableProductIdValidator.java
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class EditableProductIdValidator
         implements ConstraintValidator<EditableProductId, String> {
@@ -130,7 +130,7 @@ single-field `@RequestBody`):
 ```java
 @RestController
 @RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductController {           // no class-level @Validated on Spring Boot 3.2+ (see below)
 
     @PatchMapping("/{productId}")

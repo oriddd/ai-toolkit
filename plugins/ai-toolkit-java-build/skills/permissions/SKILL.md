@@ -109,7 +109,7 @@ Default bucketing (adjust to your identity provider and record it in an ADR):
 
 ```java
 public interface PermissionsCheckStrategy {
-    void verifyPermissions(final String resourceId);   // throws the unchecked ForbiddenException
+    void verifyPermissions(final String resourceId) throws ForbiddenException;
     List<CallerContext> supportedContexts();
 }
 ```
@@ -121,12 +121,12 @@ Adjust the `verifyPermissions` signature to the resource-id shape (Phase 1 #3).
 ```java
 @Component
 @Slf4j
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class PermissionsHandler {
     private final CallerContextResolver callerContextResolver;
     private final PermissionsRegistry permissionsRegistry;
 
-    public void handle(final String resourceId) {
+    public void handle(final String resourceId) throws ForbiddenException {
         final CallerContext ctx = callerContextResolver.resolve();
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();          // ForbiddenException → 403
@@ -211,7 +211,7 @@ entry per property: the `permissions` prefix constant in
 
 ### 8. Exception type
 
-Ensure `exception/ForbiddenException.java` (unchecked, from the
+Ensure `exception/ForbiddenException.java` (checked, from the
 `exception-handling` templates) exists and that
 `exception/constants/ExceptionMessages` has these message templates, each
 with a factory method returning `ForbiddenException`:
@@ -239,7 +239,7 @@ the strategy translate to HTTP types itself.
 Inside every `Operation` that exposes a resource:
 
 ```java
-permissionsHandler.handle(resourceId);
+permissionsHandler.handle(resourceId);   // checked ForbiddenException: the operation declares `throws`
 // …then proceed with the use case
 ```
 

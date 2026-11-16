@@ -64,7 +64,7 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 **Key Pattern:**
 ```java
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class EditableProductIdValidator 
         implements ConstraintValidator<EditableProductId, String> {
     private final ProductEditabilityRule rule;  // domain logic bean
@@ -136,7 +136,7 @@ public class CreateScheduleRequestValidator implements Validator {
 **Register in ValidationConfig:**
 ```java
 @ControllerAdvice
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ValidationConfig {
     private final CreateScheduleRequestValidator validator;
 
@@ -157,7 +157,7 @@ public class ValidationConfig {
 **Key Pattern:**
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductEditabilityRule {
     private final ConfigService configService;
 

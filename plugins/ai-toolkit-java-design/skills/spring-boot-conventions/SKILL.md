@@ -230,7 +230,7 @@ Inject `Clock` everywhere code reads "now":
 @Bean Clock clock() { return Clock.systemUTC(); }
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class FooService {
     private final Clock clock;
 

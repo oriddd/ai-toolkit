@@ -47,12 +47,12 @@ public class XyzRegistry {
 }
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class XyzHandler {
     private final XyzTypeResolver xyzTypeResolver;
     private final XyzRegistry xyzRegistry;
 
-    public Result handle(final Input in) {
+    public Result handle(final Input in) throws BaseDomainException {
         final XyzType type = xyzTypeResolver.resolve(in);
         return xyzRegistry.find(type)
                 .orElseThrow(() -> ExceptionMessages.unsupportedXyz(type))   // a factory in the catalogue (exception-handling)
@@ -64,8 +64,8 @@ public class XyzHandler {
 ### Do / Don't
 ✅ Add a new behaviour by adding **one** new `@Component` strategy – never touch
 the handler or the registry.
-✅ Throw a domain exception (unchecked — extends the `RuntimeException`-based
-hierarchy in `exception/`) when no strategy matches.
+✅ Throw a domain exception (checked — the `BaseDomainException` hierarchy in `exception/`, declared with
+`throws`) when no strategy matches.
 ❌ Do not `if/else` on a type discriminator inside a service – that is a smell
 indicating you should introduce a strategy.
 
@@ -112,13 +112,13 @@ several services, response assembly) maps to exactly one class in
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ExportInvoiceOperation {
     private final PermissionsHandler permissionsHandler;
     private final ExportInvoiceService exportInvoiceService;
 
-    public ExportInvoiceResponse execute(ExportInvoiceRequest req) {
-        permissionsHandler.handle(req.invoiceId());   // throws the unchecked ForbiddenException
+    public ExportInvoiceResponse execute(ExportInvoiceRequest req) throws BaseDomainException {
+        permissionsHandler.handle(req.invoiceId());   // throws the checked ForbiddenException
         return exportInvoiceService.export(req);
     }
 }

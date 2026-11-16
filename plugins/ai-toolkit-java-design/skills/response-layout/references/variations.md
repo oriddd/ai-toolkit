@@ -10,7 +10,7 @@ one strategy per (entity, layout); the registry fails at startup on a duplicate.
 **first**, then build the immutable DTO once — never use a thrown 403 as control flow:
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class SecureFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final ProductSensitiveDataPolicy sensitiveDataPolicy;   // port, implemented in permission/
     private final ProductMetadataService productMetadataService;

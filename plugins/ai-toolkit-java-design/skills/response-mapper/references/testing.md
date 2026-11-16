@@ -13,7 +13,7 @@ private final MapperHandler mapperHandler = new MapperHandler(
 private final User sampleUser = UserFixtures.sampleUser();   // test-data builder for the User entity
 
 @Test
-void handle_v2Path_returnsV2Dto() {
+void handle_v2Path_returnsV2Dto() throws Exception {
     final var request = new MockHttpServletRequest("GET", "/api/v2/users/u-1");
 
     final Object dto = mapperHandler.handle(User.class, sampleUser, request);
@@ -45,7 +45,7 @@ void registry_twoStrategiesForSameVersion_failsAtStartup() {
 With the media-type resolver variation (the handler is built with that `MapperContextResolver` instead):
 ```java
 @Test
-void handle_v1AcceptHeader_returnsV1Dto() {
+void handle_v1AcceptHeader_returnsV1Dto() throws Exception {
     final var request = new MockHttpServletRequest();
     request.addHeader("Accept", "application/vnd.example.v1+json");
 
@@ -55,7 +55,7 @@ void handle_v1AcceptHeader_returnsV1Dto() {
 }
 
 @Test
-void handle_noVersion_returnsDefaultVersion() {
+void handle_noVersion_returnsDefaultVersion() throws Exception {
     final var request = new MockHttpServletRequest();   // no version hints
     final Object dto = mapperHandler.handle(User.class, sampleUser, request);
     assertThat(dto).isInstanceOf(UserV1DTO.class);       // defaultVersion(), never silently latest()
@@ -70,7 +70,7 @@ void handle_unknownVersion_isNotAcceptable() {
 }
 
 @Test
-void handle_versionQueryParam_isIgnored() {
+void handle_versionQueryParam_isIgnored() throws Exception {
     final var request = new MockHttpServletRequest();
     request.setParameter("version", "v2");                                          // one scheme per API
     assertThat(mapperHandler.handle(User.class, sampleUser, request)).isInstanceOf(UserV1DTO.class);

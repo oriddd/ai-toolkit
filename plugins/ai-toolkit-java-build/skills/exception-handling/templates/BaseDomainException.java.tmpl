@@ -2,11 +2,12 @@ package {{basePackage}}.exception;
 
 import org.jspecify.annotations.Nullable;
 /**
- * Base type for every domain exception. Unchecked, so it needs no {@code throws} clause and
- * {@code @Transactional} rolls back on it by default. Always carries an error code from
+ * Base type for every domain exception. Checked: callers declare or handle it, and every
+ * {@code @Transactional} method needs {@code rollbackFor = Exception.class} because Spring rolls back on unchecked
+ * exceptions only. Always carries an error code from
  * {@code exception.constants.ExceptionMessages}; the HTTP status is chosen by the advice, never stored here.
  */
-public abstract class BaseDomainException extends RuntimeException {
+public abstract class BaseDomainException extends Exception {
     private final String errorCode;
     protected BaseDomainException(String errorCode, String message) {
         super(message);

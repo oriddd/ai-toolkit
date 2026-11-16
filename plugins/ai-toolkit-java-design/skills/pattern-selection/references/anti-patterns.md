@@ -107,7 +107,7 @@ public OrderLayout resolveLayout(String layout) {
 ```java
 // ❌ Adds no value
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class OrderFetchService {
     private final CatalogClient client;
     

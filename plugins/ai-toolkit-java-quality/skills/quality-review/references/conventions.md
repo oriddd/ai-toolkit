@@ -5,14 +5,15 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
 ### C. Cross-cutting conventions
 
 9. **Exceptions** — Throw-site uses a domain exception from the project's
-   **unchecked** hierarchy (`BaseDomainException` → `BadRequestException`,
+   **checked** hierarchy (`BaseDomainException` → `BadRequestException`,
    `ForbiddenException`, `NotFoundException`, …), built by an
    `ExceptionMessages` factory method that supplies the error code and the
    `MessageFormat`-formatted message (guild #4). The HTTP
    mapping lives only in the `@RestControllerAdvice`. (See
    `exception-handling`.) Flag any `throw new RuntimeException("…")`
    in business code, any inline error string, any exception type outside the
-   hierarchy, and `throws` clauses for domain exceptions.
+   hierarchy, `@Transactional` without `rollbackFor = Exception.class` (a checked domain exception would commit), and a
+   broad `throws Exception` where the narrow domain type is known.
 
 9a. **Nullable fetch → filtered stream.** Any collaborator whose
     contract documents `null` on error (graceful degradation) must be

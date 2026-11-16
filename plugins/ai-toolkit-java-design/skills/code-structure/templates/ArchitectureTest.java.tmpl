@@ -1,14 +1,23 @@
 package {{basePackage}}.architecture;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.util.Arrays;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 @AnalyzeClasses(packages = "{{basePackage}}", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
+    private static final String TRANSACTIONAL = "org.springframework.transaction.annotation.Transactional";
     @ArchTest
     static final ArchRule controllers_never_touch_repositories =
         noClasses().that().resideInAPackage("..controller..")
@@ -73,4 +82,33 @@ class ArchitectureTest {
         // the JPA AuditorAware (persistence SecurityAuditorAware) lives in permission/ too; config/AuditConfig only enables auditing
         noClasses().that().resideOutsideOfPackage("..permission..")
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.security.core.context.SecurityContextHolder");
+    @ArchTest
+    static final ArchRule transactionalMethodsRollBackOnEveryException =
+        // domain exceptions are checked and Spring rolls back on unchecked ones only (exception-handling §1a)
+        methods().that().areAnnotatedWith(TRANSACTIONAL)
+            .should(new ArchCondition<JavaMethod>("declare rollbackFor = Exception.class") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    boolean ok = rollsBackOnEveryException(method);
+                    events.add(new SimpleConditionEvent(method, ok, method.getDescription() + (ok ? " rolls back on every exception" : " lacks rollbackFor = Exception.class")));
+                }
+            })
+            .allowEmptyShould(true);   // a service without persistence has no @Transactional
+    @ArchTest
+    static final ArchRule transactionalClassesRollBackOnEveryException =
+        classes().that().areAnnotatedWith(TRANSACTIONAL)
+            .should(new ArchCondition<JavaClass>("declare rollbackFor = Exception.class") {
+                @Override
+                public void check(JavaClass type, ConditionEvents events) {
+                    boolean ok = rollsBackOnEveryException(type);
+                    events.add(new SimpleConditionEvent(type, ok, type.getDescription() + (ok ? " rolls back on every exception" : " lacks rollbackFor = Exception.class")));
+                }
+            })
+            .allowEmptyShould(true);
+    private static boolean rollsBackOnEveryException(HasAnnotations<?> annotated) {
+        return annotated.getAnnotationOfType(TRANSACTIONAL).get("rollbackFor")
+            .map(value -> Arrays.stream((JavaClass[]) value)
+                .anyMatch(type -> type.isEquivalentTo(Exception.class) || type.isEquivalentTo(Throwable.class)))
+            .orElse(false);
+    }
 }

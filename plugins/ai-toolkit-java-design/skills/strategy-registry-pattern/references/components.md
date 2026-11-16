@@ -19,15 +19,15 @@ Part of the [`strategy-registry-pattern`](../SKILL.md) skill. Section numbers an
   and run **before Spring Security** so 401/403 rejections are measured too. `request-metrics` §4 is the full metrics filter.
 
 **Example (Handler)** — the types and signatures of the `permissions` skill; `ForbiddenException` and
-`ExceptionMessages` come from `exception-handling` (unchecked, so no `throws` clause):
+`ExceptionMessages` come from `exception-handling` (checked, so the methods declare `throws ForbiddenException`):
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class PermissionsHandler {
     private final CallerContextResolver callerContextResolver;
     private final PermissionsRegistry permissionsRegistry;
 
-    public void handle(final String resourceId) {
+    public void handle(final String resourceId) throws ForbiddenException {
         final CallerContext ctx = callerContextResolver.resolve();
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();                 // 403
@@ -43,7 +43,7 @@ public class PermissionsHandler {
 ```java
 @Component
 @Order(SecurityProperties.DEFAULT_FILTER_ORDER - 1)   // before Spring Security, so 401/403 rejections are recorded too
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class MetricsFilter extends OncePerRequestFilter {
     private final MetricNameResolver metricNameResolver;
@@ -118,7 +118,7 @@ client id is still tagged.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricNameResolver {
     private final MonitoringConfig monitoringConfig;
 
@@ -215,7 +215,7 @@ public interface MetricsRecorder {
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
     private final MetricsTimerHelper metricsTimerHelper;
@@ -290,7 +290,7 @@ shared by the wrapped and the outer request. Requests rejected by security never
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ClientIdCaptureInterceptor implements HandlerInterceptor {
     private final ClientIdParser clientIdParser;
 
@@ -320,7 +320,7 @@ in each slice test — `input-validation` §5c has a full slice example.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricsTagsHelper {
     private final RequestMethodParser requestMethodParser;
     private final ResponseStatusParser responseStatusParser;

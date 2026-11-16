@@ -92,8 +92,8 @@ Implementation:
 ```java
 @Service
 public class InvoiceService {
-    @Transactional
-    public Invoice create(CreateRequest req) {
+    @Transactional(rollbackFor = Exception.class)
+    public Invoice create(CreateRequest req) throws BaseDomainException {
         var invoice = new Invoice(req.id(), req.name());
         invoiceRepo.save(invoice);
         outbox.append(new InvoiceCreatedEvent(invoice.getId(), invoice.getName(), now()));  // also stores the current traceparent
@@ -102,7 +102,7 @@ public class InvoiceService {
 }
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class OutboxRelay {
     private final OutboxRepository outboxRepo;
@@ -159,7 +159,7 @@ Brokers guarantee at-least-once. The consumer must be **idempotent**:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceCreatedConsumer {
 
     private final FooService service;
@@ -173,7 +173,7 @@ public class InvoiceCreatedConsumer {
             exclude = {IllegalArgumentException.class, JsonProcessingException.class},
             topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE)
     @KafkaListener(topics = "${kafka.topics.invoices.name}", groupId = "${kafka.topics.invoices.group-id}")
-    public void on(ConsumerRecord<String, String> rec, Acknowledgment ack) throws JsonProcessingException {
+    public void on(ConsumerRecord<String, String> rec, Acknowledgment ack) throws Exception {
         var header = rec.headers().lastHeader("event-id");
         if (header == null) {                       // not retryable: excluded above, goes straight to the DLT
             throw new IllegalArgumentException("Record without event-id header at offset " + rec.offset());
@@ -191,12 +191,12 @@ public class InvoiceCreatedConsumer {
 }
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class FooService {
     private final ProcessedEventRepository processed;
 
-    @Transactional
-    public void handleOnce(String eventId, InvoiceCreatedEvent event) {
+    @Transactional(rollbackFor = Exception.class)
+    public void handleOnce(String eventId, InvoiceCreatedEvent event) throws BaseDomainException {
         if (!processed.tryRecord(eventId)) {
             return;                                 // already handled — skip
         }
@@ -210,11 +210,9 @@ public class FooService {
   (`INSERT ... ON CONFLICT DO NOTHING`).
 - The consumer's business transaction includes the `processed` insert, so
   effects are atomic with the dedupe record. Domain exceptions are
-  **unchecked** (`exception-handling`), so a failing `handle(event)` rolls
-  back the dedupe row too and the redelivery is processed again. Never catch
-  and swallow inside `handleOnce`; a checked exception from a third-party
-  API must be wrapped or declared in `rollbackFor`, or the event would be
-  marked processed without its effect.
+  **checked** (`exception-handling`): `rollbackFor = Exception.class` rolls the dedupe row back with a failing
+  `handle(event)`; a `TransactionTemplate` needs `status.setRollbackOnly()` and a
+  rethrow after `execute` (`IdempotentConsumer.java.tmpl`). Never swallow a failure in `handleOnce`.
 - Use **manual ack** + **at-least-once**; commit offset only after the
   business transaction commits.
 

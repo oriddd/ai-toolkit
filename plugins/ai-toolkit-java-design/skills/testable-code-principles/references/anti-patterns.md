@@ -48,7 +48,7 @@ public class InvoiceService {
 
 // ✅ Better: Explicit injection
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final ProcessingProperties processing;
 }

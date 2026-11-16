@@ -1,4 +1,5 @@
 package {{basePackage}}.adapter.cache.http;
+import {{basePackage}}.exception.BaseDomainException;
 import {{basePackage}}.spi.cache.CacheKey;
 import {{basePackage}}.spi.cache.CachePort;
 import java.time.Duration;
@@ -15,15 +16,15 @@ class HttpCacheAdapter implements CachePort {
         this.converter = converter;
     }
     @Override
-    public Optional<byte[]> get(CacheKey key) {
+    public Optional<byte[]> get(CacheKey key) throws BaseDomainException {
         return client.fetch(key.value()).map(converter::toValue);
     }
     @Override
-    public void put(CacheKey key, byte[] value, Duration ttl) {
+    public void put(CacheKey key, byte[] value, Duration ttl) throws BaseDomainException {
         client.store(converter.toRemote(key.value(), value, ttl));
     }
     @Override
-    public void evict(CacheKey key) {
+    public void evict(CacheKey key) throws BaseDomainException {
         client.evict(key.value());
     }
     @Override

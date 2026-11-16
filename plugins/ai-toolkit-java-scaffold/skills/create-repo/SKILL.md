@@ -109,7 +109,7 @@ Execute the following skills in order. Each one is documented in its own
    `TaskExecutor` config. Adds `@ConfigurationPropertiesScan` to the
    application class.
 3a. **`api-design`**, 3b. **`input-validation`** (before step 4), 11. **`integration-tests`**, 13. **`quality-review`** (an unresolved `FAIL` blocks Phase 6): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
-4. **`exception-handling`** → the unchecked domain exception hierarchy in `{{basePackage}}.exception`
+4. **`exception-handling`** → the checked domain exception hierarchy in `{{basePackage}}.exception`
    (`BaseDomainException` with `errorCode`, one subclass per HTTP status), the `ExceptionMessages` catalogue in
    `exception.constants` and the `@RestControllerAdvice` `GlobalExceptionHandler` in `exception.handler`, extending
    `ResponseEntityExceptionHandler`. Then remove the template's tagged parts the service cannot compile

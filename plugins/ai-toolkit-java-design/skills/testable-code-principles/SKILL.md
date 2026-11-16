@@ -71,7 +71,7 @@ Each component should work without depending on:
 ```java
 // ✅ Good: Dependencies injected, testable in isolation
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final InvoiceValidator validator;
     private final InvoiceRepository repository;
@@ -109,7 +109,7 @@ public int calculatePriority(Request request) {
 
 // ✅ Better: Inject Clock (constructor injection) for testability
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class PriorityCalculator {
     private final Clock clock;   // Clock.systemUTC() bean in prod, Clock.fixed(...) in tests
 

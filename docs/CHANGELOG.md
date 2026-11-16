@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Restored original conventions (2026-11-16)
+
+- Domain exceptions are checked again (`BaseDomainException extends Exception`), as in the user-tested originals. `GlobalExceptionHandler` maps both checked and unchecked exceptions (domain handler plus a catch-all 500). Checked exceptions do not roll back `@Transactional` by default, so every `@Transactional` carries `rollbackFor = Exception.class`, enforced by `ArchitectureTest`. New `exception-handling/references/checked-exceptions.md`.
+- Constructor injection uses `@RequiredArgsConstructor(onConstructor = @__(@Autowired))` again, so a class with several constructors still injects.
+- `external-client` asks which HTTP transport to use and shows a `RestClient` / `WebClient` comparison with a recommendation; `RestClient` stays the default.
+- Proved on a Spring Boot 3.5.16 service (Error Prone + NullAway at ERROR): 55 tests pass, including checked and unchecked error mapping, rollback with and without `rollbackFor`, and the idempotent consumer.
+
 ## [2.4.0] - 2026-11-15
 
 ### Independent review fix round (2026-11-15)

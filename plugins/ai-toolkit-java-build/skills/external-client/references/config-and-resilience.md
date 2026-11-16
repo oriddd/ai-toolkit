@@ -61,7 +61,7 @@ resilience4j:
     exponentialBackoffMultiplier: 2
     retryExceptions:
       # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees a raw
-      # HttpServerErrorException / ResourceAccessException because handleResponse() has already wrapped it.
+      # HttpServerErrorException / ResourceAccessException because bodyOrThrow() has already wrapped it.
       # {{basePackage}}.exception.UnavailableException (exception-handling), e.g.:
       - com.example.foo.exception.UnavailableException
 ```
@@ -69,9 +69,11 @@ resilience4j:
 ```java
 @CircuitBreaker(name = "foo-service", fallbackMethod = "fallback")
 @Retry(name = "foo-service")
-public FooSearchResponseDto search(final FooSearchRequestDto request) { … }   // unchecked domain exceptions: no throws
+public FooSearchResponseDto search(final FooSearchRequestDto request)
+        throws UnavailableException, DependencyException { … }
 
-private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t) {
+private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t)
+        throws BaseDomainException {
     if (t instanceof BaseDomainException mapped) {
         throw mapped;               // keep the type: UnavailableException stays retryable, DependencyException does not
     }

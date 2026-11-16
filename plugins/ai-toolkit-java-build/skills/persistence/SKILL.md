@@ -241,11 +241,11 @@ spring:
 ```java
 @Service
 public class InvoiceService {
-    @Transactional                              // write boundary
-    public Invoice create(CreateRequest req) { … }
+    @Transactional(rollbackFor = Exception.class)                    // write boundary
+    public Invoice create(CreateRequest req) throws BaseDomainException { … }
 
-    @Transactional(readOnly = true)             // read boundary — important for replicas
-    public Optional<Invoice> findById(UUID id) { … }
+    @Transactional(readOnly = true, rollbackFor = Exception.class)   // read boundary — important for replicas
+    public Optional<Invoice> findById(UUID id) throws BaseDomainException { … }
 }
 ```
 
@@ -256,11 +256,11 @@ Rules:
   hint the database and Hibernate skips dirty checking and flushing. It does
   **not** route to a replica by itself: that needs a routing `DataSource`
   (e.g. `AbstractRoutingDataSource` keyed on the read-only flag).
-- **Domain exceptions are unchecked** (`exception-handling`), so
-  `@Transactional` rolls back on them by default. Never catch and swallow a
-  failure inside the boundary. If a method throws a **checked** exception
-  (e.g. from a third-party API), declare `rollbackFor` for it, or wrap it in
-  a domain exception — a checked exception otherwise commits.
+- **Domain exceptions are checked** (`exception-handling`), and Spring rolls back on unchecked exceptions only, so a
+  checked domain exception would **commit** the transaction. Every `@Transactional` method or class declares
+  `rollbackFor = Exception.class`; the `ArchitectureTest` template fails the build when one does not. Never catch and
+  swallow a failure inside the boundary. Programmatic transactions (`TransactionTemplate`) do not roll back on a checked
+  exception either: catch it, call `status.setRollbackOnly()` and rethrow after `execute`.
 - Never call a `@Transactional` method from another method of the same
   class — Spring proxying does not intercept it.
 - A transaction never spans a network call to another service.

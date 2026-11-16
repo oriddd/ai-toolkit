@@ -22,7 +22,7 @@ pattern, `<Dep>Client` in the Simple Wrapper and Lite patterns — and never see
 `WebClient`, `RestClient`, `Mono`, SDK types, or remote DTOs. This is the
 **lego-brick** convention.
 
-Scope: synchronous HTTP dependencies (`RestClient`). A vendor SDK or gRPC stub takes the `<Dep>Client` slot with the
+Scope: HTTP dependencies, `RestClient` by default and `WebClient` when the developer picks it (§0). A vendor SDK or gRPC stub takes the `<Dep>Client` slot with the
 same layers; message brokers follow `messaging`; swappable technology vendors (cache, object store, secrets) follow
 `pluggable-architecture`.
 
@@ -35,6 +35,19 @@ same layers; message brokers follow `messaging`; swappable technology vendors (c
 3. **Future Growth**: Do you expect this to grow to 10+ endpoints in next 6 months?
 4. **Query Complexity**: Does this API require complex query building (filters, DSL)?
 5. **Response Complexity**: Is response parsing simple (1:1 JSON mapping) or complex (nested transformations)?
+6. **HTTP transport**: Is the calling service blocking (Spring MVC) or reactive (WebFlux)? Does this call stream, or fan out to many dependencies in parallel? Present the table below with the recommendation that fits the answers.
+
+### Transport choice (ask, recommend, then follow the chosen one)
+
+| | `RestClient` (default) | `WebClient` |
+| --- | --- | --- |
+| Simplicity | Plain blocking calls, normal stack traces, easy to test | `Mono`/`Flux` operators, harder to debug and test |
+| Performance | Fine for typical request/response; on Java 21 virtual threads (`spring.threads.virtual.enabled=true`) remove the thread-per-request cost | Fewer threads under very high concurrency; streaming and backpressure |
+| Expandability | One call per statement; parallel fan-out needs an executor or `CompletableFuture` | Composes parallel calls, retries and timeouts as one pipeline; SSE and streaming bodies |
+| Dependencies | `spring-boot-starter-web` only | Needs `spring-boot-starter-webflux` (do not add it to a servlet service just for this) |
+| Recommend when | Servlet / MVC service, request-response calls, small team (almost always) | The caller is already reactive, or the dependency streams or you must fan out to many calls concurrently |
+
+Default to `RestClient` unless an answer points to the right-hand column; record the choice in the PR description. `WebClient` follows §6 "Reactive callers" and `Mono`/`Flux` stay inside `client/<dep>/`.
 
 ### Decision Tree
 
@@ -177,10 +190,10 @@ do not load them all.
 ✅ Callers import only the package's public entry type — `*Service` in the
    Full pattern (never `*Client`, `*CoreService`), `*Client` in Simple/Lite —
    and never any remote DTO.
-✅ Every pattern uses the synchronous `RestClient`. Full pattern: `exchange` + a private
-   `handleResponse(response, type)` in `*Client` reads the status (and, if needed, the error
-   body) before throwing a domain exception. Simple/Lite use `exchange` or `onStatus` and must
-   still map every non-2xx. `WebClient` + `exchangeToMono` only for reactive (WebFlux) callers (§6).
+✅ Every pattern uses the synchronous `RestClient` unless the developer chose `WebClient` in §0. Full pattern: `exchange` + a private
+   `readReply(response, type)` in `*Client` reads the status (and, if needed, the error
+   body); the checked domain exception is thrown after the lambda. Simple/Lite use `exchange` or
+   `onStatus` and must still map every non-2xx. `WebClient` + `exchangeToMono` when the developer picked it in §0 or the caller is reactive (§6).
 ✅ Build the transport from Boot's injected `RestClient.Builder` /
    `WebClient.Builder` (`.clone()`), never the static `builder()`, so metrics and
    trace propagation stay on. Set per-dependency timeouts through Boot's

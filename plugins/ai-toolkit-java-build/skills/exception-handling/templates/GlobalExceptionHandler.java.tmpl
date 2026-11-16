@@ -113,13 +113,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
     /**
      * Hibernate Validator wraps anything a ConstraintValidator throws (e.g. a rule bean's downstream call failing) in a
-     * ValidationException. An outage still answers 503; anything else is a bug (500). ConstraintViolationException is a
-     * subclass but has its own, closer handler above.
+     * ValidationException; isValid cannot throw a checked domain exception, so the validator wraps it first. An
+     * UnavailableException anywhere in the cause chain still answers 503; anything else is a bug (500).
+     * ConstraintViolationException is a subclass but has its own, closer handler above.
      */
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ProblemDetail> onValidationInfrastructure(ValidationException e) {
-        if (e.getCause() instanceof UnavailableException unavailable) {
-            return onUnavailable(unavailable);
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof UnavailableException unavailable) {
+                return onUnavailable(unavailable);
+            }
         }
         log.error("Validator failed", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");

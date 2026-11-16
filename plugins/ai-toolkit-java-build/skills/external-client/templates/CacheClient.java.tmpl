@@ -1,11 +1,16 @@
 package {{basePackage}}.adapter.cache.http;
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.UnavailableException;
 import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse;
 /**
  * Thin transport for the HTTP cache service (Simple Wrapper, external-client §0), used only by HttpCacheAdapter.
  * Every non-2xx becomes a domain exception: 404 = cache miss (empty), 5xx / timeout / connection refused =
@@ -19,30 +24,34 @@ class CacheClient {
         this.restClient = restClient;
         this.props = props;
     }
-    Optional<CacheEntryResponse> fetch(String key) {
-        return call(() -> restClient.get().uri(props.entryPath(), key)
-                .exchange((request, response) -> {
-                    if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                        return Optional.<CacheEntryResponse>empty();          // a miss, not an error
-                    }
-                    failOnError(response.getStatusCode());
-                    return Optional.ofNullable(response.bodyTo(CacheEntryResponse.class));
-                }));
+    Optional<CacheEntryResponse> fetch(String key) throws UnavailableException, DependencyException {
+        Reply<CacheEntryResponse> reply = call(() -> restClient.get().uri(props.entryPath(), key)
+                .exchange((request, response) -> readReply(response)));
+        if (reply.status().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+            return Optional.empty();                                       // a miss, not an error
+        }
+        failOnError(reply.status());
+        return Optional.ofNullable(reply.body());
     }
-    void store(CacheEntryResponse entry) {
-        call(() -> restClient.put().uri(props.entryPath(), entry.key()).body(entry)
-                .exchange((request, response) -> { failOnError(response.getStatusCode()); return Boolean.TRUE; }));
+    void store(CacheEntryResponse entry) throws UnavailableException, DependencyException {
+        Reply<CacheEntryResponse> reply = call(() -> restClient.put().uri(props.entryPath(), entry.key()).body(entry)
+                .exchange((request, response) -> new Reply<>(response.getStatusCode(), null)));
+        failOnError(reply.status());
     }
-    void evict(String key) {
-        call(() -> restClient.delete().uri(props.entryPath(), key)
-                .exchange((request, response) -> {
-                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {   // evicting a miss is fine
-                        failOnError(response.getStatusCode());
-                    }
-                    return Boolean.TRUE;
-                }));
+    void evict(String key) throws UnavailableException, DependencyException {
+        Reply<CacheEntryResponse> reply = call(() -> restClient.delete().uri(props.entryPath(), key)
+                .exchange((request, response) -> new Reply<>(response.getStatusCode(), null)));
+        if (!reply.status().isSameCodeAs(HttpStatus.NOT_FOUND)) {          // evicting a miss is fine
+            failOnError(reply.status());
+        }
     }
-    private static void failOnError(HttpStatusCode status) {
+    private record Reply<T>(HttpStatusCode status, @Nullable T body) {}
+    /** Runs inside the exchange lambda, which cannot throw a checked domain exception: read the status, decide outside. */
+    private static Reply<CacheEntryResponse> readReply(ConvertibleClientHttpResponse response) throws IOException {
+        HttpStatusCode status = response.getStatusCode();
+        return new Reply<>(status, status.is2xxSuccessful() ? response.bodyTo(CacheEntryResponse.class) : null);
+    }
+    private static void failOnError(HttpStatusCode status) throws UnavailableException, DependencyException {
         if (status.is5xxServerError()) {
             throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, null);
         }
@@ -51,7 +60,7 @@ class CacheClient {
         }
     }
     /** Connect / read timeouts and refused connections surface as ResourceAccessException — an outage, so 503. */
-    private static <T> T call(Supplier<T> remoteCall) {
+    private static <T> T call(Supplier<T> remoteCall) throws UnavailableException {
         try {
             return remoteCall.get();
         } catch (ResourceAccessException e) {

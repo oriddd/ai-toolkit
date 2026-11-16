@@ -26,7 +26,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 3. `ai-toolkit-java-design:code-structure` Pattern C —
    controller → operation → service layering.
 4. `ai-toolkit-java-build:exception-handling` —
-   domain exception subclass of the unchecked `BaseDomainException` + `ExceptionMessages` entry.
+   domain exception subclass of the checked `BaseDomainException` + `ExceptionMessages` entry; methods that throw it declare `throws`.
 5. `ai-toolkit-java-build:permissions` — `PermissionsHandler`
    check inside the operation.
 6. `ai-toolkit-java-build:input-validation` —
@@ -68,7 +68,7 @@ abstraction.
       to one *Operation, returns ResponseEntity.
    c. *Operation class — permission check, service orchestration, no HTTP
       types.
-   d. *Service method(s) — business logic, @Transactional where needed.
+   d. *Service method(s) — business logic, `@Transactional(rollbackFor = Exception.class)` where needed.
    e. Request/response DTOs as records with @Valid / @NotBlank.
    f. Domain exception subclass + ExceptionMessages entry if a new error
       case is introduced.

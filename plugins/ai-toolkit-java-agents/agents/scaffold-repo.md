@@ -42,7 +42,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    — `Jenkinsfile` / GitHub Actions workflow, multi-stage `Dockerfile`.
 8. `ai-toolkit-java-ops:cd` — Helm chart with hardened security context.
 9. `ai-toolkit-java-build:exception-handling` — base
-   unchecked exception hierarchy (`BaseDomainException` in `exception/`) + `GlobalExceptionHandler` in `exception/handler/`.
+   checked exception hierarchy (`BaseDomainException` in `exception/`) + `GlobalExceptionHandler` in `exception/handler/`.
 10. `ai-toolkit-java-ops:observability` — Micrometer,
     structured JSON logs, MDC, distributed tracing.
 11. `ai-toolkit-java-ops:graceful-shutdown` — wired from
@@ -85,7 +85,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
       `ai-toolkit-java-ops:github-actions-ci` (`build.yml`, `image.yml`, `release.yml`)
    g. Helm chart (templates/, values.yaml; the `jwt` block only when auth = yes)
    h. docker-compose.yml + Makefile
-   i. Exception hierarchy (`exception/BaseDomainException`, unchecked) +
+   i. Exception hierarchy (`exception/BaseDomainException`, checked) +
       `exception/handler/GlobalExceptionHandler`, minus the template parts the service cannot compile
       (`exception-handling` §3a: `[security]` when auth = no, `[persistence]` without a database)
    j. ObservabilityConfig (MDC filter, tracing, metrics)

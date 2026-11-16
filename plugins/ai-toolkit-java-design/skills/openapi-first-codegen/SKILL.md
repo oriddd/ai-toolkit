@@ -135,7 +135,7 @@ false-positive findings.
 
 ```java
 @RestController
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 class FooController implements FooApi {                    // FooApi is generated
 
     private final FooService service;

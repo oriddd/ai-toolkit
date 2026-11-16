@@ -86,7 +86,8 @@ return new RateLimitDecision(probe.isConsumed(),
 ```
 
 The caller — the operation, or a `HandlerInterceptor` for a per-route limit — turns a refusal into the domain
-exception. Both run inside the `DispatcherServlet`, so the `@RestControllerAdvice` answers 429 + `Retry-After`:
+exception. Both run inside the `DispatcherServlet`, so the `@RestControllerAdvice` answers 429 + `Retry-After`. The operation declares
+`throws TooManyRequestsException`; `HandlerInterceptor.preHandle` already declares `throws Exception`:
 
 ```java
 RateLimitDecision decision = rateLimiter.tryConsume(clientKey);

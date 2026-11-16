@@ -52,7 +52,8 @@ For every non-trivial method you must cover, **at minimum**:
 1. **Happy path** – one assertion per observable side-effect (return value,
    collaborator interaction, header set, exception swallowed, …).
 2. **Every thrown exception type** declared on the method, plus
-   `RuntimeException` for unchecked paths. Use a parameterised "exception
+   `RuntimeException` for unchecked paths. Test methods that call code declaring checked domain
+   exceptions declare `throws Exception`. Use a parameterised "exception
    provider" stream when more than two are involved.
 3. **Every `if`/`switch` branch**, including `null` / empty-collection inputs
    if the method accepts collections or nullable params.

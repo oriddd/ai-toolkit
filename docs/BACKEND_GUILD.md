@@ -384,9 +384,9 @@ producing code must validate the diff against this list before returning.
 3. **Controllers contain no business logic**; each endpoint calls one
    `*Operation` when the use case orchestrates several services, otherwise
    one `*Service` (`code-structure`).
-4. **Exceptions** extend the project's **unchecked** domain hierarchy (rooted
-   in a base exception that extends `RuntimeException`, so no `throws`
-   clauses and `@Transactional` rolls back by default) and are built from
+4. **Exceptions** extend the project's **checked** domain hierarchy (rooted
+   in a base exception that extends `Exception`: methods declare `throws`
+   and every `@Transactional` uses `rollbackFor = Exception.class`) and are built from
    the `ExceptionMessages` catalogue, which supplies the error code and
    message (`exception-handling`).
 5. **Authorization** goes through `PermissionsHandler`, never inline

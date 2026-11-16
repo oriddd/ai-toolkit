@@ -126,6 +126,10 @@ class ArchitectureTest {
 }
 ```
 
+The shipped template also fails the build for any `@Transactional` method or class without
+`rollbackFor = Exception.class`: domain exceptions are checked and Spring rolls back on unchecked ones only
+(`exception-handling` §1a).
+
 These rules turn the conventions from "PR feedback" into "build failure" —
 the strongest enforcement you can get.
 

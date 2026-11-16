@@ -61,7 +61,7 @@ application at startup (routing must never depend on bean order), and a missing 
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
 

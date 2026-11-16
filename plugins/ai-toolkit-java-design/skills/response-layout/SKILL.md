@@ -67,7 +67,7 @@ first and answers 403 when the caller may not see it.
 public enum LayoutType {
     SUMMARY, DETAILED, FULL;
 
-    public static LayoutType fromString(final String layout) {
+    public static LayoutType fromString(final String layout) throws BadRequestException {
         if (layout == null || layout.isBlank()) {
             return DETAILED;  // default when the client sends no layout
         }
@@ -91,7 +91,7 @@ so an unknown value is rejected before the handler runs.
 ```java
 @Component
 public class LayoutResolver {
-    public LayoutType resolve(final HttpServletRequest request) {
+    public LayoutType resolve(final HttpServletRequest request) throws BadRequestException {
         if (request == null) {
             return LayoutType.DETAILED;
         }
@@ -165,7 +165,7 @@ public class LayoutRegistry {
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class LayoutHandler {
     private final LayoutResolver layoutResolver;
     private final LayoutRegistry layoutRegistry;
@@ -177,23 +177,22 @@ public class LayoutHandler {
      * @param entity     never null: the service already threw NotFoundException (404) for a missing resource
      */
     public <E> Object handle(final Class<E> entityType, final String resourceId, final E entity,
-                             final HttpServletRequest request) {
+                             final HttpServletRequest request) throws BaseDomainException {
         final LayoutType layoutType = layoutResolver.resolve(request);   // unknown value → 400
-        final LayoutStrategy<E, ?> strategy = layoutRegistry.find(entityType, layoutType)
-                .orElseThrow(() -> missingStrategy(entityType, layoutType));
+        final Optional<LayoutStrategy<E, ?>> found = layoutRegistry.find(entityType, layoutType);
+        if (found.isEmpty()) {
+            if (layoutType == LayoutType.DETAILED) {   // the default layout is mandatory for every entity
+                throw new IllegalStateException("No DETAILED layout strategy for " + entityType.getSimpleName() + " (mandatory)");
+            }
+            // a valid layout this entity does not offer is a client error (400), never a silent fallback to DETAILED
+            throw ExceptionMessages.invalidField("layout", layoutType + " is not available for " + entityType.getSimpleName());
+        }
+        final LayoutStrategy<E, ?> strategy = found.get();
 
         if (strategy.isRestricted() && !layoutAccessPolicy.isAllowed(strategy.getSupportedLayoutType(), resourceId)) {
             throw ExceptionMessages.accessDenied("layout " + strategy.getSupportedLayoutType());   // 403
         }
         return strategy.map(entity);
-    }
-
-    private static RuntimeException missingStrategy(final Class<?> entityType, final LayoutType layoutType) {
-        if (layoutType == LayoutType.DETAILED) {   // the default layout is mandatory for every entity
-            return new IllegalStateException("No DETAILED layout strategy for " + entityType.getSimpleName() + " (mandatory)");
-        }
-        // a valid layout this entity does not offer is a client error (400), never a silent fallback to DETAILED
-        return ExceptionMessages.invalidField("layout", layoutType + " is not available for " + entityType.getSimpleName());
     }
 }
 ```
@@ -254,7 +253,7 @@ public class ProductDetailedLayoutStrategy implements LayoutStrategy<Product, Pr
 **FullLayoutStrategy** — all fields + expensive computations; **restricted** (it exposes permissions and history):
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final ProductMetadataService productMetadataService;
     private final ProductDetailsService productDetailsService;
@@ -308,7 +307,7 @@ public class ProductFullLayoutStrategy implements LayoutStrategy<Product, Produc
 ```java
 @RestController
 @RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductController {
     private final ProductService productService;
     private final LayoutHandler layoutHandler;
@@ -317,7 +316,7 @@ public class ProductController {
     @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(oneOf = {
             ProductSummaryDTO.class, ProductDetailedDTO.class, ProductFullDTO.class })))
     public ResponseEntity<Object> getProduct(@PathVariable final String id,
-                                             final HttpServletRequest request) {
+                                             final HttpServletRequest request) throws BaseDomainException {
         final Product product = productService.getById(id);
         final Object dto = layoutHandler.handle(Product.class, id, product, request);
         return ResponseEntity.ok(dto);

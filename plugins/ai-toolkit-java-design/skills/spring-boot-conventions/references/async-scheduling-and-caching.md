@@ -55,7 +55,7 @@ on a controller or a domain service.
 ```java
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ExpiredSessionCleanupTask {
 
     private final ExpiredSessionStore store;
@@ -146,7 +146,7 @@ public record CacheTtlProperties(@NotEmpty Map<String, Duration> ttl) {}  // foo
 
 @Configuration
 @EnableCaching
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 class CachingConfig {
     private final CacheTtlProperties props;
 

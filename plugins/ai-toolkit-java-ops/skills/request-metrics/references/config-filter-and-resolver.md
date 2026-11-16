@@ -71,7 +71,7 @@ Rules:
 ```java
 @Component
 @Slf4j
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Order(SecurityProperties.DEFAULT_FILTER_ORDER - 1)   // before Spring Security, so 401/403 rejections are recorded too
 public class MetricsFilter extends OncePerRequestFilter {
 
@@ -155,7 +155,7 @@ Rules:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricNameResolver {
 
     private final MonitoringConfig monitoringConfig;

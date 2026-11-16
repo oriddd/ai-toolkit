@@ -107,9 +107,9 @@ Rules:
 ```java
 // spi/x/CachePort.java  — vendor-free, this is what the domain depends on
 public interface CachePort {
-    Optional<byte[]> get(CacheKey key);
-    void put(CacheKey key, byte[] value, Duration ttl);
-    void evict(CacheKey key);
+    Optional<byte[]> get(CacheKey key) throws BaseDomainException;     // checked: an adapter reports an outage as UnavailableException
+    void put(CacheKey key, byte[] value, Duration ttl) throws BaseDomainException;
+    void evict(CacheKey key) throws BaseDomainException;
     String providerId();           // for observability + composition routing
 }
 

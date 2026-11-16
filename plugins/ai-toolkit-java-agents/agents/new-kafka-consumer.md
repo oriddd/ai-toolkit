@@ -34,7 +34,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 4. `ai-toolkit-java-ops:graceful-shutdown` — the listener container stops
    gracefully before pod termination; the in-flight message completes.
 5. `ai-toolkit-java-build:exception-handling` — domain
-   exception subclass of the unchecked `BaseDomainException` (in
+   exception subclass of the checked `BaseDomainException` (in
    `exception/`) for consumer failures + `ExceptionMessages` entry.
 6. `ai-toolkit-java-quality:unit-tests` — consumer + idempotency
    guard + any outbox service.
@@ -68,7 +68,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
       blocking `DefaultErrorHandler` retries + `DeadLetterPublishingRecoverer` when per-key order must hold (§5).
    b. Consumer class — @KafkaListener, idempotency guard, delegates to *Service.
    c. Idempotency record/entity + repository (if DB-backed).
-   d. *Service — business logic, @Transactional.
+   d. *Service — business logic, `@Transactional(rollbackFor = Exception.class)`.
    e. Outbox entity + publisher (if handling publishes another event).
    f. ObservabilityConfig additions — MDC header propagator. No app-side lag
       gauge: rely on the Kafka client metrics (with a custom consumer factory,

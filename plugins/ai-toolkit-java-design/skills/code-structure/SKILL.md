@@ -145,7 +145,7 @@ public class InvoiceService {
 @Component public class InvoiceRepository { ... }     // persistence brick
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final InvoiceValidator validator;
     private final InvoiceTransformer transformer;
@@ -242,13 +242,14 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - **Lombok (prerequisite):** every Java skill's examples and templates assume
   `org.projectlombok:lombok` (`<optional>true</optional>`, version managed by the Spring Boot parent) is on
   the compile classpath and, when `annotationProcessorPaths` is set, listed there too. If it is missing, add it
-  before applying any example. Prefer plain `@RequiredArgsConstructor` for DI (a single
-  constructor needs no `@Autowired`); avoid field injection. Pick one style per class.
+  before applying any example. Use `@RequiredArgsConstructor(onConstructor = @__(@Autowired))` for DI: a lone
+  constructor is injected without it, but once a class gains a second constructor Spring needs one marked
+  `@Autowired` to know which to use. Avoid field injection. Pick one style per class.
 - **Configuration:** All env-driven config is read from `application.yaml`
   into `@ConfigurationProperties` records (see `spring-boot-conventions` §1)
   with `${ENV_VAR:default}` placeholders (secrets: `${ENV_VAR}`, no default) matching the Helm chart env names.
   Keys are centralised in `constant/ConfigurationConstants`.
-- **Exceptions:** One unchecked base `BaseDomainException extends RuntimeException` (with an error code) and one
+- **Exceptions:** One checked base `BaseDomainException extends Exception` (with an error code; methods that throw it declare `throws`, `@Transactional(rollbackFor = Exception.class)`) and one
   subclass per HTTP mapping (`BadRequestException`, `ForbiddenException`, `NotFoundException`, …) — the
   `exception-handling` templates; add a more specific subclass only when the advice must map it differently.
   Static messages live in `exception/constants/ExceptionMessages` and are

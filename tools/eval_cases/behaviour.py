@@ -90,7 +90,7 @@ MORE = {
             [("aop-starter", r"spring-boot-starter-aop|spring-boot-starter-aspectj"), ("bom", r"resilience4j-bom"),
              ("semaphore-no-wait", r"max-?[wW]ait-?[dD]uration:\s*0\b"),
              ("client-read-timeout", r"[rR]eadTimeout\(|read-timeout:|ReadTimeout\("),
-             ("fallback-throws", r"(?:Throwable|Exception)\s+\w+\)\s*\{[^}]*?\bthrow\b"),
+             ("fallback-throws", r"(?:Throwable|Exception)\s+\w+\)\s*(?:throws\s+[\w.,\s]+)?\{[^}]*?\bthrow\b"),
              ("no-sync-time-limiter", r"@TimeLimiter\s*\(", "not_contains")]),
     },
     "ai-toolkit-java-design": {

@@ -86,7 +86,7 @@ it and are tagged `UNKNOWN`:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ClientIdCaptureInterceptor implements HandlerInterceptor {
     private final ClientIdParser clientIdParser;
 
@@ -136,7 +136,7 @@ recorders DRY:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricsTagsHelper {
     private final RequestMethodParser requestMethodParser;
     private final ResponseStatusParser responseStatusParser;
@@ -166,7 +166,7 @@ defined once so all recorders use consistent latency buckets:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricsTimerHelper {
     private final MeterRegistry meterRegistry;
     private final MetricsTagsHelper metricsTagsHelper;

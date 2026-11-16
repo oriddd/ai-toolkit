@@ -160,7 +160,9 @@ Rules:
   fetch configuration or lookup data. Such a call runs on every request: cache
   the lookup (with a TTL), rely on the client's timeouts, and let an outage
   surface as `UnavailableException` (503, `exception-handling`) — never as a
-  `false` that turns into a misleading 400.
+  `false` that turns into a misleading 400. The rule method declares the checked exception;
+  `ConstraintValidator.isValid` cannot, so the validator wraps it in `IllegalStateException` and the advice answers 503
+  from the cause chain.
 - **`config/`** holds `ValidationConfig` and nothing else.
 
 ## Reference map — load only the part you are working on

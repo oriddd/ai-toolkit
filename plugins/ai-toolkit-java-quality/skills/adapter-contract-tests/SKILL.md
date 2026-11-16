@@ -68,19 +68,19 @@ public abstract class CachePortContract {
     @BeforeEach protected void setUp() { clearBackend(); cache = newCache(); }
 
     @Test
-    protected void get_missingKey_returnsEmpty() {
+    protected void get_missingKey_returnsEmpty() throws Exception {
         assertThat(cache.get(new CacheKey("absent"))).isEmpty();
     }
 
     @Test
-    protected void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() throws Exception {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).map(b -> new String(b, UTF_8)).contains("v1");
     }
 
     @Test
-    protected void evict_storedKey_removesValue() {
+    protected void evict_storedKey_removesValue() throws Exception {
         var key = new CacheKey("k2");
         cache.put(key, "v".getBytes(UTF_8), Duration.ofMinutes(5));
         cache.evict(key);
@@ -169,7 +169,7 @@ class NoOpCacheAdapterContractTest extends CachePortContract {
     // That is its documented contract (pluggable-architecture safe default), not a bug.
     @Override
     @Test
-    protected void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() throws Exception {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).isEmpty();

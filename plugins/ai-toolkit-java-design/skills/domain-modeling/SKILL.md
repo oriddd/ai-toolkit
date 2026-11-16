@@ -40,7 +40,7 @@ public class Invoice extends AbstractAggregateRoot<Invoice> {   // Aggregate Roo
     private Status status;
     private final List<InvoiceLine> lines = new ArrayList<>();
 
-    public void rename(String newName, Clock clock) {   // invariant: name not blank, invoice not deleted
+    public void rename(String newName, Clock clock) throws BadRequestException {   // invariant: name not blank, invoice not deleted
         requireNotDeleted();
         if (newName == null || newName.isBlank()) throw ExceptionMessages.invalidField("name", "must not be blank");   // exception-handling catalogue → 400
         this.name = newName;
@@ -83,14 +83,14 @@ public class Invoice {                                         // no AbstractAgg
 }
 
 @Repository
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 class JpaInvoiceRepositoryAdapter implements InvoiceRepository {
     private final InvoiceJpaRepository jpa;                    // Spring Data, over entity/InvoiceEntity
     private final InvoiceEntityMapper mapper;
     private final ApplicationEventPublisher events;
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)        // runs inside the service's transaction
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)   // runs inside the service's transaction
     public void save(Invoice invoice) {
         jpa.save(mapper.toEntity(invoice));
         invoice.pullDomainEvents().forEach(events::publishEvent);   // BEFORE_COMMIT listeners see them in this transaction

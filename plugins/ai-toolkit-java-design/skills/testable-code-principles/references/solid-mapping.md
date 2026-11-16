@@ -122,11 +122,11 @@ public interface InvoiceRepository {
 ```java
 // ✅ Good: Depends on abstraction, easy to inject test double
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final InvoiceRepository repository;  // Interface
     
-    public Invoice getInvoice(String id) {
+    public Invoice getInvoice(String id) throws NotFoundException {
         return repository.findById(id)
                 .orElseThrow(() -> ExceptionMessages.resourceNotFound("Invoice", id));  // NotFoundException → 404, not a 500 NoSuchElementException (exception-handling)
     }
@@ -134,7 +134,7 @@ public class InvoiceService {
 
 // Test injects mock
 @Test
-void testGetInvoice() {
+void testGetInvoice() throws Exception {
     InvoiceRepository mockRepo = mock(InvoiceRepository.class);
     InvoiceService service = new InvoiceService(mockRepo);
     // Test with full control

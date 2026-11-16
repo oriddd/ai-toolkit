@@ -68,7 +68,7 @@ public interface InvoiceProcessor {
 ```java
 // ✅ Good: Composition, easy to test each piece
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final InvoiceValidator validator;
     private final InvoiceTransformer transformer;

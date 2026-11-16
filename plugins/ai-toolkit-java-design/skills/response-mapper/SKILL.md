@@ -89,7 +89,7 @@ public enum ApiVersion {
 ### `UnsupportedApiVersionException` (406, media-type versioning)
 
 Thrown only by the `Accept`-header resolver; with URI versioning an unknown version is the `NotFoundException` (404)
-from `ExceptionMessages.resourceNotFound`. A domain exception in the `exception-handling` hierarchy (unchecked, built through the `ExceptionMessages` catalogue)
+from `ExceptionMessages.resourceNotFound`. A domain exception in the `exception-handling` hierarchy (checked, built through the `ExceptionMessages` catalogue)
 plus its advice mapping. The `exception-handling` templates ship all three; shown here for reference:
 
 ```java
@@ -123,7 +123,7 @@ pinned `defaultVersion()`, never silently the newest:
 public class MapperContextResolver {
     private static final Pattern URI_VERSION = Pattern.compile("^/api/(v\\d+)/");
 
-    public ApiVersion resolve(final HttpServletRequest request) {
+    public ApiVersion resolve(final HttpServletRequest request) throws BaseDomainException {
         if (request == null || request.getRequestURI() == null) {
             return ApiVersion.defaultVersion();
         }
@@ -154,7 +154,7 @@ public class MapperContextResolver {
     private static final Pattern ACCEPT_VERSION =
             Pattern.compile("application/vnd\\.example\\.(v\\d+)\\+json", Pattern.CASE_INSENSITIVE);
 
-    public ApiVersion resolve(final HttpServletRequest request) {
+    public ApiVersion resolve(final HttpServletRequest request) throws BaseDomainException {
         if (request == null) {
             return ApiVersion.defaultVersion();
         }
@@ -229,7 +229,7 @@ version, 406 for an `Accept` version) — never silently answered with another s
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MapperHandler {
     private final MapperContextResolver resolver;
     private final MapperRegistry registry;
@@ -238,7 +238,8 @@ public class MapperHandler {
      * @param entityType passed explicitly — entity.getClass() can be a JPA proxy subclass
      * @param entity     never null: the service already threw NotFoundException (404) for a missing resource
      */
-    public <E> Object handle(final Class<E> entityType, final E entity, final HttpServletRequest request) {
+    public <E> Object handle(final Class<E> entityType, final E entity, final HttpServletRequest request)
+            throws BaseDomainException {
         final ApiVersion version = resolver.resolve(request);   // unknown version → 404 (URI) / 406 (Accept)
         final MapperStrategy<E, ?> strategy = registry.find(entityType, version)
                 .orElseThrow(() -> resolver.versionNotServed(version.name().toLowerCase(Locale.ROOT)));   // never a silent fallback to latest()
@@ -257,7 +258,7 @@ One `@Component` per (entity, version): V1 legacy schema, V2 split name + email,
 ```java
 @RestController
 @RequestMapping("/api/{apiVersion:v\\d+}/users")   // URI versioning (api-design §3, guild rule 15); the resolver reads the segment
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class UserController {
     private final UserService userService;
     private final MapperHandler mapperHandler;
@@ -266,7 +267,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(oneOf = {
             UserV1DTO.class, UserV2DTO.class, UserV3DTO.class })))
     public ResponseEntity<Object> getUser(@PathVariable final String id,
-                                          final HttpServletRequest request) {
+                                          final HttpServletRequest request) throws BaseDomainException {
         final User user = userService.getById(id);
         final Object dto = mapperHandler.handle(User.class, user, request);
         return ResponseEntity.ok(dto);

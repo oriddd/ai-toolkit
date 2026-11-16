@@ -9,14 +9,15 @@ hides filter building and response parsing entirely.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class FooService {
     private final FooCoreService fooCoreService;
     private final FooResponseParser fooResponseParser;
 
     /** Returns the type string of the product, or empty if no product matches. */
-    public Optional<String> getProductType(final String productId, final CallerContext callerContext) {
+    public Optional<String> getProductType(final String productId, final CallerContext callerContext)
+            throws UnavailableException, DependencyException {
         Assert.hasText(productId, "productId must not be blank");   // validated at the API boundary; reaching here blank is a bug
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).build();
@@ -26,7 +27,8 @@ public class FooService {
 
     /** Returns true iff at least one product matches the given id + type. */
     public boolean existsByIdAndType(final String productId, final String productType,
-                                     final CallerContext callerContext) {
+                                     final CallerContext callerContext)
+            throws UnavailableException, DependencyException {
         Assert.hasText(productId, "productId must not be blank");
         Assert.hasText(productType, "productType must not be blank");
         final Map<String, Object> filters = new FooFilterMapBuilder()
@@ -91,7 +93,7 @@ Contains no domain decisions; just the sequence.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class FooCoreService {
     private final FooRequestBuilder fooRequestBuilder;
@@ -101,7 +103,8 @@ public class FooCoreService {
 
     public Optional<FooProductDto> fetchSingleProduct(final Map<String, Object> filters,
                                                       final CallerContext callerContext,
-                                                      final List<String> fields) {
+                                                      final List<String> fields)
+            throws UnavailableException, DependencyException {
         final FooSearchRequestDto request = fooRequestBuilder
                 .buildSearchRequest(filters, callerContext, 1, fields);
         final FooSearchResponseDto response = fooClient.search(request);
@@ -109,7 +112,8 @@ public class FooCoreService {
     }
 
     public boolean doProductsExist(final Map<String, Object> filters,
-                                    final CallerContext callerContext) {
+                                    final CallerContext callerContext)
+            throws UnavailableException, DependencyException {
         final FooSearchRequestDto request = fooRequestBuilder
                 .buildSearchRequest(filters, callerContext, 0);
         final FooSearchResponseDto response = fooClient.search(request);
@@ -125,7 +129,7 @@ primitives. Never deals with HTTP or response handling.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class FooRequestBuilder {
     private final FooPermissionMapper permissionMapper;   // maps our caller context to Foo's permission scope
 
