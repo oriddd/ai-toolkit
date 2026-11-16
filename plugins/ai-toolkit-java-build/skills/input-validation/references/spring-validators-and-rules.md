@@ -13,7 +13,7 @@ be set").
 ```java
 // validator/CreateScheduleRequestValidator.java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class CreateScheduleRequestValidator implements Validator {
 
     @Override
@@ -52,7 +52,7 @@ Rules:
 ```java
 // config/ValidationConfig.java
 @ControllerAdvice
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ValidationConfig {
 
     private final CreateScheduleRequestValidator createScheduleRequestValidator;
@@ -87,7 +87,7 @@ dedicated `@Component` beans in `rule/`:
 ```java
 // rule/ProductEditabilityRule.java  (or policy/ProductTypeValidator.java)
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ProductEditabilityRule {
     private final CatalogConfigService catalogConfigService;   // injected external client

@@ -10,7 +10,7 @@ depends_on: [code-structure, exception-handling, spring-boot-conventions, valida
 ships_templates: false
 hitl: true
 version: 1.3
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Input Validation Skill
@@ -67,7 +67,7 @@ delete one.
 |-----------------|-------------------|---------|
 | **Cross-field** | Multiple fields interact | `startDate < endDate` |
 | **Business rules** | Domain logic | `age >= 18 for accountType=PREMIUM` |
-| **Database lookups** | External state | `userId exists in DB` |
+| **Database lookups** | External state | a *referenced* id exists (`userId` / `productId` in the body) — never the id of the resource the caller is authorized against: that check runs in the operation after `PermissionsHandler` (`permissions` §10), or 400-vs-403 leaks which ids exist |
 | **Complex logic** | Beyond simple regex | `IBAN checksum validation` |
 | **Conditional** | Rule depends on another field | `If country=US, state required` |
 
@@ -89,13 +89,16 @@ Does validation involve:
 # api.yaml
 parameters:
   - name: layout
+    in: query
     schema:
-      type: string
-      enum: [all, metadata]  # ← OpenAPI already validates!
+      $ref: '#/components/schemas/OrderLayout'   # ← generated as a Java enum: OpenAPI already validates!
+components:
+  schemas:
+    OrderLayout: {type: string, enum: [all, metadata]}
 ```
 
 ```java
-// ❌ REDUNDANT - OpenAPI Generator already validates enum
+// ❌ REDUNDANT - the generated OrderLayout enum already rejects unknown values (400)
 @Target({ElementType.PARAMETER, ElementType.FIELD})
 @Constraint(validatedBy = OrderLayoutValidator.class)
 public @interface ValidOrderLayout { ... }
@@ -107,7 +110,10 @@ public class OrderLayoutValidator implements ConstraintValidator<ValidOrderLayou
 }
 ```
 
-**Fix**: Delete custom validator, OpenAPI handles it.
+**Fix**: Delete custom validator, OpenAPI handles it — once the generated parameter is the enum type and the
+generator's `configPackage` is inside the component scan (`openapi-first-codegen` §2). An **inline**
+`enum: [all, metadata]` on the parameter is generated as a plain `String` and nothing rejects `?layout=bogus`:
+move it to a `$ref` enum first, or keep the validator.
 
 ---
 
@@ -154,7 +160,9 @@ Rules:
   fetch configuration or lookup data. Such a call runs on every request: cache
   the lookup (with a TTL), rely on the client's timeouts, and let an outage
   surface as `UnavailableException` (503, `exception-handling`) — never as a
-  `false` that turns into a misleading 400.
+  `false` that turns into a misleading 400. The rule method declares the checked exception;
+  `ConstraintValidator.isValid` cannot, so the validator wraps it in `IllegalStateException` and the advice answers 503
+  from the cause chain.
 - **`config/`** holds `ValidationConfig` and nothing else.
 
 ## Reference map — load only the part you are working on

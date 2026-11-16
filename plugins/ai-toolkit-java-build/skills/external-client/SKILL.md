@@ -1,16 +1,16 @@
 ---
 name: external-client
 description: >
-  Java / Spring Boot: SDK-style package for a downstream service (HTTP, gRPC, broker, file store) — Service facade,
-  CoreService, thin Client, request builders, response parsers/verifiers, Config. Use when a new downstream dependency
-  or external API is introduced.
+  Java / Spring Boot: SDK-style package for a downstream HTTP service — Service facade, CoreService, thin RestClient
+  Client, request builders, response parsers/verifiers, Config, OAuth2 client credentials. Use when a new downstream
+  HTTP dependency or external API is introduced.
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: true
-version: 2.1
-last_reviewed: 2026-07-13
+version: 2.3
+last_reviewed: 2026-11-15
 ---
 
 # External Client Skill
@@ -22,6 +22,10 @@ pattern, `<Dep>Client` in the Simple Wrapper and Lite patterns — and never see
 `WebClient`, `RestClient`, `Mono`, SDK types, or remote DTOs. This is the
 **lego-brick** convention.
 
+Scope: HTTP dependencies, `RestClient` by default and `WebClient` when the developer picks it (§0). A vendor SDK or gRPC stub takes the `<Dep>Client` slot with the
+same layers; message brokers follow `messaging`; swappable technology vendors (cache, object store, secrets) follow
+`pluggable-architecture`.
+
 ## 0. CRITICAL: Pattern Selection (Human-in-the-Loop Required)
 
 **STOP: Before applying this skill, ASK the developer:**
@@ -31,6 +35,19 @@ pattern, `<Dep>Client` in the Simple Wrapper and Lite patterns — and never see
 3. **Future Growth**: Do you expect this to grow to 10+ endpoints in next 6 months?
 4. **Query Complexity**: Does this API require complex query building (filters, DSL)?
 5. **Response Complexity**: Is response parsing simple (1:1 JSON mapping) or complex (nested transformations)?
+6. **HTTP transport**: Is the calling service blocking (Spring MVC) or reactive (WebFlux)? Does this call stream, or fan out to many dependencies in parallel? Present the table below with the recommendation that fits the answers.
+
+### Transport choice (ask, recommend, then follow the chosen one)
+
+| | `RestClient` (default) | `WebClient` |
+| --- | --- | --- |
+| Simplicity | Plain blocking calls, normal stack traces, easy to test | `Mono`/`Flux` operators, harder to debug and test |
+| Performance | Fine for typical request/response; on Java 21 virtual threads (`spring.threads.virtual.enabled=true`) remove the thread-per-request cost | Fewer threads under very high concurrency; streaming and backpressure |
+| Expandability | One call per statement; parallel fan-out needs an executor or `CompletableFuture` | Composes parallel calls, retries and timeouts as one pipeline; SSE and streaming bodies |
+| Dependencies | `spring-boot-starter-web` only | Needs `spring-boot-starter-webflux` (do not add it to a servlet service just for this) |
+| Recommend when | Servlet / MVC service, request-response calls, small team (almost always) | The caller is already reactive, or the dependency streams or you must fan out to many calls concurrently |
+
+Default to `RestClient` unless an answer points to the right-hand column; record the choice in the PR description. `WebClient` follows §6 "Reactive callers" and `Mono`/`Flux` stay inside `client/<dep>/`.
 
 ### Decision Tree
 
@@ -120,7 +137,7 @@ client/<dependency-name>/
 │   └── <Dep>Constants.java                   # field names, query IDs, sentinel values
 ├── core/
 │   ├── <Dep>ClientConfig.java                # @Configuration — transport bean
-│   ├── <Dep>Client.java                      # thin HTTP/gRPC transport, one method per remote op
+│   ├── <Dep>Client.java                      # thin transport (RestClient), one method per remote op
 │   └── <Dep>CoreService.java                 # orchestrator: build → call → parse/verify
 └── handler/
     ├── request/
@@ -160,6 +177,7 @@ do not load them all.
 | §4 | `<Dep>CoreService` | wiring build → call → parse | [`layers.md`](./references/layers.md) |
 | §5 | `<Dep>RequestBuilder` | assembling request DTOs | [`layers.md`](./references/layers.md) |
 | §6 | `<Dep>Client` + `<Dep>ClientConfig` | writing the transport and its bean | [`transport-and-responses.md`](./references/transport-and-responses.md) |
+| §6b | OAuth2 client credentials | the dependency needs a service token | [`transport-and-responses.md`](./references/transport-and-responses.md) |
 | §7 | `<Dep>ResponseParser` + `<Dep>ResponseVerifier` | extracting values / checking responses | [`transport-and-responses.md`](./references/transport-and-responses.md) |
 | §8 | `<Dep>Constants` | field names, query IDs | [`transport-and-responses.md`](./references/transport-and-responses.md) |
 | §9 | Spring properties | wiring base URL, endpoints, timeouts | [`config-and-resilience.md`](./references/config-and-resilience.md) |
@@ -172,12 +190,15 @@ do not load them all.
 ✅ Callers import only the package's public entry type — `*Service` in the
    Full pattern (never `*Client`, `*CoreService`), `*Client` in Simple/Lite —
    and never any remote DTO.
-✅ Full pattern: use `exchangeToMono` + a private `handleResponse(response, type)` in
-   `*Client` to read error body before throwing a domain exception. Simple/Lite
-   use `RestClient` (`exchange` or `onStatus`) and must still map every non-2xx.
+✅ Every pattern uses the synchronous `RestClient` unless the developer chose `WebClient` in §0. Full pattern: `exchange` + a private
+   `readReply(response, type)` in `*Client` reads the status (and, if needed, the error
+   body); the checked domain exception is thrown after the lambda. Simple/Lite use `exchange` or
+   `onStatus` and must still map every non-2xx. `WebClient` + `exchangeToMono` when the developer picked it in §0 or the caller is reactive (§6).
 ✅ Build the transport from Boot's injected `RestClient.Builder` /
    `WebClient.Builder` (`.clone()`), never the static `builder()`, so metrics and
-   trace propagation stay on. The per-dependency transport is **never injectable by
+   trace propagation stay on. Set per-dependency timeouts through Boot's
+   `ClientHttpRequestFactoryBuilder` + `ClientHttpRequestFactorySettings` beans, never a
+   `new SimpleClientHttpRequestFactory()` (§6). The per-dependency transport is **never injectable by
    type alone** — pick one of the two forms and show it in the code:
    (a) a named bean (`@Bean("inventoryRestClient")`) injected with
    `@Qualifier("inventoryRestClient")`, or (b) no transport bean at all: build it inside
@@ -188,13 +209,15 @@ do not load them all.
 ✅ Split `*ResponseParser` (extract values) from `*ResponseVerifier`
    (boolean checks) — they have different change rates and test shapes.
 ✅ All remote field names and query IDs live in `*Constants` — never inline.
-❌ Never let `WebClientResponseException`, `Mono`, `Flux`, or remote DTO
-   types escape the `client/<dep>/` package boundary.
+❌ Never let `RestClientException` (`HttpClientErrorException`, `ResourceAccessException`, …),
+   `WebClientResponseException`, `Mono`, `Flux`, or remote DTO types escape the
+   `client/<dep>/` package boundary.
 ❌ Never put retry, circuit-breaker, or metrics logic inside `*Client` itself —
    use Resilience4j annotations or the Decorator pattern on a client interface.
 ❌ Never return a "default" / silent empty value from a fallback — throw a
    domain exception so the `@RestControllerAdvice` maps it to `503`.
-❌ Never share one `WebClient` bean across two external dependencies.
+❌ Never share one `RestClient` / `WebClient` bean across two external dependencies.
+❌ Never return a bare `null` from a parser or facade — an absent value is `Optional` (§7).
 ❌ An unnamed `RestClient` / `WebClient` `@Bean` injected by type — the second
    dependency makes injection ambiguous or silently wires the wrong base URL.
 ❌ Never keep repository/analyzer/scheduler code under `client/<dep>/`
@@ -230,7 +253,7 @@ only — never a `client.cache` package. For a business downstream (catalogue,
 payments …) put the same classes in `client/<dep>/` and make `<Dep>Client`
 public with domain-named methods.
 
-- [`CacheClientConfig.java.tmpl`](./templates/CacheClientConfig.java.tmpl) — Vendor configuration: `RestClient` from Boot's builder with timeouts, creates the `CachePort` bean when `platform.cache.provider=http`.
+- [`CacheClientConfig.java.tmpl`](./templates/CacheClientConfig.java.tmpl) — Vendor configuration: `RestClient` from Boot's builder, request-factory builder and settings with per-dependency timeouts, creates the `CachePort` bean when `platform.cache.provider=http`.
 - [`HttpCacheProperties.java.tmpl`](./templates/HttpCacheProperties.java.tmpl) — `@ConfigurationProperties` record (`platform.cache.http.*`).
 - [`CacheClient.java.tmpl`](./templates/CacheClient.java.tmpl) — Thin transport: 404 → miss, 5xx/timeout → `UnavailableException`, other non-2xx → `DependencyException`.
 - [`CacheEntryResponse.java.tmpl`](./templates/CacheEntryResponse.java.tmpl) — Remote DTO.

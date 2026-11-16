@@ -8,22 +8,23 @@ import {{basePackage}}.exception.TooManyRequestsException;
 import {{basePackage}}.exception.UnavailableException;
 import {{basePackage}}.exception.UnsupportedApiVersionException;
 import {{basePackage}}.exception.constants.ExceptionMessages;
-import jakarta.validation.ConstraintViolationException;
-import jakarta.validation.ValidationException;
+import jakarta.validation.ConstraintViolationException;   // [validation]
+import jakarta.validation.ValidationException;   // [validation]
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;   // [persistence]
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;   // [security]
+import org.springframework.security.core.AuthenticationException;   // [security]
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,9 +33,8 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 /**
- * Needs spring-security on the classpath (the permissions skill adds it) for the AccessDeniedException /
- * AuthenticationException rethrow, and spring-tx (the persistence starters bring it) for
- * OptimisticLockingFailureException — in a service without a database, drop that handler and its import.
+ * Optional parts carry a bracketed tag: validation needs spring-boot-starter-validation, security needs spring-security,
+ * persistence needs spring-tx. A service without that dependency removes them (exception-handling SKILL.md §3a).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -64,9 +64,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Any other domain exception (the bare base type) is an unexpected server-side failure. */
     @ExceptionHandler(BaseDomainException.class)
     public ProblemDetail onDomain(BaseDomainException e) { return build(HttpStatus.INTERNAL_SERVER_ERROR, e); }
-    /** @Valid @RequestBody failures: Jakarta constraints on the DTO and Spring Validators bound with @InitBinder. */
+    /** Failures of a {@code @Valid @RequestBody}: Jakarta constraints on the DTO and Spring Validators bound with @InitBinder. */
     @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers,
+    protected @Nullable ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers,
             HttpStatusCode status, WebRequest request) {
         List<Map<String, String>> errors = e.getBindingResult().getAllErrors().stream()
             .map(err -> violation(err instanceof FieldError f ? f.getField() : err.getObjectName(), err.getDefaultMessage()))
@@ -78,7 +78,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * Spring 6.1+ built-in method validation, with no class-level @Validated on the controller (input-validation §2c).
      */
     @Override
-    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException e,
+    protected @Nullable ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException e,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         List<Map<String, String>> errors = e.getParameterValidationResults().stream()
             .flatMap(result -> result.getResolvableErrors().stream()
@@ -87,6 +87,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .toList();
         return handleExceptionInternal(e, validationProblem(errors), headers, status, request);
     }
+    /** Every error Spring MVC builds itself (404 / 405 / 406 / 415 / 400 …) passes through here: it gets the same errorCode as a domain error. */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleExceptionInternal(Exception e, @Nullable Object body, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        ResponseEntity<Object> response = super.handleExceptionInternal(e, body, headers, status, request);
+        if (response != null && response.getBody() instanceof ProblemDetail pd) {
+            Map<String, Object> properties = pd.getProperties();
+            if (properties == null || !properties.containsKey("errorCode")) {
+                pd.setProperty("errorCode", errorCodeFor(status));
+            }
+        }
+        return response;
+    }
+    // [validation:begin]
     /**
      * Constraints checked through the @Validated AOP proxy: a bean outside the web layer, or a controller implementing an
      * openapi-generator interface (the generated interface carries @Validated, openapi-first-codegen).
@@ -99,19 +113,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
     /**
      * Hibernate Validator wraps anything a ConstraintValidator throws (e.g. a rule bean's downstream call failing) in a
-     * ValidationException. An outage still answers 503; anything else is a bug (500). ConstraintViolationException is a
-     * subclass but has its own, closer handler above.
+     * ValidationException; isValid cannot throw a checked domain exception, so the validator wraps it first. An
+     * UnavailableException anywhere in the cause chain still answers 503; anything else is a bug (500).
+     * ConstraintViolationException is a subclass but has its own, closer handler above.
      */
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ProblemDetail> onValidationInfrastructure(ValidationException e) {
-        if (e.getCause() instanceof UnavailableException unavailable) {
-            return onUnavailable(unavailable);
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof UnavailableException unavailable) {
+                return onUnavailable(unavailable);
+            }
         }
         log.error("Validator failed", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
         return ResponseEntity.internalServerError().body(pd);
     }
+    // [validation:end]
+    // [persistence:begin]
     /** A concurrent update hit a stale @Version (persistence skill) — the client must re-read and retry, so 409, not 500. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ProblemDetail onOptimisticLock(OptimisticLockingFailureException e) {
@@ -119,17 +138,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("errorCode", ExceptionMessages.ERR_CONFLICT);
         return pd;
     }
+    // [persistence:end]
     @ExceptionHandler(Exception.class)
     public ProblemDetail onUnexpected(Exception e) throws Exception {
-        // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.
-        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
-            throw e;
-        }
+        // Spring Security's AccessDeniedException / AuthenticationException must reach its own 401 / 403 handling, not become a 500.   // [security]
+        if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {   // [security]
+            throw e;   // [security]
+        }   // [security]
         log.error("Unhandled exception", e);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         pd.setProperty("errorCode", ExceptionMessages.ERR_INTERNAL);
         return pd;
+    }
+    private static String errorCodeFor(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 401 -> ExceptionMessages.ERR_UNAUTHORIZED;
+            case 403 -> ExceptionMessages.ERR_FORBIDDEN;
+            case 404 -> ExceptionMessages.ERR_NOT_FOUND;
+            case 405 -> ExceptionMessages.ERR_METHOD_NOT_ALLOWED;
+            case 406 -> ExceptionMessages.ERR_NOT_ACCEPTABLE;
+            case 409 -> ExceptionMessages.ERR_CONFLICT;
+            case 415 -> ExceptionMessages.ERR_UNSUPPORTED_MEDIA_TYPE;
+            case 429 -> ExceptionMessages.ERR_TOO_MANY_REQUESTS;
+            case 503 -> ExceptionMessages.ERR_UNAVAILABLE;
+            default -> status.is5xxServerError() ? ExceptionMessages.ERR_INTERNAL : ExceptionMessages.ERR_BAD_REQUEST;
+        };
     }
     private ProblemDetail build(HttpStatus status, BaseDomainException e) {
         // 5xx: never echo the message (it may carry downstream details) — log it with the cause, return a generic detail.
@@ -149,7 +183,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("errors", errors);
         return pd;
     }
-    private static Map<String, String> violation(String field, String message) {
+    private static Map<String, String> violation(@Nullable String field, @Nullable String message) {
         return Map.of("field", String.valueOf(field), "message", String.valueOf(message));
     }
     private ResponseEntity<ProblemDetail> withRetryAfter(ProblemDetail pd, Optional<Duration> retryAfter) {

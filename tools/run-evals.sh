@@ -5,7 +5,7 @@
 # Usage:   bash tools/run-evals.sh                 # triggers + negatives, 1 run, no baseline (quick routing check)
 #          bash tools/run-evals.sh behaviour       # behaviour cases, 3 runs, with/without-plugin baseline
 #          bash tools/run-evals.sh agents          # agent cases: builds a small project fixture, delegates, 1 run
-#          bash tools/run-evals.sh all [extra flags passed to claude plugin eval]
+#          bash tools/run-evals.sh all [extra flags passed to claude plugin eval]   # runs the three modes above in turn
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ cd "$ROOT"
 case "$mode" in
   routing)   exec claude plugin eval . "${common[@]}" --tag trigger negative --runs 1 --ablation none "$@" ;;
   behaviour) exec claude plugin eval . "${common[@]}" --tag behaviour --runs 3 "$@" ;;
-  agents)    exec claude plugin eval . "${common[@]}" --tag agent --runs 1 --ablation none --scaffold --allow-tools Agent "$@" ;;
-  all)       exec claude plugin eval . "${common[@]}" "$@" ;;
+  agents)    exec claude plugin eval . "${common[@]}" --tag agent --runs 1 --ablation none --scaffold --allow-tools Agent Write Edit "$@" ;;
+  all)       bash "$0" routing "$@" && bash "$0" behaviour "$@" && exec bash "$0" agents "$@" ;;   # agent cases need --scaffold and Write/Edit
   *)         echo "usage: $0 [routing|behaviour|agents|all] [claude plugin eval flags]" >&2; exit 2 ;;
 esac

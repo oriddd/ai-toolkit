@@ -13,6 +13,10 @@ spec:
       {{ "{{" }}- include "{{chartName}}.selectorLabels" . | nindent 6 {{ "}}" }}
   template:
     metadata:
+      {{ "{{" }}- if and (not .Values.credentials.existingSecret) .Values.credentials.values {{ "}}" }}
+      annotations:
+        checksum/secret: {{ "{{" }} include (print $.Template.BasePath "/secret.yaml") . | sha256sum {{ "}}" }}   # roll the pods when the chart's Secret changes
+      {{ "{{" }}- end {{ "}}" }}
       labels:
         {{ "{{" }}- include "{{chartName}}.labels" . | nindent 8 {{ "}}" }}
         run: {{ "{{" }} include "{{chartName}}.fullname" . {{ "}}" }}
@@ -20,8 +24,10 @@ spec:
     spec:
       enableServiceLinks: false
       securityContext:
+        {{ "{{" }}- if .Values.appArmor.enabled {{ "}}" }}
         appArmorProfile:
           type: RuntimeDefault
+        {{ "{{" }}- end {{ "}}" }}
         fsGroup: {{fsGroup}}
         fsGroupChangePolicy: OnRootMismatch
         runAsGroup: {{runAsGroup}}
@@ -31,6 +37,19 @@ spec:
           type: RuntimeDefault
       serviceAccountName: {{ "{{" }} include "{{chartName}}.serviceAccountName" . {{ "}}" }}
       automountServiceAccountToken: {{ "{{" }} .Values.serviceAccount.automount {{ "}}" }}
+      {{ "{{" }}- if .Values.topologySpread.enabled {{ "}}" }}
+      topologySpreadConstraints:   # spread replicas over zones, then nodes; ScheduleAnyway never blocks scheduling
+        {{ "{{" }}- range list "topology.kubernetes.io/zone" "kubernetes.io/hostname" {{ "}}" }}
+        - maxSkew: 1
+          topologyKey: {{ "{{" }} . {{ "}}" }}
+          whenUnsatisfiable: ScheduleAnyway
+          matchLabelKeys:
+            - pod-template-hash
+          labelSelector:
+            matchLabels:
+              {{ "{{" }}- include "{{chartName}}.selectorLabels" $ | nindent 14 {{ "}}" }}
+        {{ "{{" }}- end {{ "}}" }}
+      {{ "{{" }}- end {{ "}}" }}
       terminationGracePeriodSeconds: 60   # ≥ preStop + shutdown phases + executor waits (graceful-shutdown skill)
       containers:
         - image: {{ "{{" }} (.Values.global).imageRegistry | default .Values.image.registry {{ "}}" }}/{{ "{{" }} .Values.image.repository {{ "}}" }}:{{ "{{" }} .Values.image.tag | default .Chart.AppVersion {{ "}}" }}
@@ -90,6 +109,18 @@ spec:
               value: {{ "{{" }} .Values.logLevel | quote {{ "}}" }}
             - name: SPRING_PROFILES_ACTIVE
               value: {{ "{{" }} .Values.springProfilesActive | quote {{ "}}" }}
+            {{ "{{" }}- with .Values.jwt {{ "}}" }}
+            - name: JWT_ISSUER_URI
+              value: {{ "{{" }} required "jwt.issuerUri is required: the OAuth2 issuer URL of the identity provider" .issuerUri | quote {{ "}}" }}
+            - name: JWT_AUDIENCE
+              value: {{ "{{" }} .audience | quote {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
+            {{ "{{" }}- with .Values.database {{ "}}" }}
+            - name: DB_URL
+              value: {{ "{{" }} required "database.url is required: the JDBC URL of the database" .url | quote {{ "}}" }}
+            - name: DB_USER
+              value: {{ "{{" }} required "database.username is required" .username | quote {{ "}}" }}
+            {{ "{{" }}- end {{ "}}" }}
             {{ "{{" }}- with .Values.extraEnv {{ "}}" }}
             {{ "{{" }}- toYaml . | nindent 12 {{ "}}" }}
             {{ "{{" }}- end {{ "}}" }}

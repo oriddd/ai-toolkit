@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [project-types, code-structure, ci, cd, local-dev-experience]
 ships_templates: true
 hitl: true
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.4
+last_reviewed: 2026-11-15
 ---
 
 # Create-Repo Skill (HITL)
@@ -41,7 +41,7 @@ single round if your tool supports it.
 | 4 | Spring Boot `server.servlet.context-path` (e.g. `/foo-service`)? | `contextPath` |
 | 5 | Container port (default `8800`)? | `appPort` |
 | 6 | Codeowner email for CI notifications? | `codeowner` |
-| 7 | `org.springframework.boot:spring-boot-starter-parent` version — the latest **3.5.x** (default: latest 3.5.x patch)? Reject any other major/minor: the skills are written for Boot 3.5, and a 4.x parent does not compile with them. | `springBootVersion` |
+| 7 | `spring-boot-starter-parent` version? Default: the latest **3.5.x** patch, the tested baseline. **4.x** (4.1.x) is a supported variant: the listed templates build and pass their tests on 4.1.2, but they need the 4.x changes in `spring-boot-4.md` (spring-boot-conventions `references/`; Jackson 3, modular starters, renamed packages) and areas it lists as unverified are not covered; tell the developer 3.5's free OSS support ended 2026-06-30 (patches need commercial support). Reject anything older than 3.5. | `springBootVersion` |
 | 8 | Target Kubernetes image registry (default `your-registry.example.com/<org>`)? | `imageRegistry` |
 | 9a | Is this a **deployable service** or a **reusable library / SDK** (`project-types` Type D)? | `projectKind` (`service` / `library`) |
 
@@ -91,7 +91,8 @@ Execute the following skills in order. Each one is documented in its own
    template already carries Lombok (`<optional>true</optional>`, needed by
    `@Slf4j` / `@RequiredArgsConstructor` in the generated code), the Jacoco
    `check` gate (85 % line / 75 % branch per class), Failsafe and PIT (≥ 75 %).
-   Add `spring-boot-starter-security` only when Phase 1 #9 = yes.
+   Add `spring-boot-starter-oauth2-resource-server` only when Phase 1 #9 = yes — not `spring-boot-starter-security`
+   alone: the `permissions` `SecurityConfig` validates JWTs and fails startup without it (`permissions` §1).
    **Library (`projectKind = library`, Type D):** produce only `pom.xml`
    (no `Jenkinsfile` image stages, no `Dockerfile`), and remove the
    `spring-boot-maven-plugin` repackage — a fat jar is not usable as a
@@ -107,21 +108,13 @@ Execute the following skills in order. Each one is documented in its own
    profiles, validation, springdoc OpenAPI, the `Clock` bean and the
    `TaskExecutor` config. Adds `@ConfigurationPropertiesScan` to the
    application class.
-3a. **`api-design`** (+ **`openapi-first-codegen`** if the developer
-   wants the spec to drive the code) → URL, status-code and error-format
-   conventions for the first endpoints.
-3b. **`input-validation`** → `validation/` package and `ValidationConfig` for
-   the first request types.
-4. **`exception-handling`** → produces the unchecked domain exception
-   hierarchy in `{{basePackage}}.exception` (`BaseDomainException extends
-   RuntimeException` with `errorCode`; `BadRequestException` 400,
-   `ForbiddenException` 403, `NotFoundException` 404,
-   `UnsupportedApiVersionException` 406, `ConflictException` 409,
-   `TooManyRequestsException` 429, `UnavailableException` 503,
-   `DependencyException` 500), the `ExceptionMessages` catalogue in
-   `exception.constants`, and the `@RestControllerAdvice`
-   `GlobalExceptionHandler` in `exception.handler`, extending
-   `ResponseEntityExceptionHandler`.
+3a. **`api-design`**, 3b. **`input-validation`** (before step 4), 11. **`integration-tests`**, 13. **`quality-review`** (an unresolved `FAIL` blocks Phase 6): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
+4. **`exception-handling`** → the checked domain exception hierarchy in `{{basePackage}}.exception`
+   (`BaseDomainException` with `errorCode`, one subclass per HTTP status), the `ExceptionMessages` catalogue in
+   `exception.constants` and the `@RestControllerAdvice` `GlobalExceptionHandler` in `exception.handler`, extending
+   `ResponseEntityExceptionHandler`. Then remove the template's tagged parts the service cannot compile
+   (`exception-handling` §3a): `[security]` when auth = no, `[persistence]` when no SQL dependency is selected in
+   #16, `[validation]` only if `input-validation` (step 3b) is skipped.
 5. **`permissions`** *(if Phase 1 #9 = yes)* → fills in the `permission/`
    package with `PermissionsHandler`, `PermissionsCheckStrategy` and the
    concrete strategies for the selected `CallerContext` values.
@@ -144,8 +137,8 @@ Execute the following skills in order. Each one is documented in its own
    config, env vars in Helm and the `readiness` health group entry in
    `application.yaml`. This sub-skill is itself HITL — let it ask its own
    questions per dependency.
-7a. **`observability`** → JSON `logback-spring.xml` with MDC correlation IDs
-   (guild #11), Micrometer / Prometheus and tracing. **`request-metrics`**
+7a. **`observability`** → structured JSON logs with MDC correlation IDs
+   (guild #11; Boot's native `logging.structured.format.console`), Micrometer / Prometheus and tracing. **`request-metrics`**
    when Phase 1 #10 = yes; with #9 auth = no, generate it without `ClientIdParser`, its interceptor and the
    `clientId` tag (`request-metrics` parsers-and-helpers §6) — those classes need Spring Security.
 7b. **`security-hardening`** → security headers, CORS, secret handling
@@ -164,6 +157,8 @@ Execute the following skills in order. Each one is documented in its own
    (#15), `resources.*` (#12), `autoscaling.maxReplicas` (#13). The `ci`
    Dockerfile also uses `runAsUser` / `runAsGroup` (#15) and
    `extraSystemPackages` (#17); the Jenkinsfile uses `registryCredentialsId` and `nvdApiKeyCredentialsId` (#19).
+   Keep the `values.yaml` `jwt` block only when #9 = yes (`jwt.issuerUri` is required, `permissions` §7) and the `database` block
+   only with a SQL database (`database.url` / `database.username` are required, `persistence` §3b).
 9. **`unit-tests`** → for every class produced in the previous steps,
    generate a meaningful `*Test.java` next to it. The `ArchitectureTest`
    (step 2) and the PIT / Jacoco gates (`ci` pom, step 1) already exist —
@@ -173,55 +168,29 @@ Execute the following skills in order. Each one is documented in its own
     `ComponentTestConfiguration` (and any opt-out `@TestConfiguration`s for
     heavy `@PostConstruct` beans) with deterministic fakes for every
     collaborator added in the previous steps.
-11. **`integration-tests`** *(if any external dependency was added)* →
-    produces `*IT.java` Testcontainer / WireMock tests under
-    `@Tag("integration")` (Failsafe is already in the `ci` pom).
-12. **`sdk-publishing`** *(only if the developer answered "this repo is a
-    reusable library")* → adds the `META-INF/spring/...AutoConfiguration.imports`
-    file, the `additional-spring-configuration-metadata.json`, and the
-    `ApplicationContextRunner`-based slice tests.
+    With Phase 1 #9 = yes, also generate a context-load test in the **default** profile with
+    `@MockitoBean JwtDecoder` and `spring.security.oauth2.resourceserver.jwt.issuer-uri` set in `properties` — the
+    component tests exclude `SecurityConfig`, so this is the only test that boots the production security chain.
+    Without a SQL dependency it is `ApplicationContextTest` (`mvn test`). **With one it must be `ApplicationContextIT`**:
+    `@Container @ServiceConnection` `PostgreSQLContainer` (add the `integration-tests` test dependencies now), because a
+    database-free default-profile context cannot start (no `DB_URL`; excluding the DataSource fails `AuditConfig`) —
+    `component-tests` §3b.
+    With #9 = yes, `application-component-test.yaml` also sets `jwt.issuer-uri` (`component-tests` §3).
+12. **`sdk-publishing`** *(library only)* and steps 15–17 (`release-versioning`, `documentation-and-adr`,
+    `context-maintenance`): [`references/phase-3-remaining-steps.md`](./references/phase-3-remaining-steps.md).
 12a. **`static-analysis`** → Spotless, SpotBugs (+ the starter
     `spotbugs-exclude.xml`), Error Prone / NullAway, `checkstyle.xml`, and
     `.mvn/jvm.config`.
-13. **`quality-review`** → run the SOLID / conventions audit (every
-    checklist item A–F, including quantitative thresholds) on the whole
-    generated repo; surface the report to the developer. Block the hand-off
-    (Phase 6) if there are unresolved `FAIL`s.
 14. **`local-dev-experience`** → docker-compose for the Phase 1 #16
     dependencies, Makefile, pre-commit hooks; dev settings in
-    `application-local.yaml` (the `local` profile).
-15. **`release-versioning`** → Conventional Commits + release automation.
-16. **`documentation-and-adr`** → ADR-0001 under `docs/adr/`, `docs/ARCHITECTURE.md`.
-17. **`context-maintenance`** → the `context/` folder.
-
+    `application-local.yaml` (the `local` profile), including a local `jwt.issuer-uri` when #9 = yes and the compose
+    `spring.datasource.url` / `username` / `password` with a SQL database (`persistence` §3b).
 ## Phase 4 – Common project infrastructure
 
-Always create these files at the repo root:
-
-- **`README.md`** – use [`templates/README.md.tmpl`](./templates/README.md.tmpl);
-  populate the title, service description, build/run sections.
-- **`.gitignore`** – use [`templates/gitignore.tmpl`](./templates/gitignore.tmpl).
-- **`renovate.json`** – `{"extends":["config:recommended"]}` (`config:base` is the old name).
-- **`.editorconfig`** – use [`templates/editorconfig.tmpl`](./templates/editorconfig.tmpl).
-- **`CODEOWNERS`** (`.github/CODEOWNERS`) – single line: `* <codeowner>`.
-- **Maven wrapper** – run `mvn -N wrapper:wrapper` so `./mvnw` and
-  `.mvn/wrapper/` exist (the `.gitignore` already keeps the wrapper jar).
-- **`src/main/resources/logback-spring.xml`** – produced once, by
-  `observability` (step 7a: JSON + MDC, guild #11); do not write a second,
-  minimal one here.
-- **`src/test/resources/application-component-test.yaml`** – only the
-  test-friendly overrides for the `component-test` profile (in-memory
-  clients, dummy credentials). Never name it `application.yaml`: a test
-  `application.yaml` replaces the main one instead of adding to it
-  (`component-tests` §3).
-
-Profiles (`spring-boot-conventions`): no profile = defaults in
-`application.yaml`; `local` = `application-local.yaml` (local-dev-experience);
-`component-test` = test-only overrides; `k8s` / `prod` = set by the Helm chart
-through `springProfilesActive` (`cd`).
-- **`postman/`** – empty placeholder collection
-  `{{repoName}}.postman_collection.json` with one example request hitting
-  `{{contextPath}}/actuator/health`.
+Always create the repo-root files — `README.md`, `.gitignore`, `renovate.json`, `.editorconfig`, `CODEOWNERS`, the Maven
+wrapper, `lombok.config`, `src/test/resources/application-component-test.yaml`, the profile set and the `postman/`
+placeholder — exactly as listed in [`references/phase-4-infrastructure.md`](./references/phase-4-infrastructure.md)
+(load it now; it is required, not optional).
 
 ## Phase 5 – Validate
 
@@ -233,8 +202,9 @@ Run, in order, and surface output to the user:
    architecture tests, Failsafe ITs, and the Jacoco, PIT, SpotBugs, Checkstyle
    and Error Prone gates — the same build CI runs. (ITs need Docker; if it is
    not available, report them as not verified rather than skipping silently.)
-3. `helm lint helm-chart` – verify the chart is valid (services only).
-4. `helm template helm-chart` – verify the manifests render (services only).
+3. `helm lint --strict helm-chart` – verify the chart is valid (services only).
+4. `helm template helm-chart --set jwt.issuerUri=https://issuer.example.test --set database.url=jdbc:postgresql://db:5432/app --set database.username=app` –
+   verify the manifests render (services only; omit the `jwt.*` / `database.*` flags when there is no auth / no database).
 
 If any step fails, **stop and report** – do not try to silently patch.
 

@@ -1,5 +1,5 @@
 ---
-description: "`parallel-delegation` loads for a typical request, routed by its description alone"
+description: "`parallel-delegation` loads for a typical request (its description plus the plugin's routing hook)"
 tags: [trigger]
 plugins: ["../../../plugins/ai-toolkit-workflow", "../../../plugins/ai-toolkit-quality"]
 max_turns: 4

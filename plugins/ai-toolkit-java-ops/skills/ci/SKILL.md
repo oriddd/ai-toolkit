@@ -10,7 +10,7 @@ depends_on: [static-analysis]
 ships_templates: true
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # CI Skill
@@ -45,7 +45,7 @@ Pair with `github-actions-ci` by picking
   <properties>
     <java.version>21</java.version>
     <maven.compiler.release>21</maven.compiler.release>
-    <jacoco.version>0.8.12</jacoco.version> <!-- not managed by the Boot BOM; let Renovate bump it (Java 25 needs a newer release) -->
+    <jacoco.version>0.8.16</jacoco.version> <!-- not managed by the Boot BOM; let Renovate bump it (Java 25 bytecode needs 0.8.14+) -->
     <jacoco.minimum.line>0.85</jacoco.minimum.line>
     <jacoco.minimum.branch>0.75</jacoco.minimum.branch>
   </properties>
@@ -94,6 +94,15 @@ this skill so the two concerns evolve independently. The full
 [`templates/pom.xml.tmpl`](./templates/pom.xml.tmpl) also carries Lombok, Failsafe, the
 Jacoco excludes (bootstrap class, generated sources, JPA metamodel `*_`) and the PIT
 mutation gate (≥ 75 %, guild #12; `unit-tests` explains it).
+
+Next to the pom, check in a `lombok.config` (the `create-repo` scaffold writes the same file):
+
+```properties
+lombok.addLombokGeneratedAnnotation = true
+```
+
+It pins the `@lombok.Generated` marker on Lombok-generated methods, which JaCoCo filters out, so getters, `equals` and
+builders never count against the per-class coverage gate whatever the Lombok version's default is.
 
 ## 2. `Dockerfile` — multi-stage, layered, non-root
 

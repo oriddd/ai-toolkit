@@ -1,7 +1,7 @@
 # Build Plan
 <!-- How the service is built, tested and shipped, and what is being built next. -->
 ## 1. Build and Run Locally (REQUIRED)
-<!-- Prerequisites and the exact commands (e.g. make up && make run). -->
+<!-- Prerequisites and the exact commands (e.g. `make run`, `uv run fastapi dev`, `npm start`). -->
 ## 2. Pipeline (REQUIRED)
 <!-- CI stages, quality gates, where artifacts and images go. -->
 ## 3. Deployment (REQUIRED)

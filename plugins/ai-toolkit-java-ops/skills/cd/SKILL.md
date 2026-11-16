@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [ci]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-06-28
+version: 1.3
+last_reviewed: 2026-11-15
 ---
 
 # CD Skill
@@ -30,7 +30,7 @@ helm-chart/
     ├── _helpers.tpl          # fullname, labels, serviceAccountName, credentialsSecretName
     ├── deployment.yaml
     ├── hpa.yaml
-    ├── pdb.yaml              # only when autoscaling.minReplicas > 1
+    ├── pdb.yaml              # only when autoscaling.minReplicas > 1 (the default is 2)
     ├── secret.yaml
     ├── service.yaml
     ├── serviceAccount.yaml
@@ -56,7 +56,8 @@ sed -e 's/{{chartName}}/my-service/g' -e 's/{{appPort}}/8080/g' … deployment.y
 ```
 
 Do **not** render a `.tmpl` with Helm or Go templates directly (the placeholders are not valid actions), and do not
-unescape before substituting. Check the result with `helm lint --strict helm-chart` and `helm template helm-chart`.
+unescape before substituting. Check the result with `helm lint --strict helm-chart` and `helm template helm-chart --set jwt.issuerUri=<issuer-url> --set database.url=<jdbc-url> --set database.username=<user>`
+(without `jwt.*` for a service with no authentication and without `database.*` for one with no database; `helm lint` does not evaluate `required`, `helm template` does).
 
 ## Inputs (ask if missing)
 
@@ -71,6 +72,15 @@ unescape before substituting. Check the result with `helm lint --strict helm-cha
 | `resources.limits` | `cpu: 1`, `memory: 1Gi` | |
 | `autoscaling.maxReplicas` | `5` | |
 | `fsGroup` | `1000` | usually equals `runAsGroup` |
+
+With create-repo auth = yes (`permissions` §7) the service does not start without `JWT_ISSUER_URI`, so `values.yaml`
+carries a `jwt` block (`issuerUri`, REQUIRED, and `audience`) that the Deployment turns into `JWT_ISSUER_URI` /
+`JWT_AUDIENCE`; `helm template` fails when `issuerUri` is empty. Delete the block when auth = no.
+
+With a SQL database (`persistence` §3b) `values.yaml` also carries a `database` block (`url`, `username`, both REQUIRED)
+that the Deployment turns into `DB_URL` / `DB_USER`; `DB_PASSWORD` is never in values: it is a key of the credentials
+Secret (`credentials.existingSecret`, or `credentials.values.DB_PASSWORD` on a dev cluster). Delete the block when there
+is no database.
 
 Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (list of `{name, value}` or
 `{name, valueFrom: {secretKeyRef: …}}`), `extraVolumes` / `extraVolumeMounts` (e.g. license files, fonts, certs),
@@ -97,8 +107,14 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
    - `serviceAccountName` from the `serviceAccountName` helper (`serviceAccount.create` / `serviceAccount.name`).
    - Standard `app.kubernetes.io/*` labels and a release-scoped name (`fullname` helper), so two releases — or two
      services inside one umbrella chart — never collide.
-   - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
-   - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation).
+   - `SPRING_PROFILES_ACTIVE` from `springProfilesActive`, `JWT_ISSUER_URI` / `JWT_AUDIENCE` from `jwt.*` (auth = yes), `DB_URL` / `DB_USER` from `database.*` (SQL database), and `extraEnv` / `extraVolumes` / `extraVolumeMounts` from values.
+   - Pod-level `appArmorProfile: { type: RuntimeDefault }` (Kubernetes ≥ 1.30; replaces the deprecated `container.apparmor.security.beta.kubernetes.io/*` annotation), on by default and switched off with `appArmor.enabled: false`: on a node without AppArmor (kind on Colima/Docker Desktop, RHEL/OpenShift, Bottlerocket) the kubelet rejects every pod (`Cannot enforce AppArmor`) and the rollout never becomes Ready.
+   - A `checksum/secret` pod annotation (sha256 of the rendered `secret.yaml`) when the chart renders the Secret, so
+     changed credentials roll the pods — Spring reads env vars only at startup. With `credentials.existingSecret` the
+     chart cannot see the content: let the secret operator (or a reloader controller) restart the Deployment on rotation.
+   - `topologySpreadConstraints` over `topology.kubernetes.io/zone` and `kubernetes.io/hostname` (`maxSkew: 1`,
+     `whenUnsatisfiable: ScheduleAnyway`, `matchLabelKeys: [pod-template-hash]`), on by default
+     (`topologySpread.enabled`): replicas do not share one node or zone, and a single-zone cluster still schedules.
    *(Add shared ConfigMaps as needed for your platform.)*
 4. **Image registry** – `deployment.yaml` resolves the registry inline with
    `{{ (.Values.global).imageRegistry | default .Values.image.registry }}` so a parent
@@ -122,6 +138,8 @@ Set per environment in `values.yaml` (not scaffold placeholders): `extraEnv` (li
    dev/test only: in real environments point `credentials.existingSecret` at a Secret managed by External Secrets,
    Sealed Secrets or SOPS. The Deployment loads whichever Secret applies with `envFrom.secretRef`.
 10. **`templates/pdb.yaml`** – PodDisruptionBudget (`maxUnavailable: 1`), rendered only when `autoscaling.minReplicas > 1`.
+    `values.yaml` defaults `minReplicas: 2`, so a node drain never takes the only pod down; set 1 only for dev
+    environments, which then get no PDB.
 
 ## Probes & observability contract
 

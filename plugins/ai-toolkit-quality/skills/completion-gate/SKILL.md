@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [code-hygiene, sonar-quality-gate]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.2
+last_reviewed: 2026-11-15
 ---
 
 # Completion Gate Skill
@@ -30,9 +30,14 @@ after each fix the gate makes you do. It decides "done"; the language skills def
   `pop` leaves conflicts. To compare against the base branch, use a separate worktree (`git worktree add`) or ask.
 - `ai-toolkit-workflow` ships a best-effort hook that asks for confirmation before direct `git commit|push|tag|rebase|merge|
   cherry-pick|am|revert|stash`, discards (`git clean`, `git restore`, `git checkout -- <file>`, `git reset --hard`),
-  `gh pr create|edit|merge`, `npm version|publish` and `mvn release:*|deploy` in Claude's Bash tool.
+  `gh pr create|edit|merge`, and publish or release commands (`npm version|publish`, `uv|poetry|twine publish|upload`,
+  `mvn release:*|deploy`, `gradle publish`) in Claude's Bash tool.
   It cannot see aliases, scripts that commit internally, or other tools — it is a backstop, not a guarantee, and a prompt
   does not replace the developer's request. The rule is yours to follow.
+
+A quality-only install (`ai-toolkit-quality` without `ai-toolkit-workflow`) has no commit-guard hook and no routing
+hook: nothing asks for confirmation before `git commit` / `git push`, and nothing points you at the language skills. Follow
+§1 yourself, state in the evidence table that the guard is not installed, and still run the gate with the §3 commands.
 
 ## 2. The gate
 
@@ -59,14 +64,17 @@ Prefer the project's own wrapper (`make verify`, `npm run verify`) when it exist
 | Java / Maven | `mvn -B clean verify` (Spotless, Checkstyle, SpotBugs, ArchUnit, JaCoCo run in the build) and the project's PIT mutation run, e.g. `mvn org.pitest:pitest-maven:mutationCoverage` (non-negotiable 12, score ≥ 75 %) | `diff-cover target/site/jacoco/jacoco.xml --compare-branch=origin/<default-branch> --src-roots src/main/java`; Sonar new-code coverage |
 | Python | the verify sequence from `python-static-analysis` §5: `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest -m "not integration"` (+ `uv run pytest -m integration` when Docker is available) | `uv run pytest -m "not integration" --cov --cov-report=xml` + `diff-cover coverage.xml --compare-branch=origin/<default-branch>` |
 | React Native | `npm run verify` (`tsc --noEmit`, `eslint . --max-warnings 0`, `prettier --check .`, `jest --ci --coverage` — see `react-native-static-analysis`) | `jest --coverage` + changed files from `git diff` |
+| Other stack (Go, .NET, Rust, …) | the project's own verify target (`make verify`, `make check`, CI script, `go test ./... && go vet ./...`, `dotnet build && dotnet test`) — read the Makefile / CI config to find it | the stack's coverage tool on changed files; if none is configured, say so |
 
 If a command does not exist for the project, say so — do not invent a substitute and call it passing.
+For an other stack no language skill exists: use the project's own verify target, and report every check you could not find a command for (lint, coverage, mutation, Sonar) as **not verified — no command found**, never as pass.
 
 **Blocked by the environment.** When Docker (Testcontainers integration tests) or the PIT run cannot run here —
 no Docker daemon, no network, sandbox limits — do not report the build as passing:
 
-- Run what can run and skip only the blocked part explicitly: `-DskipITs` for Failsafe integration tests, `-DskipPitest`
-  for PIT (`-Dpit.skip` is not a PIT property and does nothing), `-m "not integration"` for pytest.
+- Run what can run and skip only the blocked part explicitly: Java `-DskipITs` for Failsafe integration tests and
+  `-DskipPitest` for PIT (`-Dpit.skip` is not a PIT property and does nothing); Python `-m "not integration"`;
+  React Native skip the device/emulator E2E run and keep `npm run verify`.
 - Report each skipped check as **not verified — blocked by the environment (<reason>)**, never as pass.
 - Compare with the baseline where you can: say whether the same check was already blocked or failing before the
   change, so the developer knows what is left to verify in CI.
@@ -75,14 +83,22 @@ no Docker daemon, no network, sandbox limits — do not report the build as pass
 
 Finish with a table. A row is **pass** only when you saw the command succeed in this session.
 
+One row per gate check, columns Check, Command, Result (Java shown; use the §3 command of your language):
+
 ```
-| Check          | Command                  | Result                         |
-| Build          | mvn -B clean verify      | pass (BUILD SUCCESS, 412 tests)|
-| Static analysis| (part of verify)         | pass                           |
-| Coverage       | jacoco + diff            | pass — 2 uncovered lines: <why>|
-| Sonar          | sonar-maven-plugin:sonar | not verified — no SONAR_TOKEN  |
+| Check           | Command                         | Result                              |
+| --------------- | ------------------------------- | ----------------------------------- |
+| Scope           | git status --short              | pass — 6 files, all in the task     |
+| Build + tests   | mvn -B clean verify             | pass (BUILD SUCCESS, 412 tests)     |
+| Static analysis | (part of verify)                | pass                                |
+| Standards       | code-review agent               | pass — no findings                  |
+| Coverage        | diff-cover jacoco.xml           | pass — 2 uncovered lines: <why>     |
+| Hygiene         | code-hygiene §5 on git diff     | pass                                |
+| Sonar           | read CI gate status             | not verified — no SONAR_TOKEN       |
+| Docs            | context-maintenance             | pass — progress-tracker.md updated  |
 ```
 
+Python: `uv run ruff check . && … && uv run pytest -m "not integration"`, React Native: `npm run verify`.
 Results are `pass`, `fail` or `not run/not verified` with the reason. Never write "should pass", and never
 turn a skipped check into a pass.
 
@@ -119,6 +135,13 @@ available to you, apply the check 5 standards inline and say so in the table.
 - ✅ Fix, re-run from the build, report with evidence, then ask whether to commit.
 
 ## Cross-references
+
+`git-commit-conventions`, `parallel-delegation` and `release-versioning` come from `ai-toolkit-workflow`; `context-maintenance`
+from `ai-toolkit-docs`. This plugin does not depend on them (the dependency graph is quality ← workflow ← docs), and every
+language set installs both. With `ai-toolkit-quality` alone those skills do not exist, so: §1 commit policy applies as
+written; when asked to commit, use Conventional Commit subjects (`type(scope): imperative summary`, ≤ 72 characters,
+no trailing period) and one logical change per commit; skip check 9's skill and report docs as "not verified — docs
+skills not installed" when the change needs doc updates; run check 5 inline and do not delegate to review agents.
 
 `code-hygiene`, `sonar-quality-gate`, `parallel-delegation`, `context-maintenance`, `git-commit-conventions` (when asked to
 commit), and per language its static-analysis, unit-test and review skills (Java `static-analysis`, `unit-tests`, `quality-review`, `golden-path`; `python-static-analysis`, `python-unit-tests`; `react-native-static-analysis`, `react-native-unit-tests`).

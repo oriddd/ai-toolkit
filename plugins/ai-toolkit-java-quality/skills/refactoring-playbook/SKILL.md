@@ -10,7 +10,7 @@ depends_on: [quality-review]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-15
 ---
 
 # Refactoring Playbook Skill (meta)
@@ -43,26 +43,38 @@ Steps:
 Symptom: `if (ctx == USER) … else if (ctx == SERVICE_ACCOUNT) …`.
 
 Steps:
-1. Extract the interface `XxxStrategy` with a `supports(...)` method.
+1. Extract the interface `XxxStrategy` with the business method and **one**
+   discriminator method saying what it supports — `getSupported<X>()` (or
+   `supported<X>s()` for several values), the `strategy-registry-pattern` contract.
 2. Move each branch into a `@Component` strategy class.
-3. Create a `Handler` (`@Component`) that takes `List<XxxStrategy>` and
-   dispatches by `supports`.
+3. Create an `XxxRegistry` (`@Component`) that takes `List<XxxStrategy>`,
+   indexes it by the discriminator in its constructor and fails at startup when
+   two strategies claim the same value; and a `Handler` (`@Component`) that
+   resolves the discriminator, asks the registry and throws a domain exception
+   when nothing matches.
 4. Replace the original `if/else` with `handler.handle(input)`.
 5. Delete the dead `if` after green tests.
 
-See `code-structure` §2 + `permissions` for the canonical shape.
+See `code-structure` §2, `strategy-registry-pattern` and `permissions` for the canonical shape.
 
-## 3. `RestTemplate` → `RestClient` + Decorator
+## 3. `RestTemplate` → `RestClient` (+ Decorator only where Boot does not cover it)
 
 Symptom: `RestTemplate` calls, retry/cache logic inline, no domain
 exception translation.
 
 Steps:
 1. Introduce a `FooClient` interface mirroring the methods used.
-2. Implement it with `RestClient` (sync) or `WebClient` (reactive); wrap
-   non-2xx into a `FooException` at the boundary.
-3. Wrap with a `MeteredFooClient` decorator (Micrometer Timer).
-4. Add Resilience4j `@CircuitBreaker` + `@Retry` (see `external-client`).
+2. Implement it with `RestClient` (sync) or `WebClient` (reactive), built from
+   Boot's injected `RestClient.Builder` / `WebClient.Builder` (`external-client` §6).
+   Translate every non-2xx at the boundary into the shared catalogue — no
+   per-dependency `FooException`: 5xx / timeout → `ExceptionMessages.dependencyUnavailable(...)`
+   (`UnavailableException`, 503), any other status → `dependencyCallFailed(...)`
+   (`DependencyException`, 500), see `exception-handling`.
+3. Metrics: the Boot-built client already records a per-call Micrometer Timer
+   (`http.client.requests`) — do not add a `MeteredFooClient` Timer decorator
+   that duplicates it. Keep the Decorator for what Boot does not record: a
+   domain-level metric (`observability`) or caching.
+4. Add Resilience4j `@CircuitBreaker` + `@Retry` (see `external-client` §10).
 5. Replace callers; the old `RestTemplate` bean becomes a candidate for
    deletion (do it in a separate PR).
 
@@ -115,6 +127,9 @@ Steps:
 4. Add `Mockito.clearInvocations(...)` in `@AfterEach` where needed — not
    `Mockito.reset(...)`, which wipes the deterministic stubbing from step 2
    (see `component-tests` "Resetting state between tests").
+5. `@MockBean` / `@SpyBean` are deprecated since Boot 3.4: replace the ones
+   that remain (slice tests such as `@WebMvcTest`) with `@MockitoBean` /
+   `@MockitoSpyBean` (`org.springframework.test.context.bean.override.mockito`).
 
 ## 7. Hibernate auto-DDL → Flyway
 

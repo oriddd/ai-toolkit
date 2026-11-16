@@ -16,8 +16,9 @@ foo-service:
 Bind the block with one `FooProperties` `@ConfigurationProperties` record
 (`spring-boot-conventions` §1; shown in §6) — never `@Value`. Mirror every key as a constant in
 `constant/ConfigurationConstants` (one constant per prefix, used by
-`@ConfigurationProperties`; `spring-boot-conventions` §1). Add liveness/readiness probes for this dependency (see
-`health-indicator`).
+`@ConfigurationProperties`; `spring-boot-conventions` §1). Add a health indicator for this dependency
+(`health-indicator`) and put it in the **readiness** group only if the service cannot work without it (its question
+8); never in liveness — a downstream outage must take the pod out of the Service, not restart it.
 
 ## 10. Resilience — Resilience4j
 
@@ -26,7 +27,7 @@ Bind the block with one `FooProperties` `@ConfigurationProperties` record
 <dependency>
     <groupId>io.github.resilience4j</groupId>
     <artifactId>resilience4j-bom</artifactId>
-    <version><current></version>
+    <version>${resilience4j.version}</version>   <!-- <properties>: resilience4j.version = 2.4.0, verified on Boot 3.5 -->
     <type>pom</type>
     <scope>import</scope>
 </dependency>
@@ -45,6 +46,8 @@ Bind the block with one `FooProperties` `@ConfigurationProperties` record
 
 > **Boot 4 note:** the AOP starter is named `spring-boot-starter-aspectj` there.
 
+Merge under the single top-level `resilience4j:` key of `application.yaml`:
+
 ```yaml
 resilience4j:
   circuitbreaker.instances.foo-service:
@@ -57,8 +60,8 @@ resilience4j:
     enableExponentialBackoff: true          # without this the multiplier below is ignored
     exponentialBackoffMultiplier: 2
     retryExceptions:
-      # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees the raw
-      # WebClientResponseException because handleResponse() has already wrapped it.
+      # the exception FooClient translates a transient failure (5xx, timeout) into (§6) — Retry never sees a raw
+      # HttpServerErrorException / ResourceAccessException because bodyOrThrow() has already wrapped it.
       # {{basePackage}}.exception.UnavailableException (exception-handling), e.g.:
       - com.example.foo.exception.UnavailableException
 ```
@@ -66,9 +69,11 @@ resilience4j:
 ```java
 @CircuitBreaker(name = "foo-service", fallbackMethod = "fallback")
 @Retry(name = "foo-service")
-public FooSearchResponseDto search(final FooSearchRequestDto request) { … }   // unchecked domain exceptions: no throws
+public FooSearchResponseDto search(final FooSearchRequestDto request)
+        throws UnavailableException, DependencyException { … }
 
-private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t) {
+private FooSearchResponseDto fallback(final FooSearchRequestDto req, final Throwable t)
+        throws BaseDomainException {
     if (t instanceof BaseDomainException mapped) {
         throw mapped;               // keep the type: UnavailableException stays retryable, DependencyException does not
     }

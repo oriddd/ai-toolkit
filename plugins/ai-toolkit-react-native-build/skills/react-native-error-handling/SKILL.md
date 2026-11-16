@@ -9,8 +9,8 @@ applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-state-and-data]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -49,24 +49,28 @@ SDK 58: `~8.28.0`; bare: the latest stable release).
 // shared/errors/AppError.ts
 export type ErrorCode =
   | 'NETWORK_OFFLINE' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION_FAILED'
-  | 'BAD_REQUEST' | 'RATE_LIMITED' | 'SERVER' | 'UNKNOWN';
+  | 'BAD_REQUEST' | 'RATE_LIMITED' | 'EMAIL_TAKEN' | 'SERVER' | 'UNKNOWN';   // EMAIL_TAKEN: from a server code, §3
 
 export class AppError extends Error {
+  override name = 'AppError';
   constructor(readonly code: ErrorCode, readonly retryable: boolean, options?: { cause?: unknown }) {
     super(code, options);
-    this.name = new.target.name;
   }
 }
-export class NetworkError extends AppError { constructor(cause?: unknown) { super('NETWORK_OFFLINE', true, { cause }); } }
-export class UnauthorizedError extends AppError { constructor() { super('UNAUTHORIZED', false); } }
-export class NotFoundError extends AppError { constructor() { super('NOT_FOUND', false); } }
-export class ServerError extends AppError { constructor(readonly status: number) { super('SERVER', true); } }
+export class NetworkError extends AppError { override name = 'NetworkError'; constructor(cause?: unknown) { super('NETWORK_OFFLINE', true, { cause }); } }
+export class UnauthorizedError extends AppError { override name = 'UnauthorizedError'; constructor() { super('UNAUTHORIZED', false); } }
+export class NotFoundError extends AppError { override name = 'NotFoundError'; constructor() { super('NOT_FOUND', false); } }
+export class ServerError extends AppError { override name = 'ServerError'; constructor(readonly status: number) { super('SERVER', true); } }
 export type FieldErrors = Record<string, string>;        // form field path -> server error code
-export class ValidationError extends AppError { constructor(readonly fieldErrors: FieldErrors) { super('VALIDATION_FAILED', false); } }
+export class ValidationError extends AppError { override name = 'ValidationError'; constructor(readonly fieldErrors: FieldErrors) { super('VALIDATION_FAILED', false); } }
 export const isAppError = (e: unknown): e is AppError => e instanceof AppError;
 ```
 
-Add a subclass only when callers branch on it; otherwise a new `ErrorCode` is enough. Every 4xx the API documents gets its own code, so nothing expected lands in `UNKNOWN` and is reported as a bug.
+Each class sets its `name` as a string literal: the release bundle's minifier renames classes (Metro's terser config
+turns `new.target.name` / `constructor.name` into `''` or `c`), so a derived name breaks crash grouping. Group and
+branch on `code`, never on `name`.
+
+Add a subclass only when callers branch on it; otherwise a new `ErrorCode` is enough. Every 4xx the API documents gets its own code (by status, or by the problem `code` in §3), so nothing expected lands in `UNKNOWN` and is reported as a bug.
 
 ## 2. Message catalogue
 
@@ -81,6 +85,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   VALIDATION_FAILED: 'Some of the information is not valid.',
   BAD_REQUEST: 'We could not process that request. Please try again.',
   RATE_LIMITED: 'Too many requests. Please wait a moment and try again.',
+  EMAIL_TAKEN: 'An account with this email already exists.',
   SERVER: 'Something went wrong on our side. Please try again.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
@@ -94,14 +99,38 @@ server text, stack traces or ids. When localising, key this by `ErrorCode` into 
 
 ```ts
 // shared/errors/mapHttpError.ts
+// the server's stable problem `code` (python-error-handling §2, exception-handling) -> our ErrorCode; 4xx only
+const SERVER_CODES: ReadonlyMap<string, ErrorCode> = new Map<string, ErrorCode>([
+  ['EMAIL_ALREADY_REGISTERED', 'EMAIL_TAKEN'],
+  ['ORDER_VERSION_CONFLICT', 'CONFLICT'],
+]);
+
+// error bodies are application/problem+json: `code`, and on 422 `errors: [{ field, code, message }]`
+const problemSchema = z.object({
+  code: z.string().optional(),
+  errors: z.array(z.object({ field: z.string(), code: z.string() })).default([]),
+});
+type Problem = z.infer<typeof problemSchema>;
+const NO_PROBLEM: Problem = { errors: [] };
+
+const readProblem = async (res: Response): Promise<Problem> => {
+  const parsed = problemSchema.safeParse(await res.json().catch(() => null));   // no or non-JSON body: status only
+  return parsed.success ? parsed.data : NO_PROBLEM;
+};
+const fieldErrorsOf = (problem: Problem): FieldErrors =>
+  Object.fromEntries(problem.errors.map((e) => [e.field.replace(/^body\./, ''), e.code]));  // `body.email` -> `email`
+
 export async function mapHttpError(res: Response): Promise<AppError> {
+  const problem = await readProblem(res);
+  const known = problem.code === undefined ? undefined : SERVER_CODES.get(problem.code);
+  if (known && res.status < 500) return new AppError(known, false);       // a documented code wins over the status
   switch (res.status) {
     case 400: return new AppError('BAD_REQUEST', false);
     case 401: return new UnauthorizedError();
     case 403: return new AppError('FORBIDDEN', false);
     case 404: return new NotFoundError();
     case 409: return new AppError('CONFLICT', false);
-    case 422: return new ValidationError(await readFieldErrors(res));
+    case 422: return new ValidationError(fieldErrorsOf(problem));
     case 429: return new AppError('RATE_LIMITED', false);
     default:  return res.status >= 500 ? new ServerError(res.status) : new AppError('UNKNOWN', false);
   }
@@ -109,16 +138,11 @@ export async function mapHttpError(res: Response): Promise<AppError> {
 export const toNetworkError = (cause: unknown) => new NetworkError(cause);
 // a response that breaks the zod contract is our bug: UNKNOWN is reported and not retried
 export const toContractError = (cause: unknown) => new AppError('UNKNOWN', false, { cause });
-
-// 422 bodies are problem+json with `errors: [{ field, code, message }]` (see python-error-handling / exception-handling)
-const problemSchema = z.object({ errors: z.array(z.object({ field: z.string(), code: z.string() })).default([]) });
-async function readFieldErrors(res: Response): Promise<FieldErrors> {
-  const parsed = problemSchema.safeParse(await res.json().catch(() => null));
-  if (!parsed.success) return {};
-  return Object.fromEntries(parsed.data.errors.map((e) => [e.field.replace(/^body\./, ''), e.code]));  // `body.email` -> `email`
-}
 ```
 
+Clients branch on the server's `code`, never on its text: add a `SERVER_CODES` entry (and an `ErrorCode` with its
+catalogue message) for each code a screen must react to differently; an unlisted code falls back to the status. A
+`Map`, so a server code such as `toString` never matches a prototype member.
 Only the codes are kept, never the server's message text: the form maps each code to the validation catalogue
 (see `react-native-input-validation`).
 

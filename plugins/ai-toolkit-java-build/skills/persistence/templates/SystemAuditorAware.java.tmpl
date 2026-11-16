@@ -1,0 +1,15 @@
+package {{basePackage}}.config;
+import java.util.Optional;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.stereotype.Component;
+/**
+ * createdBy / updatedBy for a service without authentication (create-repo auth = no, no Spring Security on the classpath),
+ * where SecurityAuditorAware does not compile. Use one or the other, never both: both are the bean "auditorAware".
+ */
+@Component("auditorAware")
+public class SystemAuditorAware implements AuditorAware<String> {
+    @Override
+    public Optional<String> getCurrentAuditor() {
+        return Optional.of("system");
+    }
+}

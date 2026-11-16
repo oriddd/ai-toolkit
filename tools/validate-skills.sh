@@ -538,6 +538,13 @@ for lang, label in (("java", "Java"), ("python", "Python"), ("react-native", "Re
 for pl in mp.get("plugins", []):
     if "version" in pl:
         err(f"marketplace.json: entry `{pl['name']}` must not set `version` (plugin.json owns it)")
+import re as _re
+_cl = os.path.join(root, "docs", "CHANGELOG.md")
+if os.path.exists(_cl):
+    _released = _re.search(r"^## \[(\d+\.\d+\.\d+)\]", read(_cl), _re.M)
+    _mpv = mp.get("metadata", {}).get("version")
+    if _released and _mpv and _released.group(1) != _mpv:
+        err(f"marketplace.json metadata.version {_mpv} != latest released CHANGELOG section {_released.group(1)} — cut a CHANGELOG release section when the marketplace version is bumped")
 for pname, pdir in listed.items():
     try:
         pj = json.loads(read(os.path.join(pdir, ".claude-plugin", "plugin.json")))

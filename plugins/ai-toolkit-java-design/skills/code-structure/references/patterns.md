@@ -8,11 +8,15 @@ Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings 
 > Read that skill for the complete pattern definition and all component responsibilities.
 
 When the same operation has **multiple interchangeable implementations** chosen
-at runtime, use this pattern:
+at runtime, use this pattern (the contract is `strategy-registry-pattern` — `components.md` §3–§4):
 
-1. **`<X>Strategy`** – interface with a `canHandle(...)` discriminator method plus the business method
+1. **`<X>Strategy`** – interface with the business method plus **one** discriminator method, `getSupported<X>()`
+   (or `supported<X>s()` when a strategy serves several values); a default `canHandle(...)` derived from it exists
+   for tests and is never overridden with other logic
 2. **Concrete strategies** – `@Component` classes implementing the interface
-3. **`<X>Registry`** – `@Component` that receives `List<<X>Strategy>` via constructor injection and routes by calling `canHandle`
+3. **`<X>Registry`** – `@Component` that receives `List<<X>Strategy>` via constructor injection, indexes it by the
+   discriminator once in the constructor, **fails at startup** when two strategies claim the same value (routing
+   must never depend on bean order), and returns `Optional`
 4. **`<X>Handler`** – orchestrator that resolves context, calls registry, executes strategy
 
 **Reference skills:**
@@ -24,20 +28,34 @@ at runtime, use this pattern:
 
 ```java
 @Component
-@RequiredArgsConstructor
-public class XyzHandler {
-    private final List<XyzStrategy> strategies;
+public class XyzRegistry {
+    private final Map<XyzType, XyzStrategy> strategiesByType;
 
-    public Result handle(Input in) {
-        List<XyzStrategy> matches = strategies.stream()
-                .filter(s -> s.canHandle(in))
-                .toList();
-        if (matches.size() > 1) {   // routing must never depend on bean order
-            throw new IllegalStateException("Ambiguous XyzStrategy for " + in + ": " + matches);
-        }
-        return matches.stream()
-                .findFirst()
-                .orElseThrow(() -> new DomainException(...))
+    public XyzRegistry(final List<XyzStrategy> strategies) {
+        this.strategiesByType = strategies.stream().collect(Collectors.toUnmodifiableMap(
+                XyzStrategy::getSupportedType,
+                Function.identity(),
+                (first, second) -> {
+                    throw new IllegalStateException("Two XyzStrategy beans for " + first.getSupportedType()
+                            + ": " + first.getClass().getName() + ", " + second.getClass().getName());
+                }));
+    }
+
+    public Optional<XyzStrategy> find(final XyzType type) {
+        return Optional.ofNullable(strategiesByType.get(type));
+    }
+}
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class XyzHandler {
+    private final XyzTypeResolver xyzTypeResolver;
+    private final XyzRegistry xyzRegistry;
+
+    public Result handle(final Input in) throws BaseDomainException {
+        final XyzType type = xyzTypeResolver.resolve(in);
+        return xyzRegistry.find(type)
+                .orElseThrow(() -> ExceptionMessages.unsupportedXyz(type))   // a factory in the catalogue (exception-handling)
                 .execute(in);
     }
 }
@@ -45,9 +63,9 @@ public class XyzHandler {
 
 ### Do / Don't
 ✅ Add a new behaviour by adding **one** new `@Component` strategy – never touch
-the handler.
-✅ Throw a domain exception (unchecked — extends the `RuntimeException`-based
-hierarchy in `exception/`) when no strategy matches.
+the handler or the registry.
+✅ Throw a domain exception (checked — the `BaseDomainException` hierarchy in `exception/`, declared with
+`throws`) when no strategy matches.
 ❌ Do not `if/else` on a type discriminator inside a service – that is a smell
 indicating you should introduce a strategy.
 
@@ -65,7 +83,7 @@ Full implementation details in request-metrics skill.
 ```
 monitor/
 ├── MetricsFilter.java          # OncePerRequestFilter – measures latency
-├── MonitoringConfig.java       # @Configuration: URI Pattern → query type
+├── MonitoringConfig.java       # @Component: ordered URI pattern → metric name list (no beans, so not @Configuration)
 ├── MonitoringConstants.java
 ├── MetricsTagsHelper.java
 ├── MetricsTimerHelper.java
@@ -94,13 +112,13 @@ several services, response assembly) maps to exactly one class in
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ExportInvoiceOperation {
     private final PermissionsHandler permissionsHandler;
     private final ExportInvoiceService exportInvoiceService;
 
-    public ExportInvoiceResponse execute(ExportInvoiceRequest req) {
-        permissionsHandler.handle(req.invoiceId());   // throws the unchecked ForbiddenException
+    public ExportInvoiceResponse execute(ExportInvoiceRequest req) throws BaseDomainException {
+        permissionsHandler.handle(req.invoiceId());   // throws the checked ForbiddenException
         return exportInvoiceService.export(req);
     }
 }

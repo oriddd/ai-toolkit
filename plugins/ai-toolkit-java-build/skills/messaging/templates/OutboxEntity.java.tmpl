@@ -7,6 +7,8 @@ import org.jspecify.annotations.Nullable;
 @Table(name = "outbox")
 public class OutboxEntity {
     @Id private UUID id = UUID.randomUUID();
+    /** null until persisted: Spring Data's save() then persists instead of merging (no extra SELECT; persistence §1). */
+    @Version private @Nullable Long version;
     @Column(nullable = false) private String aggregateType;
     @Column(nullable = false) private String aggregateId;
     @Column(nullable = false) private String eventType;
@@ -15,16 +17,19 @@ public class OutboxEntity {
     @Column(nullable = false, columnDefinition = "text") private String payload;
     /** W3C trace context of the request that wrote the row; the relay sends it as the `traceparent` header. */
     private @Nullable String traceparent;
-    @Column(nullable = false) private Instant createdAt = Instant.now();
+    @Column(nullable = false) private Instant createdAt;
     private @Nullable Instant publishedAt;
     @SuppressWarnings("NullAway.Init") // JPA-only constructor: Hibernate sets every field right after it (persistence §1)
     protected OutboxEntity() {}
-    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload, @Nullable String traceparent) {
+    /** createdAt comes from the injected Clock (spring-boot-conventions), so tests can fix it. */
+    public OutboxEntity(String aggregateType, String aggregateId, String eventType, String payload,
+                        @Nullable String traceparent, Instant createdAt) {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.payload = payload;
         this.traceparent = traceparent;
+        this.createdAt = createdAt;
     }
     public UUID getId()              { return id; }   // sent as the `event-id` header; consumers dedupe on it
     public String getAggregateType() { return aggregateType; }
@@ -33,5 +38,5 @@ public class OutboxEntity {
     public String getPayload()       { return payload; }
     public @Nullable String getTraceparent()  { return traceparent; }
     public @Nullable Instant getPublishedAt() { return publishedAt; }
-    public void markPublished()      { this.publishedAt = Instant.now(); }
+    public void markPublished(Instant publishedAt) { this.publishedAt = publishedAt; }
 }

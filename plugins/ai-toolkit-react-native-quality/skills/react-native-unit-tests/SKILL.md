@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure, react-native-state-and-data, react-nat
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -46,6 +46,8 @@ jest.config.js  jest.setup.ts
 
 - `jest-expo` is pinned to one Expo SDK: replace `<expo-sdk>` with the app's `expo` major (e.g. `~58.0.0` for SDK 58); use the latest stable SDK for a new app. Bare React Native apps drop `jest-expo` and use the `react-native` preset.
 - `jest` 30 matches `jest-expo` 58, which is built on the Jest 30 packages; Jest 29 runs but installs two Jest stacks.
+  `jest-expo` 58 takes the React Native preset from its peer `@react-native/jest-preset` (npm installs it; with
+  `--legacy-peer-deps` add it yourself, at the app's React Native version, or the preset fails to load).
 - RNTL 14 (React >= 19, React Native >= 0.78, Node `^22.13 || >=24`) renders with `test-renderer`, not the deprecated
   `react-test-renderer`: remove `react-test-renderer`, and pin the `test-renderer` line of your React minor
   (`<test-renderer-line>`: `1.3.0` for React 19.3, `1.2.0` for 19.2). **`render`, `renderHook`, `fireEvent` and `act` are
@@ -55,7 +57,9 @@ jest.config.js  jest.setup.ts
   `@testing-library/jest-native` (deprecated). RNTL unmounts after each test by itself: never call `cleanup()`.
 - `msw` is held on `~2.6.0`: later 2.x releases pull ESM-only dependencies (`rettime`) and `msw` 3 is ESM-only; under
   `jest-expo` both fail with "Must use import to load ES Module", and `msw` 3 with `--experimental-vm-modules` returns
-  responses without a status. Move only when a version passes section 3's tests unchanged.
+  responses without a status. Re-checked 2026-11-15 with `msw` 3.0.6, `jest` 30.5, `jest-expo` 58.0.14 on Node 26: same
+  two failures (plain Jest 30 without `jest-expo` runs `msw` 3 under `--experimental-vm-modules`, so the blocker is the
+  React Native environment's `fetch`). Move only when a version passes section 3's tests unchanged.
 
 ```js
 // jest.config.js
@@ -132,7 +136,7 @@ it('exposes a retryable NetworkError when offline', async () => {
 // test/renderWithProviders.tsx
 const noop = () => undefined;
 export const fakeServices = (): Services => ({
-  http: createHttpClient('https://api.test', () => Promise.resolve(null)),   // real client; MSW answers
+  http: createHttpClient('https://api.test', anonymousSession),              // real client; MSW answers
   storage: new FakeKeyValueStorage(),                                          // Map-backed fakes
   logger: { debug: noop, info: noop, warn: noop, error: noop },
   errorReporter: { report: noop },
@@ -156,6 +160,36 @@ timers from keeping Jest alive (with the mutation default of 5 minutes, `npx jes
 mutation hangs, and the full run prints "A worker process has failed to exit gracefully"). Never render the app's real
 `QueryProvider` in a test for the same reason: test its policy through `createQueryClient` (`react-native-state-and-data` §7).
 
+## 3b. Screens behind Expo Router routes
+
+Test a screen on its own with `render` and the test providers. To prove navigation (a press opens the right route,
+a deep-link path renders the right screen), render an in-memory route tree with `renderRouter` from
+`expo-router/testing-library` (async, peers on RNTL >= 14):
+
+```tsx
+import { userEvent } from '@testing-library/react-native';          // expo-router/testing-library exports it as a type only
+import { renderRouter, screen } from 'expo-router/testing-library';
+
+it('opens the order detail when an order card is pressed', async () => {
+  server.use(http.get('*/orders', () => HttpResponse.json([anOrderDto({ id: 'o-1', title: 'Shoes' })])),
+    http.get('*/orders/o-1', () => HttpResponse.json(anOrderDto({ id: 'o-1', title: 'Shoes' }))));
+  const Providers = testProviders();
+  const user = userEvent.setup();
+  await renderRouter(
+    { _layout: () => <Providers><Slot /></Providers>, 'orders/index': OrdersListScreen, 'orders/[id]': OrderDetailScreen },
+    { initialUrl: '/orders' },
+  );
+
+  await user.press(await screen.findByRole('button', { name: /shoes/i }));
+
+  expect(screen).toHavePathname('/orders/o-1');
+});
+```
+
+The route map points at the feature screens, not at `src/app/` files, so the real root layout (Sentry, real services)
+never runs. `renderRouter` switches the test file to Jest fake timers: keep tests that need real time (the api-client
+timeout) in another file, or call `jest.useRealTimers()` first.
+
 ## 4. Fakes over mocks
 
 Inject in-memory fakes for the interfaces (`SecureStore`, `Analytics`, `Logger`) via the services
@@ -171,12 +205,13 @@ A test of the real adapter (`KeychainSecureStore`, `SentryErrorReporter`) runs a
 | Unit | Positive | Negative | Edge |
 | --- | --- | --- | --- |
 | `signupSchema` | valid form passes | missing `@` rejected | 12-char password boundary, trimmed whitespace |
-| `mapHttpError` | 404 -> `NotFoundError` | 418 -> `UNKNOWN` | 500 and 503 are retryable |
+| `mapHttpError` | 404 -> `NotFoundError`; known problem `code` wins over status | 418 -> `UNKNOWN` | 500 and 503 are retryable; non-JSON body |
+| api-client / `createAuthSession` | 401 -> one refresh, retried with the new token | rejected refresh -> `UnauthorizedError` | two concurrent 401s share one refresh; timeout -> `NetworkError` |
 | `OrdersListScreen` | renders items | shows `ErrorState` on failure | empty list shows empty state |
 | `createQueryClient` | retries a 5xx twice, reports it once | 404 not retried, not reported | offline not reported |
 | `scrubEvent` / `scrubBreadcrumb` | keeps `user.id`, url path | drops email, token, query string | user without id |
 | `parseEnv` | valid build config | `http://` api url throws | missing value throws |
-| App composition | `AppProviders` + root navigator render the first screen | | |
+| Navigation | `renderRouter`: pressing a card opens `/orders/[id]` | invalid route param shows not-found | (React Navigation: `AppProviders` + root navigator render the first screen) |
 
 Table-driven `it.each` is encouraged for mappers and schemas. Test the catalogue: every `ErrorCode` has a message.
 

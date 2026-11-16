@@ -9,8 +9,8 @@ applies_to: [mobile]
 depends_on: [react-native-static-analysis, react-native-unit-tests]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -62,14 +62,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
       - run: npm run verify
 ```
 
 `npm run verify` is the verify script from `react-native-static-analysis`: `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`.
+Expo apps add `- run: npx expo-doctor` after `npm ci` (SDK-mismatched native packages, see
+`react-native-app-config-and-updates` §4).
 Mark the `verify` job as a required status check in branch protection. CI runs exactly what developers and agents run
 locally; no step is `continue-on-error`. Split it into separate steps (`typecheck`, `lint`, `format:check`, `test`) only
 if you want per-step timings in the log.
@@ -86,8 +88,8 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --ignore-scripts
       - run: npm audit --omit=dev --audit-level=high   # advisory: not a required check; triage failures weekly
@@ -113,10 +115,10 @@ jobs:
     if: github.event.label.name == 'preview'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v9
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }   # eas-version = the eas-cli pin
       - run: npm ci
       - run: eas build --profile preview --platform all --non-interactive --no-wait
@@ -150,10 +152,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production        # manual approval gate
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - uses: expo/expo-github-action@v9
+      - uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with: { eas-version: <current>, packager: npm, token: '${{ secrets.EXPO_TOKEN }}' }
       - run: npm ci && npm run verify
       - run: eas build --profile production --platform all --non-interactive --auto-submit
@@ -176,6 +178,9 @@ Linux for Android (`fastlane android release`, keystore from secrets). Keep lane
   work for Fastlane or `eas build --local`. Never hand-edit the version.
 - **Build number** (iOS `buildNumber`, Android `versionCode`) must increase monotonically per upload;
   let EAS `autoIncrement` with `appVersionSource: remote` own it, or derive from `${{ github.run_number }}` for Fastlane.
+- The app never receives version or build number through `EXPO_PUBLIC_*` variables (nothing on the runner can set the
+  remote build number); it reads both from the installed binary at runtime (`expo-application`, see
+  `react-native-observability` §1).
 - One tag, one release; never rebuild a tag. Generate release notes from Conventional Commits.
 
 ## 5. OTA update stance
@@ -183,12 +188,13 @@ Linux for Android (`fastlane android release`, keystore from secrets). Keep lane
 OTA (EAS Update; Microsoft App Center CodePush was retired in 2025, so do not start new work on it) may ship **JS and asset changes only**, never native changes, and only to
 the matching `runtimeVersion`. Use channels (`preview`, `production`), roll out gradually, keep a rollback
 (`eas update:republish`). Store-policy-sensitive changes (new features that change app purpose) go through
-the store. Every OTA passes the same `verify` gate.
+the store. Every OTA passes the same `verify` gate. `runtimeVersion` policy, per-variant `app.config.ts`, channel per
+profile and the publish workflow: `react-native-app-config-and-updates`.
 
 ## 6. Secrets and hygiene
 
 - Store tokens, keystores and certificates in GitHub Secrets/Environments; scope per environment.
-- Least privilege: every workflow declares `permissions:` (`contents: read` unless a job needs more, scoped per job); pin third-party actions to a major version or SHA, and tools such as `eas-cli` to an exact version, never `latest`.
+- Least privilege: every workflow declares `permissions:` (`contents: read` unless a job needs more, scoped per job); pin every action to a full commit SHA with the version in a trailing comment (a moved tag cannot swap code in a job that holds `EXPO_TOKEN`), and tools such as `eas-cli` to an exact version, never `latest`.
 - Cache `~/.npm` via `setup-node`; cache Gradle/CocoaPods only on self-hosted native builds.
 - Upload test reports, Maestro artefacts and source maps (to Sentry) as artifacts of the run.
 
@@ -208,3 +214,4 @@ the store. Every OTA passes the same `verify` gate.
 - `react-native-unit-tests`, `react-native-e2e-tests`: test stages.
 - `react-native-observability`: source map upload and release health per version.
 - `react-native-security`: secrets and signing hygiene.
+- `react-native-app-config-and-updates`: app variants per profile, fingerprint runtime version, EAS Update publishing.

@@ -61,14 +61,17 @@ producing code must validate the diff against this list before returning.
 3. **Controllers contain no business logic**; each endpoint calls one
    `*Operation` when the use case orchestrates several services, otherwise
    one `*Service` (`code-structure`).
-4. **Exceptions** extend the project's **unchecked** domain hierarchy (rooted
-   in a base exception that extends `RuntimeException`, so no `throws`
-   clauses and `@Transactional` rolls back by default) and are built from
+4. **Exceptions** extend the project's **checked** domain hierarchy (rooted
+   in a base exception that extends `Exception`: methods declare `throws`
+   and every `@Transactional` uses `rollbackFor = Exception.class`) and are built from
    the `ExceptionMessages` catalogue, which supplies the error code and
    message (`exception-handling`).
 5. **Authorization** goes through `PermissionsHandler`, never inline
    `if (principal.isAdmin)` (`permissions`).
-6. **Outbound HTTP** goes through the `client/<dep>/` sub-package (see #23) —
+6. **Outbound HTTP** goes through the `client/<dep>/` sub-package for a business
+   downstream (see #23), or through `adapter/<capability>/<vendor>/` when the
+   downstream is a technology capability behind a `spi/` port (#20): the adapter
+   is that port's client and uses the same transport classes —
    never raw `WebClient` / `RestClient` calls in a service.
    **Pattern complexity must match integration scale** (`external-client` §0):
    - Simple CRUD (1-4 endpoints) → Simple Wrapper pattern
@@ -114,7 +117,9 @@ producing code must validate the diff against this list before returning.
     `adapter/<capability>/<vendor>/`; selection/composition is config-driven in
     `config/` with a `@ConditionalOnMissingBean` safe default. No vendor
     type leaks into `spi/`, `service/`, `operation/`, or `controller/`
-    (`pluggable-architecture`, ArchUnit-enforced).
+    (`pluggable-architecture`, ArchUnit-enforced). Accepted facades are used
+    directly, not wrapped: Spring Data repositories, Micrometer, and Spring
+    Kafka / AMQP listeners and templates in `messaging/`.
 21. **Every adapter passes the shared port TCK.** Each port has one
     abstract contract test; every adapter (including the composite)
     subclasses it and passes identical assertions, and a build check fails
@@ -123,8 +128,9 @@ producing code must validate the diff against this list before returning.
 22. **Input validation lives in the validation layer — never inline.**
     Parameter/field rules use Jakarta `@Constraint` + `ConstraintValidator`;
     object/cross-field rules use Spring `Validator` + `@InitBinder`.
-    Domain rule logic is extracted into `rule/` beans. The controller class
-    carries `@Validated`; never write `if (x == null) throw new
+    Domain rule logic is extracted into `rule/` beans. On Boot 3.2+ the
+    controller carries no class-level `@Validated` (built-in method
+    validation; class-level only below 3.2); never write `if (x == null) throw new
     BadRequestException(...)` in a controller, operation, or service
     (`input-validation`).
 23. **Every external downstream is wrapped in a `client/<dep>/` sub-package.**
@@ -137,8 +143,9 @@ producing code must validate the diff against this list before returning.
     in Full 5-Layer, `<Dep>Client` in Simple Wrapper and Lite; `WebClient`,
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
-    exception inside it. In the Full 5-Layer pattern, `exchangeToMono` +
-    `handleResponse` handles all non-2xx, and filter map, request building,
+    exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
+    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).
 24. **Domain endpoint metrics use the Filter → Recorder → Parser pattern.**

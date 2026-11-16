@@ -15,6 +15,12 @@ fail=0
 for dir in plugins/*/; do
   p="$(basename "$dir")"
   changed="$({ git diff --name-only "$mb" -- "$dir" ':(exclude)'"$dir"'.claude-plugin/plugin.json'; git ls-files --others --exclude-standard -- "$dir"; } | grep -v '\.claude-plugin/plugin\.json$' | head -1)"
+  if [ -z "$changed" ]; then    # plugin.json itself: description / dependencies changes count, the version field does not
+    strip='import json,sys;d=json.load(sys.stdin);d.pop("version",None);print(json.dumps(d,sort_keys=True))'
+    a_="$(git show "$mb:$dir.claude-plugin/plugin.json" 2>/dev/null | python3 -c "$strip" 2>/dev/null)"
+    b_="$(python3 -c "$strip" < "$dir.claude-plugin/plugin.json")"
+    [ -n "$a_" ] && [ "$a_" != "$b_" ] && changed="$dir.claude-plugin/plugin.json (description/dependencies)"
+  fi
   [ -n "$changed" ] || continue
   new="$(python3 -c "import json,sys;print(json.load(open('$dir.claude-plugin/plugin.json')).get('version',''))")"
   old="$(git show "$mb:$dir.claude-plugin/plugin.json" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('version',''))" 2>/dev/null)"

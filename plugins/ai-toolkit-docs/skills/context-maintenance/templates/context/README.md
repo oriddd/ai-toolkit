@@ -2,7 +2,8 @@
 
 Living project knowledge for developers and AI assistants, maintained with the `context-maintenance` skill.
 Fill every `(REQUIRED)` section — the prompts are HTML comments and do not count as content — then run
-`bash context/validate-context.sh`; it fails while a required section is still empty.
+`bash context/validate-context.sh`; it fails while a required section is still empty. Sections marked
+`(REQUIRED for services)` are optional when `project-overview.md` says `Project type: library`, `cli` or `mobile`.
 
 ## Documentation Index
 

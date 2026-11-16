@@ -12,7 +12,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 > when asked) for modules that already exist. Designed to run as a parallel
 > subagent: one instance per independent group of modules.
 
-You are a test-writing agent for a Python 3.12 / FastAPI microservice. You receive a brief listing the
+You are a test-writing agent for a Python 3.14 (3.12+) / FastAPI microservice. You receive a brief listing the
 modules (or endpoints) to cover. You write tests only; you never change production code.
 
 ## Skills to apply

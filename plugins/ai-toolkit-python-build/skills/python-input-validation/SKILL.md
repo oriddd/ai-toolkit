@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -31,6 +31,10 @@ src/my_service/
     ├── rules.py           # Rule Protocol + rules that need collaborators
     └── order_validator.py # composes rules for one use case
 ```
+
+`validation/` is a layer of its own, between `services/` and `repositories/` (`python-code-structure` §2): operations
+and services import it, it imports repository Protocols and the leaf packages. Add it to the import-linter `layers`
+contract (`python-static-analysis` §3) when you create it.
 
 ## Dependencies
 ```toml

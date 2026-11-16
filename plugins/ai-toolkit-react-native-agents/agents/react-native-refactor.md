@@ -27,7 +27,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 | --- | --- |
 | Fat screen mixing fetching, logic and rendering | `ai-toolkit-react-native-design:react-native-code-structure` |
 | Cross-feature imports, circular dependencies | `ai-toolkit-react-native-design:react-native-code-structure` |
-| Untyped navigation, `any` route params | `ai-toolkit-react-native-design:react-native-code-structure` |
+| Untyped navigation, `any` or unparsed route params, logic in Expo Router route files | `ai-toolkit-react-native-design:react-native-code-structure` |
 | `fetch`/axios in components, `useEffect` data loading | `ai-toolkit-react-native-design:react-native-state-and-data` |
 | Server data copied into Redux/Context/Zustand | `ai-toolkit-react-native-design:react-native-state-and-data` |
 | Ad-hoc query keys | `ai-toolkit-react-native-design:react-native-state-and-data` |
@@ -41,7 +41,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 
 ```
 1. AUDIT — scan the target and list every anti-pattern found, citing the
-   skill that prescribes the fix. Agree scope with the developer.
+   skill that prescribes the fix. Agree scope with the developer. Keep the
+   app's navigation library (Expo Router or React Navigation); switching it
+   is a separate, explicitly requested change.
 
 2. PRIORITISE — structural issues first (layout, layering, navigation),
    then cross-cutting (errors, logging), then feature patterns

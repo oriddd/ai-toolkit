@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -59,13 +59,17 @@ export type HttpRequest = Omit<RequestInit, 'headers' | 'body'> & {
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;                                        // JSON-serialised by the client (POST/PUT/PATCH payloads)
+  timeoutMs?: number;                                    // default 15 s
 };
 export interface HttpClient { request<T>(req: HttpRequest, schema: z.ZodType<T>): Promise<T>; }  // input type defaults to unknown: a branded or transformed schema's input differs from its output
 
-const authHeaders = async (getToken: () => Promise<string | null>): Promise<Record<string, string>> => {
-  const token = await getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+export interface AuthSession {                           // implemented in shared/session (react-native-security §1)
+  getToken(): Promise<string | null>;
+  refresh(): Promise<string | null>;                     // new access token, or null: the session is over
+}
+export const anonymousSession: AuthSession = { getToken: () => Promise.resolve(null), refresh: () => Promise.resolve(null) };
+
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 export const toQueryString = (query: HttpRequest['query']): string => {
   const params = new URLSearchParams();
@@ -74,15 +78,41 @@ export const toQueryString = (query: HttpRequest['query']): string => {
   return s ? `?${s}` : '';
 };
 
-export const createHttpClient = (baseUrl: string, getToken: () => Promise<string | null>): HttpClient => ({
+// one signal for the caller's cancellation (TanStack's `signal`) and our timeout; React Native 0.85 and earlier
+// have no AbortSignal.timeout / AbortSignal.any (0.88 has both), so compose by hand
+const withTimeout = (outer: AbortSignal | null | undefined, ms: number) => {
+  const controller = new AbortController();
+  const abort = () => { controller.abort(); };
+  const timer = setTimeout(abort, ms);
+  if (outer?.aborted) abort();
+  else outer?.addEventListener('abort', abort);
+  return { signal: controller.signal, clear: () => { clearTimeout(timer); outer?.removeEventListener('abort', abort); } };
+};
+
+export const createHttpClient = (baseUrl: string, session: AuthSession): HttpClient => ({
   async request(req, schema) {
-    const { path, query, body, ...init } = req;         // path/query/body are ours, not RequestInit fields
-    const res = await fetch(`${baseUrl}${path}${toQueryString(query)}`, {
-      ...init,
-      headers: { ...(await authHeaders(getToken)), 'Content-Type': 'application/json', Accept: 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    }).catch((cause: unknown) => { throw toNetworkError(cause); });
-    if (!res.ok) throw await mapHttpError(res);          // see react-native-error-handling (reads the 422 body)
+    const { path, query, body, signal, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = req;  // ours, not RequestInit fields
+    const send = async (token: string | null): Promise<Response> => {
+      const timeout = withTimeout(signal, timeoutMs);
+      try {
+        return await fetch(`${baseUrl}${path}${toQueryString(query)}`, {
+          ...init,
+          signal: timeout.signal,
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json', Accept: 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+      } catch (cause: unknown) {
+        throw toNetworkError(cause);                     // offline, timeout and cancellation: retryable NetworkError
+      } finally {
+        timeout.clear();
+      }
+    };
+    let res = await send(await session.getToken());
+    if (res.status === 401) {                            // one refresh (single-flight in the session), one retry
+      const fresh = await session.refresh();
+      if (fresh) res = await send(fresh);
+    }
+    if (!res.ok) throw await mapHttpError(res);          // see react-native-error-handling (reads the problem body)
     const payload: unknown = res.status === 204                 // 204 has no body: res.json() would throw
       ? undefined
       : await res.json().catch((cause: unknown) => { throw toContractError(cause); });  // malformed 2xx body
@@ -93,9 +123,11 @@ export const createHttpClient = (baseUrl: string, getToken: () => Promise<string
 });
 ```
 
-`authHeaders` returns a plain `Record<string, string>` (`{}` when signed out). An endpoint that
-answers 204 is called with `z.undefined()` as its schema. Every failure the client throws is an `AppError` (network, HTTP status, contract),
-which is what makes the `AppError` narrowing in the hooks below true.
+The token goes into the headers only here (`{}` when signed out). An endpoint that answers 204 is called with
+`z.undefined()` as its schema. Every failure the client throws is an `AppError` (network, timeout, HTTP status,
+contract), which is what makes the `AppError` narrowing in the hooks below true. A 401 still left after the one refresh
+reaches the caller as `UnauthorizedError`, and the `QueryCache` handler signs out (`react-native-security` §1).
+Pass TanStack's `signal` through (sections 2 and 4) so a query that unmounts or is cancelled aborts its request.
 
 The client is provided through the services context in `shared/services/` (`useServices`, see `react-native-code-structure`) so tests inject a fake.
 
@@ -107,14 +139,15 @@ export type OrderFilter = { status?: Order['status']; customerId?: string };
 
 // features/orders/api/ordersApi.ts
 export const createOrdersApi = (http: HttpClient) => ({
-  list: (filter: OrderFilter): Promise<Order[]> =>
-    http.request({ path: '/orders', method: 'GET', query: filter }, z.array(orderSchema)),
+  list: (filter: OrderFilter, signal?: AbortSignal): Promise<Order[]> =>
+    http.request({ path: '/orders', method: 'GET', query: filter, signal: signal ?? null }, z.array(orderSchema)),
   cancel: (id: OrderId): Promise<Order> =>
     http.request({ path: `/orders/${encodeURIComponent(id)}/cancel`, method: 'POST' }, orderSchema),
 });
 ```
 
-Plain functions, typed in and out, no React and no caching here. Every value interpolated into a path is
+Plain functions, typed in and out, no React and no caching here. Reads take an optional `signal`
+(`signal ?? null`: `exactOptionalPropertyTypes` forbids passing `undefined` to `RequestInit.signal`). Every value interpolated into a path is
 `encodeURIComponent`-encoded; query values go through `query`, which `URLSearchParams` encodes.
 
 ## 3. Query keys: a factory per feature
@@ -146,7 +179,7 @@ const NO_ORDERS: Order[] = [];                           // one stable empty arr
 
 export function useOrders(filter: OrderFilter) {
   const ordersApi = useOrdersApi();
-  const q = useQuery({ queryKey: orderKeys.list(filter), queryFn: () => ordersApi.list(filter), staleTime: 30_000 });
+  const q = useQuery({ queryKey: orderKeys.list(filter), queryFn: ({ signal }) => ordersApi.list(filter, signal), staleTime: 30_000 });
   return {
     orders: q.data ?? NO_ORDERS,
     isLoading: q.isPending,
@@ -215,7 +248,7 @@ One small store per concern. Never copy server data into a store; the query cach
 ## 7. Offline and retry stance
 
 ```tsx
-// app/providers/QueryProvider.tsx
+// bootstrap/QueryProvider.tsx (React Navigation apps: app/providers/)
 onlineManager.setEventListener((set) => NetInfo.addEventListener((s) => { set(!!s.isConnected); }));
 focusManager.setEventListener((handleFocus) => {          // React Native has no window focus: use AppState
   const sub = AppState.addEventListener('change', (state) => { handleFocus(state === 'active'); });
@@ -251,11 +284,13 @@ that as `isOffline` so the screen shows an offline state instead of a spinner.
 ## Do / Don't
 
 - ✅ Validate responses with zod at the api-client edge.
+- ✅ Every request has a timeout; queries pass TanStack's `signal` down to `fetch`.
 - ✅ One query-key factory per feature; invalidate by prefix.
 - ✅ Select narrow Zustand slices to avoid re-renders.
 - ❌ `useEffect(() => { fetch(...) }, [])` in a component.
 - ❌ Server data mirrored into Zustand or Redux.
-- ❌ Several HTTP clients or per-call error handling; map errors once.
+- ❌ Several HTTP clients or per-call error handling; map errors once. (The session's unauthenticated client for the
+  refresh call is the one exception: same factory, `anonymousSession`.)
 - ❌ A global store for state one screen owns; use `useState`.
 
 ## Cross-references

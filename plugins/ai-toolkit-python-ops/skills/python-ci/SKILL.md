@@ -1,7 +1,7 @@
 ---
 name: python-ci
 description: >
-  Python 3.12 CI — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a
+  Python CI (3.14, 3.12+) — GitHub Actions with uv and caching, separate lint, type, unit and integration gates, plus a
   multi-stage, non-root Dockerfile. Use when bootstrapping a repo or moving a service onto the standard pipeline. Lint
   rules live in `python-static-analysis`.
 tier: must
@@ -9,8 +9,8 @@ applies_to: [rest, worker, cli, library]
 depends_on: [python-static-analysis, python-unit-tests]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.2
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -23,6 +23,7 @@ When bootstrapping a Python repository, or when the pipeline or container image 
 
 ```
 .github/workflows/ci.yml
+.github/workflows/audit.yml     # pip-audit: weekly and on lock-file changes (§4)
 Dockerfile
 .dockerignore
 pyproject.toml + uv.lock        # lock file is committed; CI installs with --locked (fails on drift)
@@ -59,8 +60,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # vN.N.N: third-party, so SHA-pinned to the latest stable release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "<uv-version>"  # latest stable uv, same as the Dockerfile image tag
           enable-cache: true
@@ -74,8 +75,8 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m "not integration" --cov   # fail_under lives in [tool.coverage.report]
@@ -83,8 +84,8 @@ jobs:
   integration:
     runs-on: ubuntu-latest          # Docker available for testcontainers
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@<commit-sha>   # same SHA as in the quality job
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
       - run: uv sync --locked
       - run: uv run pytest -m integration || [ $? -eq 5 ]   # exit 5 = no integration test collected yet
@@ -93,9 +94,9 @@ jobs:
     needs: [quality, unit, integration]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@<commit-sha>   # third-party: SHA of the latest stable release
-      - uses: docker/build-push-action@<commit-sha>     # third-party: SHA of the latest stable release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
@@ -114,13 +115,14 @@ job with `uv run pytest -m "not integration" --cov --cov-report=xml`, then scan 
 Pass the token only through the `SONAR_TOKEN` environment variable (from a CI secret); never as
 `-Dsonar.token=...` on the command line, where it leaks into logs and process lists.
 
-Pin actions to a major version at minimum (a SHA for third-party ones). Matrix over Python versions
+Pin every action to a full commit SHA with the version in a trailing comment (a moved tag cannot swap code in a job
+that holds registry credentials); let Renovate or Dependabot raise the SHA bumps. Matrix over Python versions
 only for libraries; services test the one version they ship. Push the image only from the default branch, in a
 separate step with registry credentials scoped to that job.
 
 ## 3. Dockerfile: multi-stage, non-root
 ```dockerfile
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
 # use the image's Python, never a downloaded one
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
@@ -132,7 +134,7 @@ COPY src ./src
 # --no-editable: the package is installed into .venv, so the runtime needs no source tree
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
 RUN groupadd --system app && useradd --system --gid app --uid 10001 app
 WORKDIR /app
@@ -143,8 +145,19 @@ COPY alembic.ini ./
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live')"]
-CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# exec form: uvicorn is PID 1 and receives SIGTERM; the timeout must fit the pod's grace period
+CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "20"]
 ```
+
+`--proxy-headers` trusts `X-Forwarded-For`/`-Proto` only from the addresses in `FORWARDED_ALLOW_IPS` (uvicorn reads
+the variable; unset means `127.0.0.1` only). The ingress CIDR differs per cluster, so the Deployment sets it
+(`python-cd`), never the image, and never to `*` (`python-security` §4).
+
+The image's Python, `requires-python`, ruff's `target-version` and mypy's `python_version` name the same version
+(3.14 by default; 3.12 and 3.13 are security-only upstream but still supported here). `uv sync` installs the project
+itself, so `pyproject.toml` needs `[project]` and `[build-system]` and the package must sit at
+`src/<normalised project name>/` (`python-code-structure` §1b); without a build system, `--no-editable` has nothing to
+install and `script_location = my_service:alembic` cannot resolve.
 
 `README.md` is copied with the manifests because `pyproject.toml` declares `readme = "README.md"` and the build backend
 reads it when the project is installed (drop it from the `COPY` if you do not declare a readme; keep it out of `.dockerignore`).
@@ -161,9 +174,33 @@ Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic 
 ## 4. Reproducibility and supply chain
 - Commit `uv.lock`; `uv sync --locked` (or `uv lock --check`) fails CI on drift.
 - Pin uv to one exact version in both places (`setup-uv` `version:` and the `ghcr.io/astral-sh/uv:<tag>` image) and bump them together.
-  `<uv-version>` and `<commit-sha>` above are placeholders: pin the latest stable release when you generate the file (never copy an old example pin), and let Renovate/Dependabot bump them.
+  `<uv-version>` is a placeholder, and the action SHAs above were the latest releases on 2026-11-15: re-resolve them (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag> 'refs/tags/<tag>^{}'`, the peeled `^{}` line when it exists) when you generate the file, and let Renovate/Dependabot bump them.
 - Pin the base image by major.minor (digest for release builds).
-- Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` (or Dependabot/Renovate) as a scheduled job for vulnerable dependencies.
+- Add `diff-cover>=9.0` (used by `completion-gate` for changed-line coverage) and `pip-audit>=2.7` to the dev dependency group and run `uv run pip-audit` as a scheduled job and on every `uv.lock` change (`.github/workflows/audit.yml`, below); Dependabot/Renovate keep the lock current but do not replace the audit.
+
+```yaml
+name: audit
+on:
+  schedule:
+    - cron: "0 5 * * 1"        # weekly: new advisories appear without any change to the repo
+  pull_request:
+    paths: [uv.lock, pyproject.toml]
+  push:
+    branches: [main]
+    paths: [uv.lock, pyproject.toml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { version: "<uv-version>", enable-cache: true, cache-dependency-glob: uv.lock }
+      - run: uv sync --locked
+      - run: uv run pip-audit         # audits the locked environment; the project itself is skipped (not on PyPI)
+```
 - No secrets in images or build args; they arrive at runtime from the environment.
 
 ## Do / Don't
@@ -179,3 +216,4 @@ Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic 
 - `python-static-analysis` — the configuration behind the quality job's commands.
 - `python-unit-tests`, `python-integration-tests` — the unit and integration jobs.
 - `python-observability` — health endpoints and runtime telemetry for the container.
+- [`python-graceful-shutdown`](../python-graceful-shutdown/SKILL.md) — SIGTERM, drain budget and the worker entrypoint.

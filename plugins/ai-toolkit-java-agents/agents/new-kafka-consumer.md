@@ -23,8 +23,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 1. `ai-toolkit-java-build:messaging` — idempotent consumer,
    DLQ wiring, transactional outbox pattern, Kafka config.
 2. `ai-toolkit-java-design:pluggable-architecture` —
-   broker dependency behind a port; vendor SDK only inside the adapter. The
-   listener in `messaging/consumer/` is the driving adapter: the only class
+   broker dependency behind a port; vendor SDK only inside the adapter. Spring
+   Kafka in `messaging/` is an accepted adapter location ("Accepted facades"):
+   the listener in `messaging/consumer/` is the driving adapter, the only class
    that touches Kafka types, delegating to a Kafka-free `*Service` / port.
 3. `ai-toolkit-java-ops:observability` — trace context from the W3C
    `traceparent` record header (propagated by the instrumented Kafka
@@ -33,7 +34,7 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 4. `ai-toolkit-java-ops:graceful-shutdown` — the listener container stops
    gracefully before pod termination; the in-flight message completes.
 5. `ai-toolkit-java-build:exception-handling` — domain
-   exception subclass of the unchecked `BaseDomainException` (in
+   exception subclass of the checked `BaseDomainException` (in
    `exception/`) for consumer failures + `ExceptionMessages` entry.
 6. `ai-toolkit-java-quality:unit-tests` — consumer + idempotency
    guard + any outbox service.
@@ -47,22 +48,27 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
    - Topic name and partition strategy
    - Message key/value schema (Avro / JSON / plain string)
    - Consumer group ID
-   - Idempotency key (which field uniquely identifies a message?)
+   - Idempotency key: the `event-id` record header our outbox relay sends (`ai-toolkit-java-build:messaging` §3, §4).
+     Ask only for a foreign producer without that header: which header or payload field uniquely identifies a message?
    - Expected side effect (persist entity / call downstream / publish event)
    - Does handling the message publish another event? If yes, use the
      transactional outbox (`ai-toolkit-java-build:messaging` §3).
 
 2. DESIGN:
    - Consumer class name + package (`messaging/consumer/`, per `ai-toolkit-java-build:messaging`)
-   - Idempotency store (DB column / Redis key / in-memory for tests)
+   - Idempotency store: a `processed_events` row inserted in the **same DB transaction** as the effect
+     (`ai-toolkit-java-build:messaging` §4). Not a Redis key: it cannot commit atomically with the effect, so a crash
+     between the two loses or repeats it. In-memory only as a unit-test fake.
    - DLQ topic naming convention
    Confirm with developer before generating.
 
 3. GENERATE (in order):
-   a. KafkaConfig — consumer factory, concurrency, DLQ RetryTopicConfiguration.
+   a. KafkaConfig — only if code-level customisation is needed (the `messaging` template keeps Boot's configurer);
+      retries + DLT via `@RetryableTopic` + `@DltHandler` on the listener (`ai-toolkit-java-build:messaging` §5), or
+      blocking `DefaultErrorHandler` retries + `DeadLetterPublishingRecoverer` when per-key order must hold (§5).
    b. Consumer class — @KafkaListener, idempotency guard, delegates to *Service.
    c. Idempotency record/entity + repository (if DB-backed).
-   d. *Service — business logic, @Transactional.
+   d. *Service — business logic, `@Transactional(rollbackFor = Exception.class)`.
    e. Outbox entity + publisher (if handling publishes another event).
    f. ObservabilityConfig additions — MDC header propagator. No app-side lag
       gauge: rely on the Kafka client metrics (with a custom consumer factory,

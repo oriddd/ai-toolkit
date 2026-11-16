@@ -19,15 +19,15 @@ Part of the [`strategy-registry-pattern`](../SKILL.md) skill. Section numbers an
   and run **before Spring Security** so 401/403 rejections are measured too. `request-metrics` §4 is the full metrics filter.
 
 **Example (Handler)** — the types and signatures of the `permissions` skill; `ForbiddenException` and
-`ExceptionMessages` come from `exception-handling` (unchecked, so no `throws` clause):
+`ExceptionMessages` come from `exception-handling` (checked, so the methods declare `throws ForbiddenException`):
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class PermissionsHandler {
     private final CallerContextResolver callerContextResolver;
     private final PermissionsRegistry permissionsRegistry;
 
-    public void handle(final String resourceId) {
+    public void handle(final String resourceId) throws ForbiddenException {
         final CallerContext ctx = callerContextResolver.resolve();
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();                 // 403
@@ -43,7 +43,7 @@ public class PermissionsHandler {
 ```java
 @Component
 @Order(SecurityProperties.DEFAULT_FILTER_ORDER - 1)   // before Spring Security, so 401/403 rejections are recorded too
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class MetricsFilter extends OncePerRequestFilter {
     private final MetricNameResolver metricNameResolver;
@@ -102,7 +102,9 @@ client id is still tagged.
 
 **Rules:**
 - ✅ Reads request/context and returns a discriminator (String, Enum, etc.)
-- ✅ Returns `Optional.empty()` when no match (Handler/Filter logs warning) — never `null`
+- ✅ Returns `Optional.empty()` when no match (Handler/Filter logs warning) — never `null`. Exception: a resolver that
+  parses client HTTP input (`LayoutResolver`, `ApiVersionResolver`) throws the 4xx domain exception for an unknown
+  value, because the client sent something invalid (`response-layout`: 400, `response-mapper`: 404 / 406)
 - ✅ When the discriminator comes from an ordered rule list (URI patterns), the first match wins, so the list is
   ordered most-specific-first — never a `Map.of(...)`, whose iteration order is unspecified
 - ✅ **Never** contains business logic
@@ -116,7 +118,7 @@ client id is still tagged.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricNameResolver {
     private final MonitoringConfig monitoringConfig;
 
@@ -213,7 +215,7 @@ public interface MetricsRecorder {
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
     private final MetricsTimerHelper metricsTimerHelper;
@@ -288,7 +290,7 @@ shared by the wrapped and the outer request. Requests rejected by security never
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ClientIdCaptureInterceptor implements HandlerInterceptor {
     private final ClientIdParser clientIdParser;
 
@@ -318,7 +320,7 @@ in each slice test — `input-validation` §5c has a full slice example.
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class MetricsTagsHelper {
     private final RequestMethodParser requestMethodParser;
     private final ResponseStatusParser responseStatusParser;

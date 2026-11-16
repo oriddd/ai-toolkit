@@ -9,8 +9,8 @@ applies_to: [rest, monolith]
 depends_on: [unit-tests]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.3
+last_reviewed: 2026-11-15
 ---
 
 # Component Tests Skill
@@ -146,6 +146,20 @@ the canonical template.
   `application.yaml` *replaces* the main one (same resource name), so every
   property the test file omits (e.g. `${kafka.topics…}` placeholders) is
   missing and the context fails to start.
+- With auth = yes (`permissions`), `application.yaml` reads `${JWT_ISSUER_URI}` with no default, and the
+  `component-test` profile does not read the environment. Without a value for it every `@SpringBootTest` dies with
+  `PlaceholderResolutionException`. The resource server never contacts the issuer at startup, so any URL will do:
+
+  ```yaml
+  spring:
+    security:
+      oauth2:
+        resourceserver:
+          jwt:
+            issuer-uri: https://issuer.example.test
+  ```
+
+  Add `audiences: test-audience` beside it if `application.yaml` also reads `${JWT_AUDIENCE}` without a default.
 - When the service has `persistence` (JPA / Flyway), the component test still runs without a database: see §3b.
 - Place binary fixtures under
   `src/test/resources/<descriptive-folder>/`. Load them via a single
@@ -154,45 +168,12 @@ the canonical template.
 
 ### 3b. Services with persistence
 
-Keep the database out of the component-test context and replace the repositories at the boundary:
-
-```yaml
-# src/test/resources/application-component-test.yaml
-spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
-  kafka:                              # services with messaging: no broker in component tests
-    listener.auto-startup: false
-    admin.auto-create: false
-```
-
-- Excluding JPA also removes the `PlatformTransactionManager`, so `@Transactional` and an injected
-  `TransactionTemplate` fail. Register a no-op `AbstractPlatformTransactionManager` bean in
-  `ComponentTestConfiguration` (its `doGetTransaction` returns a new `Object()`, `doBegin`/`doCommit`/`doRollback` do
-  nothing) — the fakes hold the state, so there is nothing to roll back.
-- With messaging, also drop listener startup and topic creation (above) and fake the `KafkaTemplate` /
-  publisher port; `@RetryableTopic` and `@KafkaListener` containers otherwise retry `localhost:9092` in every context.
-
-- Without a `DataSource` Boot creates no `EntityManagerFactory` and no Spring Data repositories, so each repository
-  the service injects needs a bean in `ComponentTestConfiguration` — an in-process fake when the repository is a
-  narrow domain interface, otherwise a deterministic mock (a `JpaRepository` has too many methods to fake by hand):
-
-  ```java
-  @Bean
-  public InvoiceRepository invoiceRepository() {   // the only InvoiceRepository: none is created without a DataSource
-      final InvoiceRepository mock = mock(InvoiceRepository.class);
-      doAnswer(inv -> "inv-1".equals(inv.getArgument(0))
-              ? Optional.of(new Invoice("inv-1", "acme")) : Optional.empty())
-          .when(mock).findById(anyString());
-      return mock;
-  }
-  ```
-- `@EnableJpaAuditing` fails without JPA ("JPA metamodel must not be empty"): the `persistence` `AuditConfig` carries
-  `@Profile("!component-test")`. Any other configuration that needs the `EntityManager` gets the same profile guard.
-- Repository queries, mappings and migrations are proved against a real database in `*IT` tests (`integration-tests`).
+Keep the database out of the component-test context: exclude the DataSource / JPA / Flyway auto-configuration in
+`application-component-test.yaml` (all six Boot 3.5 and Boot 4 names), replace every repository with a deterministic
+mock or fake in `ComponentTestConfiguration`, register a no-op transaction manager, and switch Kafka listeners off.
+`AuditConfig` is `@Profile("!component-test")`. A **default-profile** context test (`ApplicationContextTest`, auth = yes)
+cannot use that guard: with persistence it is a Testcontainers-backed `ApplicationContextIT`. Full recipe:
+[`references/persistence.md`](./references/persistence.md) (load only when the service has persistence).
 
 ## Test design rules
 
@@ -242,45 +223,10 @@ To prove the **production** security chain (401 without a token, 200 with the ri
 dependencies, and the beans the slice needs mocked (resource-server issuer, `JwtDecoder`, the `request-metrics`
 filter and interceptor collaborators) are in [`references/security-slice-test.md`](./references/security-slice-test.md).
 
-## Response-body assertions — JsonPath
+## Response-body assertions and golden files
 
-For JSON responses, prefer JsonPath assertions over deserializing the body
-into a DTO that mirrors the contract (which double-counts the test):
-
-```java
-mvc.perform(get("/api/v1/foo/123"))
-   .andExpect(status().isOk())
-   .andExpect(jsonPath("$.id").value("123"))
-   .andExpect(jsonPath("$.items.length()").value(3))
-   .andExpect(jsonPath("$.items[*].status", everyItem(equalTo("READY"))));
-```
-
-For `TestRestTemplate` (no `MockMvc`), request the body as a `String`
-(`restTemplate.exchange(url, GET, HttpEntity.EMPTY, String.class)`) and
-assert with AssertJ + JsonPath (`com.jayway.jsonpath`, in `spring-boot-starter-test`):
-
-```java
-assertThat(response.getBody()).isNotNull();
-DocumentContext json = JsonPath.parse(response.getBody());
-assertThat(json.<String>read("$.id")).isEqualTo("123");
-```
-
-## Snapshot / golden-file pattern
-
-When the response is a large stable JSON / XML document (e.g. an export
-endpoint), assert against a **golden file** in
-`src/test/resources/__snapshots__/` rather than inlining the expected text:
-
-```java
-String actual   = response.getBody();
-String expected = TestsResourcesHolder.getInstance().readString("__snapshots__/foo-export-happy.json");
-JSONAssert.assertEquals(expected, actual, JSONCompareMode.LENIENT);
-```
-
-`readString` is a small helper on the `TestsResourcesHolder` from the Layout
-(read the classpath resource as UTF-8). There is no built-in update switch:
-update a snapshot intentionally by overwriting the file with the new
-response, then review the diff in the PR. Snapshots make contract drift visible.
+Assert JSON with JsonPath (never a DTO that mirrors the contract) and keep large stable documents as golden files in
+`src/test/resources/__snapshots__/`. Examples: [`references/response-assertions.md`](./references/response-assertions.md).
 
 ## Resetting state between tests
 
@@ -336,6 +282,14 @@ filter chain shown above (prove the security wiring in a separate
 replace it with an in-process fake so component tests run on a laptop with
 no infra. Anything that needs a real Testcontainer is an `*IT` integration
 test (`integration-tests`), never part of `mvn test`.
+
+## Reference map — load only the part you are working on
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3b | database-free component context, repository fakes, `ApplicationContextIT` | the service has persistence | [`persistence.md`](./references/persistence.md) |
+| Authenticated paths | `*SecurityTest` slice | proving the production security chain | [`security-slice-test.md`](./references/security-slice-test.md) |
+| Response assertions | JsonPath, golden files | asserting bodies | [`response-assertions.md`](./references/response-assertions.md) |
 
 ## 4. Templates
 

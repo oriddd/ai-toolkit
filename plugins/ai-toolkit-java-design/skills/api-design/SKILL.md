@@ -10,7 +10,7 @@ depends_on: [code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # API Design Skill
@@ -46,7 +46,8 @@ GET    /api/v1/invoices/{id}/attachments/{attachmentId}/content   # Accept: appl
 | **400 Bad Request** | Malformed input, validation failure |
 | **401 Unauthorized** | No / invalid credentials |
 | **403 Forbidden** | Authenticated but not allowed |
-| **404 Not Found** | Resource (or its parent) does not exist |
+| **404 Not Found** | Resource (or its parent) does not exist — also an unknown URI version (`/api/v9/…`, `response-mapper`) |
+| **406 Not Acceptable** | The `Accept` header asks for a representation the API does not serve — a media type, or a media-type version (`response-mapper`) |
 | **409 Conflict** | Optimistic-lock failure, a request with the same `Idempotency-Key` still in flight, business invariant |
 | **415 Unsupported Media Type** | Body content type not accepted |
 | **422 Unprocessable Entity** | Syntactically valid, semantically invalid; `Idempotency-Key` reused with a different body (IETF Idempotency-Key draft) |

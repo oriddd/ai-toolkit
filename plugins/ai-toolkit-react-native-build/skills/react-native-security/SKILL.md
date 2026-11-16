@@ -10,7 +10,7 @@ depends_on: [react-native-code-structure, react-native-input-validation]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -28,6 +28,8 @@ shared/services/secure-storage/
 ├── SecureStore.ts            # interface: get/set/remove
 ├── KeychainSecureStore.ts    # Keychain (iOS) / Keystore (Android) implementation
 └── FakeSecureStore.ts        # in-memory, for tests
+shared/session/createAuthSession.ts   # AuthSession: access token + single-flight refresh
+shared/session/signOut.ts
 shared/services/logger/Logger.ts
 features/links/model/linkSchemas.ts
 ```
@@ -66,15 +68,61 @@ user's data, so the next user never sees it:
 ```ts
 // shared/session/signOut.ts: the one sign-out path (sign-out button, failed refresh, 401)
 export async function signOut(queryClient: QueryClient, secure: SecureStore): Promise<void> {
-  await secure.remove('token');                 // and the refresh token
+  await secure.remove('token');
+  await secure.remove('refreshToken');
   queryClient.clear();                          // in-memory query and mutation caches
   useSessionStore.getState().signOut();         // every user-scoped Zustand store
   // persisted cache (react-query-persist-client): also `await persister.removeClient()`
 }
 ```
 
-Wire the 401 case once: the `QueryCache` / `MutationCache` `onError` in `QueryProvider`
-(`react-native-state-and-data` §7) calls `signOut` when the error is an `UnauthorizedError`.
+### 1b. Token refresh: once, single-flight
+
+The api-client (`react-native-state-and-data` §1) answers a 401 by calling `session.refresh()` once and retrying the
+request once with the new token. The session makes concurrent 401s share **one** refresh call, keeps both tokens in
+the `SecureStore`, and returns `null` only when the server rejects the refresh token:
+
+```ts
+// shared/session/createAuthSession.ts
+const tokenPairSchema = z.object({ accessToken: z.string().min(1), refreshToken: z.string().min(1) });
+
+// anonymousHttp: createHttpClient(baseUrl, anonymousSession), so the refresh call never recurses into a refresh
+export function createAuthSession(secure: SecureStore, anonymousHttp: HttpClient): AuthSession {
+  let inFlight: Promise<string | null> | null = null;
+
+  const exchange = async (refreshToken: string) => {
+    try {
+      return await anonymousHttp.request({ path: '/auth/refresh', method: 'POST', body: { refreshToken } }, tokenPairSchema);
+    } catch (e) {
+      if (e instanceof UnauthorizedError || (isAppError(e) && e.code === 'BAD_REQUEST')) return null;  // session over
+      throw e;                                   // offline or 5xx: the request fails retryably, the user stays signed in
+    }
+  };
+
+  const refreshOnce = async (): Promise<string | null> => {
+    const refreshToken = await secure.get('refreshToken');
+    if (!refreshToken) return null;
+    const pair = await exchange(refreshToken);
+    if (!pair) return null;
+    await secure.set('token', pair.accessToken);
+    await secure.set('refreshToken', pair.refreshToken);   // rotated refresh tokens replace the old one
+    return pair.accessToken;
+  };
+
+  return {
+    getToken: () => secure.get('token'),
+    refresh: () => {
+      inFlight ??= refreshOnce().finally(() => { inFlight = null; });
+      return inFlight;
+    },
+  };
+}
+```
+
+`bootstrap/createServices.ts` builds it: `createHttpClient(env.apiBaseUrl, createAuthSession(secure,
+createHttpClient(env.apiBaseUrl, anonymousSession)))`. Wire the remaining 401 once: the `QueryCache` / `MutationCache`
+`onError` in `QueryProvider` (`react-native-state-and-data` §7) calls `signOut` when the error is an
+`UnauthorizedError`, which now means "refresh failed", never "access token expired".
 
 ## 2. No secrets in the bundle
 
@@ -90,14 +138,14 @@ be extracted. Therefore:
 Treat every link as untrusted input: allow-list the routes and parse the params.
 
 ```ts
-// First import of the app entry file: `index.js`/`index.ts` (React Native CLI, plain Expo), or the root
-// `app/_layout.tsx` in an Expo Router app (its entry, `expo-router/entry`, is not your file).
+// First import of the app entry file: `src/app/_layout.tsx` in an Expo Router app (its entry, `expo-router/entry`,
+// is not your file), or `index.js`/`index.ts` (React Native CLI, Expo without Expo Router).
 // React Native's built-in URL throws "not implemented" on hostname, pathname and searchParams up to at
 // least 0.79; the polyfill makes this code version-independent.
 import 'react-native-url-polyfill/auto';
 
 // features/links/model/linkSchemas.ts
-export type Route = { name: 'OrderDetail'; params: OrdersParamList['OrderDetail'] };   // navigation target
+export type Route = { name: 'OrderDetail'; params: { id: OrderId } };   // router-neutral target; OrderId from @features/orders
 const orderLink = z.object({ orderId: z.uuid().brand<'OrderId'>() });   // same brand as orderSchema's id
 
 const parseUrl = (url: string): URL | null => {
@@ -119,9 +167,20 @@ Minimum React Native: with `react-native-url-polyfill` installed there is no min
 use only a React Native release whose `URL` implements these getters (not 0.79 or earlier) and unit-test
 `resolveDeepLink` in the app's own test setup. Do not hand-parse links with regexes.
 
-Wire it once: every incoming URL (the initial one from `Linking.getInitialURL()` and later ones from
-`Linking.addEventListener('url', ...)`, or React Navigation's `linking.getStateFromPath`) goes through `resolveDeepLink`,
-and a `null` result is ignored (the app stays where it is). Test the mapping as a pure function (`react-native-unit-tests`)
+Wire it once, so every incoming URL goes through `resolveDeepLink` and a `null` result is ignored (the app stays where
+it is). Expo Router opens any URL that matches a route file by itself, so intercept it in `src/app/+native-intent.tsx`:
+
+```ts
+// src/app/+native-intent.tsx: Expo Router calls this for the initial URL and every later one
+export function redirectSystemPath({ path }: { path: string; initial: boolean }): string | null {
+  const route = resolveDeepLink(path);                   // from @features/links
+  return route ? `/orders/${encodeURIComponent(route.params.id)}` : null;
+}
+```
+
+React Navigation apps pass the initial URL from `Linking.getInitialURL()` and later ones from
+`Linking.addEventListener('url', ...)` (or `linking.getStateFromPath`) through it. Either way the screen still parses
+its own route params (`react-native-code-structure` §4), because a link that maps to a route file is a route param. Test the mapping as a pure function (`react-native-unit-tests`)
 and the entry as one Maestro flow (`react-native-e2e-tests`).
 
 Prefer verified universal/app links over custom schemes. Never navigate to a route or open a URL taken
@@ -166,9 +225,11 @@ that writes to the console (a file-level override in `eslint.config.mjs`, see `r
 ## Do / Don't
 
 - ✅ Inject `SecureStore` and `Logger`; use fakes in tests.
+- ✅ One refresh for any number of concurrent 401s; retry each request once, then sign out.
 - ✅ Validate and allow-list every deep link.
 - ✅ Treat every value in the JS bundle as public.
-- ❌ Tokens in `AsyncStorage`, Redux persist or Zustand `persist` without a secure engine.
+- ❌ Tokens or refresh tokens in `AsyncStorage`, Redux persist or Zustand `persist` without a secure engine.
+- ❌ Signing out on the first 401, or refreshing per request without single-flight.
 - ❌ `console.log` of request, response or user objects.
 - ❌ Disabling TLS verification, even in debug flavours committed to the repo.
 - ❌ Trusting `Linking.getInitialURL()` params as typed data.

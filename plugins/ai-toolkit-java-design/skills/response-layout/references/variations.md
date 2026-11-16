@@ -10,7 +10,7 @@ one strategy per (entity, layout); the registry fails at startup on a duplicate.
 **first**, then build the immutable DTO once — never use a thrown 403 as control flow:
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class SecureFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final ProductSensitiveDataPolicy sensitiveDataPolicy;   // port, implemented in permission/
     private final ProductMetadataService productMetadataService;
@@ -33,7 +33,6 @@ public class SecureFullLayoutStrategy implements LayoutStrategy<Product, Product
 
     @Override
     public ProductFullDTO map(final Product product) {
-        if (product == null) return null;
         final boolean mayReadSensitiveData = sensitiveDataPolicy.mayReadSensitiveData(product.getId());
         final ProductFullDetails details = productDetailsService.getFullDetails(product.getId());
         return new ProductFullDTO(
@@ -49,7 +48,8 @@ public class SecureFullLayoutStrategy implements LayoutStrategy<Product, Product
                 mayReadSensitiveData ? details.sensitiveData() : null);   // omitted for other callers
     }
 }
-// ProductFullDTO gains a sensitiveData component (null → omitted with @JsonInclude(NON_NULL))
+// ProductFullDTO gains a @Nullable String sensitiveData component (org.jspecify; null → omitted with
+// @JsonInclude(NON_NULL)) — without @Nullable, passing null fails the NullAway gate
 
 public interface ProductSensitiveDataPolicy {
     boolean mayReadSensitiveData(String productId);

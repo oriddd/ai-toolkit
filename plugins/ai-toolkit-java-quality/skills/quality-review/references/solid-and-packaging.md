@@ -38,8 +38,8 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
    *Smell:* field injection (`@Autowired` field), `new ConcreteClient()` in
    business code, static singletons.
    *Fix:* constructor injection only — either Lombok
-   `@RequiredArgsConstructor` (a single constructor needs no `@Autowired`) or an
-   explicit constructor. **One** style per class.
+   `@RequiredArgsConstructor(onConstructor = @__(@Autowired))` or an explicit `@Autowired` constructor.
+   A class with several constructors must mark exactly one `@Autowired`. **One** style per class.
 
 ### B. Lego-brick packaging
 

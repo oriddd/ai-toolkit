@@ -17,10 +17,10 @@ public class TaskExecutorsConfig {
         ex.setMaxPoolSize(16);
         ex.setQueueCapacity(100);
         ex.setThreadNamePrefix("foo-async-");
-        // Pick the rejection policy per use case — CallerRunsPolicy runs the task on the *calling* thread
-        // (often an HTTP request thread), which is back-pressure, not async. For request-triggered work prefer
-        // AbortPolicy (the default) and map TaskRejectedException to 503 + Retry-After.
-        ex.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // Request-triggered work: AbortPolicy (the default) — map TaskRejectedException to 503 + Retry-After.
+        // A batch / background pool fed by a scheduler uses CallerRunsPolicy instead: it runs the task on the
+        // calling thread, which is back-pressure — on an HTTP thread it would only add latency.
+        ex.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         ex.setWaitForTasksToCompleteOnShutdown(true);     // drain in-flight work on shutdown
         ex.setAwaitTerminationSeconds(20);                // keep below spring.lifecycle.timeout-per-shutdown-phase
         ex.initialize();
@@ -55,7 +55,7 @@ on a controller or a domain service.
 ```java
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ExpiredSessionCleanupTask {
 
     private final ExpiredSessionStore store;
@@ -146,7 +146,7 @@ public record CacheTtlProperties(@NotEmpty Map<String, Duration> ttl) {}  // foo
 
 @Configuration
 @EnableCaching
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 class CachingConfig {
     private final CacheTtlProperties props;
 

@@ -2,9 +2,9 @@
 description: "the main session delegates to `react-native-refactor` for a matching task in a react-native project"
 tags: [agent]
 plugins: ["../../../plugins/ai-toolkit-react-native-agents", "../../../plugins/ai-toolkit-docs", "../../../plugins/ai-toolkit-react-native-design", "../../../plugins/ai-toolkit-react-native-build", "../../../plugins/ai-toolkit-react-native-quality", "../../../plugins/ai-toolkit-react-native-ops", "../../../plugins/ai-toolkit-workflow", "../../../plugins/ai-toolkit-quality"]
-max_turns: 8
-timeout_seconds: 600
-allowed_tools: [Agent, Skill, Read, Glob, Grep]
+max_turns: 40
+timeout_seconds: 2400
+allowed_tools: [Agent, Skill, Read, Glob, Grep, Write, Edit]
 ---
 
-Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed.
+Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed. Nobody can answer questions during this run: accept every default you would propose (add what is missing, keep the existing folder layout), state each assumption in your final answer, and implement.

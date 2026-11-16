@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: [git-commit-conventions]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.2
+last_reviewed: 2026-11-15
 ---
 
 # Release & Versioning Skill
@@ -99,7 +99,7 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         # A tag or release created with the default GITHUB_TOKEN does not trigger other workflows, so the
-        # image build on `v*` tags would never run. Use a PAT or GitHub App token (same as `github-actions-ci`).
+        # image build on `v*` tags would never run. Use a PAT or GitHub App token (same as `github-actions-ci` / `react-native-ci`).
         with: { token: "${{ secrets.RELEASE_PLEASE_TOKEN }}" }   # no release-type: settings come from the two files below
 ```
 
@@ -146,7 +146,10 @@ Whichever you pick, the **git tag is the release's source of truth**; the versio
 
 ## 5. CHANGELOG.md
 
-This is the one CHANGELOG format for every skill and agent (`context-maintenance`, `update-context` follow it).
+This is the CHANGELOG format for every skill and agent (`context-maintenance`, `update-context` follow it) and for
+every new repo. One exception: an existing hand-maintained changelog that already uses Keep a Changelog section names
+(Added, Changed, Deprecated, Removed, Fixed, Security) keeps them — this catalogue's own `docs/CHANGELOG.md` is one.
+Never mix the two schemes in one file; a release bot always writes the Conventional-type sections below.
 
 Conventionally generated when a release bot is configured — then do not hand-edit released sections. Without a bot,
 hand-edit only `[Unreleased]` (one bullet per user-visible change) and let the release step rename it. Sections per release:
@@ -167,7 +170,7 @@ hand-edit only `[Unreleased]` (one bullet per user-visible change) and let the r
 ## 6. Image tag = version
 
 Release images are tagged from the git tag (`v1.4.0` → image tag `1.4.0`). Snapshot images from `main` are
-optional: the Jenkins `ci` skill pushes them tagged `${BUILD_NUMBER}`, `github-actions-ci` builds images for `v*` tags
+optional: in Java, the Jenkins `ci` skill pushes them tagged `${BUILD_NUMBER}`, `github-actions-ci` builds images for `v*` tags
 only. A snapshot image is never deployed as a release. Helm `Chart.appVersion` mirrors the release version — set it
 with release-please `extra-files` (§3a) or `helm package --app-version <version>` at package time, never by hand.
 
@@ -177,7 +180,7 @@ with release-please `extra-files` (§3a) or `helm package --app-version <version
   `warnings.warn(..., DeprecationWarning)`, `@deprecated` TSDoc) and with `Deprecation` + `Sunset`
   headers on HTTP endpoints.
 - Remove only in the next **MAJOR** release (removing an API is a breaking change, §2), and not before at least **2 minor releases**
-  after the deprecation — longer for public APIs (HTTP APIs also keep `api-design`'s minimum sunset period; the later date wins).
+  after the deprecation — longer for public APIs (HTTP APIs also keep the API's minimum sunset period — Java: `api-design`; the later date wins).
 - CHANGELOG documents every deprecation: under `### Deprecations` when the changelog is hand-maintained. With a bot,
   the deprecating commit carries it — subject `feat(<scope>): deprecate <thing> (removal in <major>)`, which the bot
   lists under Features; hand edits are not needed.
@@ -195,6 +198,8 @@ into `main` if relevant.
 ✅ The git tag is the release's source of truth; the version file follows it.
 ✅ One bot generates the CHANGELOG (or, with no bot, only `[Unreleased]` is hand-edited); humans review.
 ✅ Conventional Commits enforced by CI, not by reviewer goodwill.
+✅ Every `uses:` in a release or lint workflow is pinned to a full commit SHA with the release in a comment; `actions/checkout` sets `persist-credentials: false` unless the job pushes.
+❌ Never use a floating tag (`@v4`, `@main`) in a workflow that holds a release token.
 ❌ Never tag the same SHA twice with different versions.
 ❌ Never publish a `1.x.y` after a `2.0.0` exists without explicit hotfix
 process (and an entry in CHANGELOG).

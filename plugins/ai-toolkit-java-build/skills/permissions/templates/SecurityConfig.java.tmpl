@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -25,7 +26,7 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemDetailSecurityHandler problemHandler) throws Exception {
         http
             // CSRF protects cookie-based sessions. This is a stateless bearer-token API, so it is off — record that in an ADR
             // (security-hardening: never disable CSRF without justifying it).
@@ -43,7 +44,13 @@ public class SecurityConfig {
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll()
             )
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+            // 401 / 403 from the filter chain as ProblemDetail (ProblemDetailSecurityHandler) instead of an empty body
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(Customizer.withDefaults())
+                .authenticationEntryPoint(problemHandler)
+                .accessDeniedHandler(problemHandler))
+            // IdP unreachable → 503 problem+json instead of the container's 500 (IdentityProviderUnavailableFilter)
+            .addFilterBefore(new IdentityProviderUnavailableFilter(problemHandler), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 }

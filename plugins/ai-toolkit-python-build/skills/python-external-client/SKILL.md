@@ -10,7 +10,7 @@ depends_on: [python-code-structure, python-error-handling]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -86,6 +86,15 @@ Never call a URL taken from user input (SSRF); see `python-security`.
 
 ## 4. Retries: idempotent calls, transient failures, bounded
 ```python
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_random_exponential,
+)
+from tenacity.wait import wait_base  # not re-exported by `tenacity` itself
+
 RETRYABLE_STATUSES = frozenset({HTTPStatus.TOO_MANY_REQUESTS, HTTPStatus.BAD_GATEWAY,
                                 HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.GATEWAY_TIMEOUT})
 
@@ -185,6 +194,9 @@ Cover, per endpoint: success mapping, each documented 4xx, 500 (no retry), 503-t
 attempt (assert `call_count == max_attempts` and `__cause__`), malformed body, and an id that needs encoding.
 Services and operations are tested with a hand-written `FakeBillingGateway` implementing the port
 (`python-unit-tests` §3), never with respx.
+
+The adapter stays on `httpx`: respx patches `httpx` and not `httpx2`, the fork that recent Starlette's
+`TestClient` asks for (`python-unit-tests` §6). The two packages install side by side.
 
 ## Do / Don't
 - ✅ One `AsyncClient` per dependency, created and closed in the lifespan, explicit `Timeout`.

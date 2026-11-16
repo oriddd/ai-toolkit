@@ -1,5 +1,5 @@
 ---
-description: "`react-native-code-structure` loads for a typical request, routed by its description alone"
+description: "`react-native-code-structure` loads for a typical request (its description plus the plugin's routing hook)"
 tags: [trigger]
 plugins: ["../../../plugins/ai-toolkit-react-native-design", "../../../plugins/ai-toolkit-quality"]
 max_turns: 4

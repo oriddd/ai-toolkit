@@ -118,8 +118,8 @@ Reminder only — `ai-toolkit-java-quality:golden-path` is authoritative; if thi
 3. Controllers contain no business logic.
 4. Exceptions extend project hierarchy + carry ExceptionMessages code.
 5. Authorization via PermissionsHandler — no inline principal checks.
-6. Outbound HTTP via *Client sub-package — no raw WebClient in services.
-7. @Transactional in service layer; readOnly=true for queries.
+6. Outbound HTTP via *Client sub-package — no raw RestClient / WebClient in services.
+7. @Transactional in service layer with `rollbackFor = Exception.class`; readOnly=true for queries.
 8. @Async/@Scheduled use named TaskExecutor + property-driven interval.
 9. Caching: explicit provider, name, key, TTL.
 10. Messaging consumers idempotent + DLQ.

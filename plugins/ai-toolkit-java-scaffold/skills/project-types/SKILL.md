@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: true
 version: 1.0
-last_reviewed: 2026-06-28
+last_reviewed: 2026-11-15
 ---
 
 # Project Types Skill (meta)
@@ -24,10 +24,10 @@ combination of skills and call `create-repo` with the right answers.
 | Project type | What it does | Required skills | Optional skills |
 | --- | --- | --- | --- |
 | **A. Synchronous REST microservice** | HTTP API in front of business logic | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `permissions`, `external-client`, `health-indicator`, `api-design`, `security-hardening`, `observability`, `unit-tests`, `component-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown`, `input-validation`, `pluggable-architecture`, `resilience-patterns`, `request-metrics`, `context-maintenance` | `persistence`, `messaging`, `integration-tests`, `domain-modeling`, `adapter-contract-tests` (required once a port has an adapter, guild #21), `data-privacy` (required when the service handles personal data) |
-| **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A minus the HTTP-API skills (`api-design`, `permissions`) + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` | `api-design`, `permissions` (only if a tiny status/admin HTTP API exists) |
+| **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A minus the HTTP-only skills (`api-design`, `permissions`, `component-tests` — it drives the HTTP API through `TestRestTemplate` — and `request-metrics`, a per-request HTTP filter) + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` (the end-to-end test: produce → consume → assert) | `api-design`, `permissions`, `component-tests` (only if a tiny status/admin HTTP API exists) |
 | **C. Scheduler / batch job** | `@Scheduled` or one-shot CLI, no HTTP | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client`, `observability`, `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown`, `pluggable-architecture`, `resilience-patterns`, `context-maintenance`, `health-indicator` (long-running `@Scheduled` deployments on Kubernetes) | `persistence`, `adapter-contract-tests` |
 | **D. Library / SDK** | Reusable JAR consumed by other services | `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client` (if it wraps a remote service), `sdk-publishing` (mandatory), `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `static-analysis` | `permissions` if the library brings auth bits |
-| **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + `messaging` (intra-process events via `ApplicationEventPublisher`, future-proof for broker) | n/a |
+| **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + intra-process events between modules via `ApplicationEventPublisher` / Spring Modulith (`code-structure` §4k, Pattern D — durable event publication registry, future-proof for a broker) | `messaging` once events leave the process (broker + outbox) |
 
 ## 2. Decision flow
 
@@ -102,17 +102,21 @@ Type D (library):
 Type E (monolith):
   [#9a] projectKind: service
   domain-modeling: yes
-  messaging: yes (Spring events + outbox-ready)
+  module events: code-structure §4k (Spring Modulith; outbox-ready event publication registry);
+  messaging only for a real broker ([#16])
 ```
 
 ## 5. Renaming guidance
 
 | Component | Type A | Type B | Type C |
 | --- | --- | --- | --- |
-| Entry point | `controller/` | `consumer/` | `scheduler/` (`@Scheduled` beans) |
+| Entry point | `controller/` | `messaging/consumer/` | `scheduler/` (`@Scheduled` beans) |
 | Orchestrator | `operation/` | `handler/` | `job/` |
 | Business logic | `service/` | `service/` | `service/` |
-| Outbound | `client/` | `producer/` + `client/` | `client/` |
+| Outbound | `client/` | `messaging/producer/` + `client/` | `client/` |
+
+Type B keeps the `messaging` skill's layout (`messaging/consumer/`, `messaging/producer/`, `messaging/outbox/`); the
+`code-structure` ArchUnit template defines the Consumer and Producer layers on those packages.
 
 The rest of the package hierarchy from `code-structure` applies identically,
 and the renamed packages take the place of their Type A counterpart in the

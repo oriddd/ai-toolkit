@@ -14,8 +14,10 @@ python3 tools/build-indexes.py         # regenerate REGISTRY.md + BACKEND_GUILD.
 python3 tools/build-indexes.py --check # dry-run (check without writing)
 python3 tools/check-links.py           # relative markdown links resolve
 
-# Context templates have their own validator, next to the context/ folder:
-bash plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh
+python3 tools/build-evals.py --check  # eval case files in sync with tools/eval_cases/
+
+# A project that copied the context templates validates its own folder (the blank templates fail by design):
+bash context/validate-context.sh
 ```
 
 ### Find things fast

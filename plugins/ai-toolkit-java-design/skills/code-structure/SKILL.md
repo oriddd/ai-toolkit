@@ -10,7 +10,7 @@ depends_on: [testable-code-principles]
 ships_templates: true
 hitl: false
 version: 1.1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-15
 ---
 
 # Code Structure
@@ -70,7 +70,7 @@ com.example.<domain>.<subdomain>/
 > top of a `client/` (see §1c). Business code reaches data only through it.
 >
 > Event-driven and scheduler services rename the entry/orchestrator packages
-> (`consumer/`, `handler/`, `job/`, `producer/` — see `project-types`); the
+> (`messaging/consumer/`, `handler/`, `job/`, `messaging/producer/` — see `project-types`); the
 > same layering and ArchUnit rules apply to them.
 
 ### Layering rules
@@ -145,7 +145,7 @@ public class InvoiceService {
 @Component public class InvoiceRepository { ... }     // persistence brick
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceService {
     private final InvoiceValidator validator;
     private final InvoiceTransformer transformer;
@@ -242,14 +242,16 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - **Lombok (prerequisite):** every Java skill's examples and templates assume
   `org.projectlombok:lombok` (`<optional>true</optional>`, version managed by the Spring Boot parent) is on
   the compile classpath and, when `annotationProcessorPaths` is set, listed there too. If it is missing, add it
-  before applying any example. Prefer plain `@RequiredArgsConstructor` for DI (a single
-  constructor needs no `@Autowired`); avoid field injection. Pick one style per class.
+  before applying any example. Use `@RequiredArgsConstructor(onConstructor = @__(@Autowired))` for DI: a lone
+  constructor is injected without it, but once a class gains a second constructor Spring needs one marked
+  `@Autowired` to know which to use. Avoid field injection. Pick one style per class.
 - **Configuration:** All env-driven config is read from `application.yaml`
   into `@ConfigurationProperties` records (see `spring-boot-conventions` §1)
   with `${ENV_VAR:default}` placeholders (secrets: `${ENV_VAR}`, no default) matching the Helm chart env names.
   Keys are centralised in `constant/ConfigurationConstants`.
-- **Exceptions:** Define an unchecked base `<Domain>Exception extends RuntimeException` and subclasses
-  (`*BadRequestException`, `*ForbiddenException`, `*NotFoundException`).
+- **Exceptions:** One checked base `BaseDomainException extends Exception` (with an error code; methods that throw it declare `throws`, `@Transactional(rollbackFor = Exception.class)`) and one
+  subclass per HTTP mapping (`BadRequestException`, `ForbiddenException`, `NotFoundException`, …) — the
+  `exception-handling` templates; add a more specific subclass only when the advice must map it differently.
   Static messages live in `exception/constants/ExceptionMessages` and are
   formatted with `MessageFormat`. HTTP mapping happens in a single
   `@RestControllerAdvice` extending `ResponseEntityExceptionHandler` that returns
@@ -276,7 +278,8 @@ When applying this skill to a new module:
       graceful shutdown (`server.shutdown: graceful`, `spring.lifecycle.timeout-per-shutdown-phase`, see `graceful-shutdown`),
       actuator exposure (`prometheus,health,info`), and
       `management.endpoint.health.probes.enabled: true`.
-- [ ] Add `logback-spring.xml` aligned with `spring-boot-starter-logging`.
+- [ ] Structured JSON logs: Boot's native `logging.structured.format.console` (Boot 3.4+, see `observability`) —
+      add a `logback-spring.xml` only when you need encoder options the native format lacks.
 - [ ] Create `exception/constants/ExceptionMessages.java`.
 - [ ] If the service needs auth → add a `permission/` strategy + handler.
 - [ ] If the service has measurable use cases → add a `monitor/` filter + recorder.

@@ -10,7 +10,7 @@ depends_on: [code-structure, spring-boot-conventions, strategy-registry-pattern]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-07-12
+last_reviewed: 2026-11-15
 ---
 
 # Response Layout Skill
@@ -67,7 +67,7 @@ first and answers 403 when the caller may not see it.
 public enum LayoutType {
     SUMMARY, DETAILED, FULL;
 
-    public static LayoutType fromString(final String layout) {
+    public static LayoutType fromString(final String layout) throws BadRequestException {
         if (layout == null || layout.isBlank()) {
             return DETAILED;  // default when the client sends no layout
         }
@@ -82,14 +82,16 @@ public enum LayoutType {
 ```
 
 `ExceptionMessages.invalidField` returns the `BadRequestException` of `exception-handling` (400). With
-openapi-first, declare `layout` as an enum parameter in `api.yaml` instead, so the generated code rejects unknown values.
+openapi-first, declare `layout` as a `$ref` enum in `api.yaml` instead (an inline `enum:` is generated as a plain
+`String` that accepts anything) and set the generator's `configPackage` inside the scan (`openapi-first-codegen` §1, §2),
+so an unknown value is rejected before the handler runs.
 
 ### `LayoutResolver`
 
 ```java
 @Component
 public class LayoutResolver {
-    public LayoutType resolve(final HttpServletRequest request) {
+    public LayoutType resolve(final HttpServletRequest request) throws BadRequestException {
         if (request == null) {
             return LayoutType.DETAILED;
         }
@@ -163,8 +165,7 @@ public class LayoutRegistry {
 
 ```java
 @Component
-@RequiredArgsConstructor
-@Slf4j
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class LayoutHandler {
     private final LayoutResolver layoutResolver;
     private final LayoutRegistry layoutRegistry;
@@ -173,20 +174,20 @@ public class LayoutHandler {
     /**
      * @param entityType passed explicitly — entity.getClass() can be a JPA proxy subclass
      * @param resourceId the id the access policy checks for restricted layouts
+     * @param entity     never null: the service already threw NotFoundException (404) for a missing resource
      */
     public <E> Object handle(final Class<E> entityType, final String resourceId, final E entity,
-                             final HttpServletRequest request) {
-        if (entity == null) {
-            return null;
-        }
+                             final HttpServletRequest request) throws BaseDomainException {
         final LayoutType layoutType = layoutResolver.resolve(request);   // unknown value → 400
-        final LayoutStrategy<E, ?> strategy = layoutRegistry.find(entityType, layoutType)
-                .or(() -> {
-                    log.warn("No {} layout for {}, using DETAILED", layoutType, entityType.getSimpleName());
-                    return layoutRegistry.find(entityType, LayoutType.DETAILED);
-                })
-                .orElseThrow(() -> new IllegalStateException(
-                        "No DETAILED layout strategy for " + entityType.getSimpleName() + " (mandatory)"));
+        final Optional<LayoutStrategy<E, ?>> found = layoutRegistry.find(entityType, layoutType);
+        if (found.isEmpty()) {
+            if (layoutType == LayoutType.DETAILED) {   // the default layout is mandatory for every entity
+                throw new IllegalStateException("No DETAILED layout strategy for " + entityType.getSimpleName() + " (mandatory)");
+            }
+            // a valid layout this entity does not offer is a client error (400), never a silent fallback to DETAILED
+            throw ExceptionMessages.invalidField("layout", layoutType + " is not available for " + entityType.getSimpleName());
+        }
+        final LayoutStrategy<E, ?> strategy = found.get();
 
         if (strategy.isRestricted() && !layoutAccessPolicy.isAllowed(strategy.getSupportedLayoutType(), resourceId)) {
             throw ExceptionMessages.accessDenied("layout " + strategy.getSupportedLayoutType());   // 403
@@ -214,7 +215,6 @@ public class ProductSummaryLayoutStrategy implements LayoutStrategy<Product, Pro
 
     @Override
     public ProductSummaryDTO map(final Product product) {
-        if (product == null) return null;
         return new ProductSummaryDTO(product.getId(), product.getName(), product.getCreatedAt());
     }
 }
@@ -239,7 +239,6 @@ public class ProductDetailedLayoutStrategy implements LayoutStrategy<Product, Pr
 
     @Override
     public ProductDetailedDTO map(final Product product) {
-        if (product == null) return null;
         return new ProductDetailedDTO(
                 product.getId(),
                 product.getName(),
@@ -254,7 +253,7 @@ public class ProductDetailedLayoutStrategy implements LayoutStrategy<Product, Pr
 **FullLayoutStrategy** — all fields + expensive computations; **restricted** (it exposes permissions and history):
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductFullLayoutStrategy implements LayoutStrategy<Product, ProductFullDTO> {
     private final ProductMetadataService productMetadataService;
     private final ProductDetailsService productDetailsService;
@@ -276,7 +275,6 @@ public class ProductFullLayoutStrategy implements LayoutStrategy<Product, Produc
 
     @Override
     public ProductFullDTO map(final Product product) {
-        if (product == null) return null;
         // Lazy associations are loaded inside the service's read-only transaction and returned as a read model;
         // touching product.getPermissions() / getChangeHistory() here would run outside it (LazyInitializationException).
         final ProductFullDetails details = productDetailsService.getFullDetails(product.getId());
@@ -301,13 +299,15 @@ public class ProductFullLayoutStrategy implements LayoutStrategy<Product, Produc
   and pass a read model, as `ProductFullDetails` above.
 - On list endpoints, load the extra data for the whole page in one query — calling a per-item service from `map`
   is an N+1.
+- `map` never receives `null` (the service throws `NotFoundException` first), so it has no `null` guard and never
+  returns `null` — a `return null` from a non-`@Nullable` method fails the NullAway gate (`static-analysis`).
 
 ## 4. Controller Integration
 
 ```java
 @RestController
 @RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductController {
     private final ProductService productService;
     private final LayoutHandler layoutHandler;
@@ -316,7 +316,7 @@ public class ProductController {
     @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(oneOf = {
             ProductSummaryDTO.class, ProductDetailedDTO.class, ProductFullDTO.class })))
     public ResponseEntity<Object> getProduct(@PathVariable final String id,
-                                             final HttpServletRequest request) {
+                                             final HttpServletRequest request) throws BaseDomainException {
         final Product product = productService.getById(id);
         final Object dto = layoutHandler.handle(Product.class, id, product, request);
         return ResponseEntity.ok(dto);
@@ -331,7 +331,8 @@ public class ProductController {
   as is. Declare the layouts as `oneOf` in `api.yaml` and map to the generated types, or don't use layouts there.
 - Pass `HttpServletRequest` to handler for layout resolution
 - Service returns **product**, mapping is presentation-layer concern
-- Unknown `?layout=` → 400; a restricted layout the caller may not see → 403
+- Unknown `?layout=`, or a layout this entity has no strategy for → 400 (no silent fallback); a restricted layout
+  the caller may not see → 403. No `?layout=` → `DETAILED`, which every entity must provide
 
 ## 5. Adding a New Layout
 
@@ -369,4 +370,4 @@ Layout + Permissions (field filtering by a boolean permission query) and layout 
 ---
 
 **Version:** 1.0  
-**Last Reviewed:** 2026-07-12
+**Last Reviewed:** 2026-11-15

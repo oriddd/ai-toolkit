@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: []
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.2
+last_reviewed: 2026-11-15
 ---
 
 # Local Dev Experience Skill
@@ -60,6 +60,17 @@ services:
 Bring it up with `docker compose up -d` (wrapped by a Makefile target —
 see below). Put the matching dev URLs and the weak dev credentials in `application-local.yaml` (or a git-ignored
 `.env`), never in the base `application.yaml` — the base file must not carry credentials (golden-path #16).
+With authentication (`permissions`), also set `spring.security.oauth2.resourceserver.jwt.issuer-uri` there (a local
+IdP container, or any URL when you call with a test token): the issuer URL is not a secret, and without it the service
+does not start (`${JWT_ISSUER_URI}` has no default). With a database (`persistence` §3b) the same file holds the
+compose Postgres, since `application.yaml` reads `${DB_URL}` / `${DB_USER}` / `${DB_PASSWORD}` with no default:
+
+```yaml
+spring.datasource:
+  url: jdbc:postgresql://localhost:5432/foo
+  username: foo
+  password: foo
+```
 
 > **MinIO status:** MinIO stopped publishing community container images in late 2025 and the community edition is
 > in maintenance mode, so a pinned `minio/minio` tag no longer receives fixes. For a local S3 stand-in, prefer a

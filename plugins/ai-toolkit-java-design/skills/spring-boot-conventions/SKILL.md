@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [code-structure]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.3
+last_reviewed: 2026-11-15
 ---
 
 # Spring Boot Conventions Skill
@@ -46,7 +46,10 @@ Rules:
 - Add `@NotBlank` / `@Positive` / `@Min` / `@Max` **and `@Validated` on the record** so misconfiguration fails
   fast at startup — constraints on a `@ConfigurationProperties` class are only checked when it is `@Validated`.
 - Add `spring-boot-configuration-processor` as an `optional` dependency (it is **not** on the classpath via the starter): it generates the
-  IDE metadata. `META-INF/additional-spring-configuration-metadata.json` is hand-written, only for keys the processor cannot see.
+  IDE metadata. **Also list it in `maven-compiler-plugin` `annotationProcessorPaths`** next to Error Prone, NullAway and
+  Lombok (`static-analysis`): once that list exists, processors on the classpath are not run and no
+  `META-INF/spring-configuration-metadata.json` is generated (`<path>` with groupId + artifactId; the Boot parent
+  supplies the version). `META-INF/additional-spring-configuration-metadata.json` is hand-written, only for keys the processor cannot see.
 - Match the prefix to the package convention: `<bounded-context>.<feature>`.
 - **Keys live in `constant/ConfigurationConstants`** (`code-structure`): one constant per prefix, used by the
   `@ConfigurationProperties(prefix = …)` record and by any `@ConditionalOnProperty` / `@Value` / `${…}` reference, so a
@@ -61,6 +64,8 @@ Spring Boot's profile mechanism (`spring.profiles.active`) allows for environmen
 1. **`application.yaml`**: Contains **all** keys with local-friendly defaults.
 2. **`application-{profile}.yaml`**: Overrides only what is different for that **class** of environment (e.g., `k8s`, `prod`) — shared infrastructure defaults, never values that differ between two concrete environments (staging vs prod hostnames, credentials).
 3. **Environment Variables**: values that differ per concrete environment come from env vars (set by the Helm chart). Use `${VAR_NAME:default}` for non-secret infrastructure values (hostnames, ports, pool sizes). **Secrets use `${VAR_NAME}` with no default** (or a secret store, see `security-hardening`) — a default such as `${DB_PASSWORD:changeme}` silently ships a known password when the variable is missing.
+
+**YAML snippets in the skills are fragments.** `application.yaml` has each top-level key once (`spring:`, `server:`, `management:`, `logging:`, `resilience4j:` …); a snippet that repeats one is merged under the existing key, or written with dotted keys (`spring.datasource.url:`). A second `spring:` block is a duplicate key and the application fails to start.
 
 **Reference Profile Strategy**:
 - `default`: Local development against a local DB / Docker Compose.
@@ -166,6 +171,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
+| Boot 4.x | Verified second target: what compiles unchanged, the dual-compatible changes, the 4.x variants (Jackson 3, modular starters, Hibernate 7, Testcontainers 2) and what is not verified | the project runs Spring Boot 4.x | [`spring-boot-4.md`](./references/spring-boot-4.md) |
 | §7, §7b, §8 | `@Async` with a named `TaskExecutor` (rejection policy, shutdown draining, interrupts, virtual threads); `@Scheduled` jobs (config-driven interval, never throws, metrics, ShedLock); caching (`CachePort` default, `@Cacheable` shortcut, per-cache TTL, self-invocation) | adding async work, a scheduled job or a cache | [`async-scheduling-and-caching.md`](./references/async-scheduling-and-caching.md) |
 
 ## 9. Idempotency
@@ -224,7 +230,7 @@ Inject `Clock` everywhere code reads "now":
 @Bean Clock clock() { return Clock.systemUTC(); }
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class FooService {
     private final Clock clock;
 

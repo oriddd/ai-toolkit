@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, monolith]
 depends_on: [cd, observability]
 ships_templates: true
 hitl: true
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Health Indicator Skill (HITL)
@@ -84,18 +84,25 @@ It must:
 - Log at `debug` on every refresh; `error` on failure.
 
 ### b) `health/config/ReadinessClientConfig.java`
-Create if missing. Single `@Bean RestClient readinessRestClient(RestClient.Builder builder)` built from Boot's
-injected `RestClient.Builder` (keeps observation/tracing), with short timeouts:
+Create if missing. Single `@Bean RestClient readinessRestClient(...)` built from Boot's
+injected `RestClient.Builder` (keeps observation/tracing), with short timeouts set through Boot's
+`ClientHttpRequestFactoryBuilder` and `ClientHttpRequestFactorySettings` beans — they keep the detected HTTP client
+(pooling) and `spring.http.client.*`; a `new SimpleClientHttpRequestFactory()` would drop both:
 
 ```java
 @Bean
-RestClient readinessRestClient(final RestClient.Builder builder) {
-    final SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-    requestFactory.setConnectTimeout(Duration.ofSeconds(2));
-    requestFactory.setReadTimeout(Duration.ofSeconds(2));
-    return builder.requestFactory(requestFactory).build();
+RestClient readinessRestClient(final RestClient.Builder builder,
+                               final ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
+                               final ClientHttpRequestFactorySettings requestFactorySettings) {
+    return builder.requestFactory(requestFactoryBuilder.build(requestFactorySettings
+                    .withConnectTimeout(Duration.ofSeconds(2))
+                    .withReadTimeout(Duration.ofSeconds(2))))
+            .build();
 }
 ```
+
+Boot 4.x (opt-in): inject `HttpClientSettings` instead of `ClientHttpRequestFactorySettings` (same `with*Timeout`
+methods).
 
 If `authMode != none`, add the appropriate default header / interceptor
 (e.g. `defaultHeader(HttpHeaders.AUTHORIZATION, ...)`).
@@ -139,6 +146,8 @@ The Spring bean name (`@Component("fooDependency")`) is **the key** used
 by the readiness group in `application.yaml`. Keep them in sync.
 
 ### d) `application.yaml` (main)
+
+Merge into the existing `management:` / `spring:` keys of `application.yaml`; do not add a second block:
 
 ```yaml
 management:
@@ -220,8 +229,8 @@ Print:
 ## Do / Don't
 
 ✅ Always extend `AbstractReadinessIndicator`; never re-implement HTTP polling.
-✅ Always register the indicator in the `readiness` group – otherwise the pod
-will be marked Ready even when the dependency is down.
+✅ Always register the indicator of a hard dependency (question 8 = yes) in the `readiness` group – otherwise the
+pod will be marked Ready even when the dependency is down. A soft dependency (8 = no) stays out of every probe group.
 ✅ Cache the result (the indicator is called on every probe – avoid hammering
 the downstream). `AbstractReadinessIndicator` caches for `cacheSeconds`; Spring's
 `management.endpoint.health.cache.time-to-live` does not apply to the probe group paths, so don't rely on it.

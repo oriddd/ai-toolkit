@@ -7,7 +7,10 @@ Part of the [`request-metrics`](../SKILL.md) skill. Section numbers and headings
 ```java
 public interface MetricsRecorder {
 
-    /** Called by MetricsFilter once the request (including any async dispatch) has completed. */
+    /**
+     * Called by MetricsFilter once the request (including any async dispatch) has completed. The request and response
+     * are passed through to parsers and MetricsTimerHelper; the recorder never reads them itself.
+     */
     void recordMetrics(long durationMs, HttpServletRequest request,
                        HttpServletResponse response);
 
@@ -58,7 +61,7 @@ application at startup (routing must never depend on bean order), and a missing 
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
 
@@ -81,8 +84,7 @@ public class ExportInvoiceMetricsRecorder implements MetricsRecorder {
                 getSupportedMetricName(), request, response, formatTag);
 
         timer.record(durationMs, TimeUnit.MILLISECONDS);
-        log.debug("Recorded metric '{}' for URI '{}' in {}ms",
-                getSupportedMetricName(), request.getRequestURI(), durationMs);
+        log.debug("Recorded metric '{}' in {}ms", getSupportedMetricName(), durationMs);
     }
 }
 ```

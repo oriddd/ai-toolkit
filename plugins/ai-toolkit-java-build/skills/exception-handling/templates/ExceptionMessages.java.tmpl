@@ -19,11 +19,15 @@ import java.time.Duration;
 public final class ExceptionMessages {
     private ExceptionMessages() {}
 
-    // Error codes — one per HTTP mapping; the advice copies it to the ProblemDetail "errorCode" property.
+    // Error codes — one per HTTP mapping; the advice copies it to the ProblemDetail "errorCode" property (also for Spring MVC's own 404 / 405 / 406 / 415).
     public static final String ERR_BAD_REQUEST = "ERR-BAD-REQUEST";
+    public static final String ERR_UNAUTHORIZED = "ERR-UNAUTHORIZED";
     public static final String ERR_FORBIDDEN = "ERR-FORBIDDEN";
     public static final String ERR_NOT_FOUND = "ERR-NOT-FOUND";
     public static final String ERR_CONFLICT = "ERR-CONFLICT";
+    public static final String ERR_METHOD_NOT_ALLOWED = "ERR-METHOD-NOT-ALLOWED";
+    public static final String ERR_NOT_ACCEPTABLE = "ERR-NOT-ACCEPTABLE";
+    public static final String ERR_UNSUPPORTED_MEDIA_TYPE = "ERR-UNSUPPORTED-MEDIA-TYPE";
     public static final String ERR_TOO_MANY_REQUESTS = "ERR-TOO-MANY-REQUESTS";
     public static final String ERR_UNAVAILABLE = "ERR-UNAVAILABLE";
     public static final String ERR_DEPENDENCY = "ERR-DEPENDENCY";
@@ -65,7 +69,7 @@ public final class ExceptionMessages {
             MessageFormat.format(RATE_LIMIT_EXCEEDED, String.valueOf(retryAfterSeconds)), Duration.ofSeconds(retryAfterSeconds));
     }
     /** {@code dependency} is our own name for the downstream (e.g. "foo"), never text from its response. */
-    public static UnavailableException dependencyUnavailable(String dependency, @Nullable @Nullable Throwable cause) {
+    public static UnavailableException dependencyUnavailable(String dependency, @Nullable Throwable cause) {
         return new UnavailableException(ERR_UNAVAILABLE, MessageFormat.format(DEPENDENCY_UNAVAILABLE, dependency), cause);
     }
     /** Unexpected non-2xx that is not an outage; the status is ours to log, the response body never goes in the message. */

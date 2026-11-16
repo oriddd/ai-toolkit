@@ -97,7 +97,7 @@ fans out to the delegates. The domain never knows the difference.
 ```java
 // adapter/secret/composite/CompositeSecretAdapter.java
 @Slf4j
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class CompositeSecretAdapter implements SecretPort {
     private final List<SecretPort> delegates;          // ordered via @Order (ObjectProvider.orderedStream())
     private final CompositionMode mode;                // wired only when mode != SINGLE

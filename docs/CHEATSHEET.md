@@ -79,6 +79,6 @@ Full setup: [`../setup/jetbrains/README.md`](../setup/jetbrains/README.md).
 ```bash
 bash tools/validate-skills.sh      # all skills lint clean
 python3 tools/build-indexes.py --check   # indexes in sync
-bash plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh           # context templates valid
+bash context/validate-context.sh   # in a project that copied the templates (blank templates fail by design)
 ```
 

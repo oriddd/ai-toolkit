@@ -90,15 +90,16 @@ plugins/ai-toolkit-docs/agents/   (language-neutral)
 # Copy the context folder into your new repo
 cp -r plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/ path/to/your-service/context/
 
-# Fill in each template (search for "Placeholder content")
-# Required: project-overview, architecture, code-standards, dependencies
+# Fill every section marked (REQUIRED) in every file; the prompts are HTML comments and do not count.
+# Add "Project type: <type>" to project-overview.md — library, cli and mobile skip the
+# (REQUIRED for services) sections in slo.md and runbooks.md.
 
-# Validate the context is populated
-bash plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh
-
-# Run the skill validator after any skill edits
-bash tools/validate-skills.sh
+# Validate the copied folder (fails until every required section has content)
+bash path/to/your-service/context/validate-context.sh
 ```
+
+The blank templates in this repo fail the validator by design — run it on a project's copied `context/` folder,
+not on `plugins/`.
 
 ---
 
@@ -183,11 +184,15 @@ mkdir -p plugins/ai-toolkit-java-design/skills/my-skill
 
 # 3. Add a row to docs/README.md and name the skill in docs/INDEX_BY_USE_CASE.md
 
-# 4. Validate — the tool tells you exactly what is missing
-bash tools/validate-skills.sh
+# 4. Add a realistic trigger prompt to tools/eval_cases/triggers.py (and, for a key skill, a behaviour case in
+#    behaviour.py — AUTHORING.md §10), then generate the eval suites
+python3 tools/build-evals.py
 
 # 5. Regenerate auto-generated indexes
 python3 tools/build-indexes.py
+
+# 6. Validate — the tool tells you exactly what is missing
+bash tools/validate-skills.sh
 ```
 
 ---
@@ -201,15 +206,17 @@ bash tools/validate-skills.sh
 # Rebuild REGISTRY.md and BACKEND_GUILD.md matrix/graph from frontmatter
 python3 tools/build-indexes.py
 
-# Validate the shipped context templates (required sections are non-empty)
-bash plugins/ai-toolkit-docs/skills/context-maintenance/templates/context/validate-context.sh
+# Eval case files are generated from tools/eval_cases/ and in sync
+python3 tools/build-evals.py --check
 
-# Links, hook behaviour, git modes
+# Links, hook behaviour, git modes, plugin version bumps
 python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh
+bash tools/check-versions.sh origin/main
 ```
 
-All of these must exit 0 before any PR that touches `plugins/` or `docs/` (CI runs them). In a service repo
-that copied the templates, the validator lives at `context/validate-context.sh`.
+All of these must exit 0 before any PR that touches `plugins/` or `docs/` (CI runs them). `validate-context.sh` is
+not part of this gate: it checks a project's copied `context/` folder (section 2), and the blank templates fail it by
+design.
 
 ---
 

@@ -9,8 +9,8 @@ applies_to: [event, monolith]
 depends_on: [code-structure, observability, pluggable-architecture]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.2
+last_reviewed: 2026-11-15
 ---
 
 # Messaging Skill
@@ -24,8 +24,21 @@ src/main/java/<basePackage>/
 │   ├── producer/        # publishers (use transactional outbox)
 │   ├── consumer/        # @KafkaListener / @RabbitListener
 │   └── outbox/          # outbox table writer + relay
-└── operation/           # use-case orchestrators (publish events as side-effects)
+├── handler/             # event-driven service: orchestrators the consumers call
+└── operation/           # REST service: use-case orchestrators (publish events as side-effects)
 ```
+
+The `code-structure` ArchUnit test layers `..messaging.consumer..` and `..messaging.producer..` as separate slices.
+
+## Dependencies
+
+```xml
+<dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka</artifactId></dependency>   <!-- version from the Boot BOM -->
+<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-amqp</artifactId></dependency>   <!-- RabbitMQ instead of Kafka -->
+```
+
+The templates also need the `persistence` dependencies (outbox entity, `TransactionTemplate`). Boot 4 names the Kafka
+starter `spring-boot-starter-kafka` (`spring-boot-conventions` `references/spring-boot-4.md`).
 
 ## 1. Events as immutable records
 
@@ -53,21 +66,8 @@ public record InvoiceCreatedEvent(
 
 ## 2. Schema management
 
-| Format | Use when |
-| --- | --- |
-| **Avro + Schema Registry** | Strict schema evolution, long-lived events, large fanout. |
-| **Protobuf** | Polyglot consumers (Go/Rust), gRPC nearby. |
-| **JSON Schema** | Small org, no schema registry, accept evolution risk. |
-
-Rules:
-- Schemas are **forward + backward compatible** during normal evolution. A
-  consumer must be able to consume yesterday's event; a producer must be
-  able to produce today's event without breaking yesterday's consumer.
-- Add fields with **defaults**; never remove required fields without a major
-  version bump.
-- Schemas live in `messaging/schemas/` and are published as a separate
-  artifact (see `sdk-publishing`) so cross-team consumers can depend on a
-  versioned jar.
+Avro + Schema Registry, Protobuf or JSON Schema; always forward + backward compatible, shipped as a versioned artifact.
+Table and rules: [`references/schema-management.md`](./references/schema-management.md).
 
 ## 3. Producer — transactional outbox
 
@@ -92,8 +92,8 @@ Implementation:
 ```java
 @Service
 public class InvoiceService {
-    @Transactional
-    public Invoice create(CreateRequest req) {
+    @Transactional(rollbackFor = Exception.class)
+    public Invoice create(CreateRequest req) throws BaseDomainException {
         var invoice = new Invoice(req.id(), req.name());
         invoiceRepo.save(invoice);
         outbox.append(new InvoiceCreatedEvent(invoice.getId(), invoice.getName(), now()));  // also stores the current traceparent
@@ -102,7 +102,7 @@ public class InvoiceService {
 }
 
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class OutboxRelay {
     private final OutboxRepository outboxRepo;
@@ -159,7 +159,7 @@ Brokers guarantee at-least-once. The consumer must be **idempotent**:
 
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class InvoiceCreatedConsumer {
 
     private final FooService service;
@@ -173,7 +173,7 @@ public class InvoiceCreatedConsumer {
             exclude = {IllegalArgumentException.class, JsonProcessingException.class},
             topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE)
     @KafkaListener(topics = "${kafka.topics.invoices.name}", groupId = "${kafka.topics.invoices.group-id}")
-    public void on(ConsumerRecord<String, String> rec, Acknowledgment ack) throws JsonProcessingException {
+    public void on(ConsumerRecord<String, String> rec, Acknowledgment ack) throws Exception {
         var header = rec.headers().lastHeader("event-id");
         if (header == null) {                       // not retryable: excluded above, goes straight to the DLT
             throw new IllegalArgumentException("Record without event-id header at offset " + rec.offset());
@@ -191,12 +191,12 @@ public class InvoiceCreatedConsumer {
 }
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class FooService {
     private final ProcessedEventRepository processed;
 
-    @Transactional
-    public void handleOnce(String eventId, InvoiceCreatedEvent event) {
+    @Transactional(rollbackFor = Exception.class)
+    public void handleOnce(String eventId, InvoiceCreatedEvent event) throws BaseDomainException {
         if (!processed.tryRecord(eventId)) {
             return;                                 // already handled — skip
         }
@@ -210,11 +210,9 @@ public class FooService {
   (`INSERT ... ON CONFLICT DO NOTHING`).
 - The consumer's business transaction includes the `processed` insert, so
   effects are atomic with the dedupe record. Domain exceptions are
-  **unchecked** (`exception-handling`), so a failing `handle(event)` rolls
-  back the dedupe row too and the redelivery is processed again. Never catch
-  and swallow inside `handleOnce`; a checked exception from a third-party
-  API must be wrapped or declared in `rollbackFor`, or the event would be
-  marked processed without its effect.
+  **checked** (`exception-handling`): `rollbackFor = Exception.class` rolls the dedupe row back with a failing
+  `handle(event)`; a `TransactionTemplate` needs `status.setRollbackOnly()` and a
+  rethrow after `execute` (`IdempotentConsumer.java.tmpl`). Never swallow a failure in `handleOnce`.
 - Use **manual ack** + **at-least-once**; commit offset only after the
   business transaction commits.
 
@@ -225,7 +223,8 @@ through the same `StringSerializer` `KafkaTemplate`, so a consumer that
 deserializes to the event record (`JsonDeserializer`) makes every DLT/retry
 publish fail with `SerializationException` — the record is redelivered forever,
 the partition is blocked and nothing reaches the DLT. Configure both sides
-explicitly (topic and group come from properties, never literals):
+explicitly (topic and group come from properties, never literals). Merge under the existing top-level keys of
+`application.yaml` (one `spring:` block, with the §5 listener keys):
 
 ```yaml
 kafka:
@@ -257,7 +256,8 @@ to the DLT instead of looping or burning the retry topics.
 After **N retries** with exponential backoff, send to a `<topic>-dlt` (Spring Kafka's default suffix) and
 emit a **metric + alert** so an operator notices. Default values: 5 attempts, 1s initial delay, multiplier 2,
 max delay 30s — the `kafka.retry.*` keys of §4, applied by `@RetryableTopic` on the listener (non-blocking retry
-topics `<topic>-retry-0..n`, then `<topic>-dlt`; the `DlqHandler` template is the same recipe).
+topics `<topic>-retry-0..n`, then `<topic>-dlt`; the `DlqHandler` template is the same recipe). Merge `listener` under the
+`spring.kafka` block of §4:
 
 ```yaml
 spring:
@@ -268,13 +268,10 @@ spring:
       missing-topics-fatal: false
 ```
 
-Use the annotation, not Boot's `spring.kafka.retry.topic.*` properties: those cannot list non-retryable exceptions
-(a missing header would be retried N times) and Boot builds them with `doNotAutoCreateRetryTopics()`, so on a
-cluster without broker-side auto-creation the retry and DLT topics do not exist. `@RetryableTopic` creates them
-(`autoCreateTopics`, default `true`); where the platform forbids that, create the retry topics
-(`<topic>-retry-0`, `-1`, … one per retry) and `<topic>-dlt` together with the topic itself.
-
-A DLT record carries `kafka_exception-fqcn`, `kafka_exception-message` and `kafka_original-topic` headers (`KafkaHeaders.EXCEPTION_FQCN`, `EXCEPTION_MESSAGE`, `ORIGINAL_TOPIC`; Spring Kafka 3.x no longer writes the old `kafka_dlt-*` names) explaining the failure. A redrive
+Use the annotation, not Boot's `spring.kafka.retry.topic.*` properties (§5b: they cannot exclude exceptions and do
+not create the topics). **Non-blocking retry topics break per-key order**: a failed record moves to `-retry-0` while
+later records of the same aggregate are processed. An order-sensitive consumer uses blocking retries instead
+(`DefaultErrorHandler` + `DeadLetterPublishingRecoverer`, §5b). DLT header names differ by path (§5b). A redrive
 operator tool replays from DLT after a fix.
 
 ## 6. Concurrency & ordering
@@ -290,7 +287,8 @@ Sections below keep their names and numbers but live in `references/` so this fi
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
-| §3 Outbox Performance & Clean-up, §5a, §7 | outbox indexes / partitioning / retention, exactly-once scope, testing producers and consumers | tuning the outbox, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
+| §2 | schema formats and compatibility rules | choosing or evolving the event schema | [`schema-management.md`](./references/schema-management.md) |
+| §3 Outbox Performance & Clean-up, §5a, §5b, §7 | outbox indexes / partitioning / retention, exactly-once scope, retry topology and DLT headers, testing | tuning the outbox, choosing blocking vs non-blocking retries, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
 
 ## Do / Don't
 

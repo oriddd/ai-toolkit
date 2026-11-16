@@ -1,5 +1,5 @@
 ---
-description: "`sonar-quality-gate` loads for a typical request, routed by its description alone"
+description: "`sonar-quality-gate` loads for a typical request (its description plus the plugin's routing hook)"
 tags: [trigger]
 plugins: ["../../../plugins/ai-toolkit-quality"]
 max_turns: 4

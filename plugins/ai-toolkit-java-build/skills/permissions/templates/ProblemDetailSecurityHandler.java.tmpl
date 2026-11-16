@@ -1,0 +1,88 @@
+package {{basePackage}}.config;
+
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.text.MessageFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.stereotype.Component;
+
+/**
+ * 401 / 403 raised inside the security filter chain never reach the @RestControllerAdvice, so this writes the same
+ * ProblemDetail shape (exception-handling) itself. The Bearer handlers set the status and the RFC 6750
+ * WWW-Authenticate header; the body never echoes the exception message. Every failure is counted
+ * (security.auth.failure) and logged as event=AUTH_FAILED for the security-hardening A09 alert.
+ * An identity provider that cannot be reached (AuthenticationServiceException from the JWT provider, or the
+ * JwtDecoderInitializationException that IdentityProviderUnavailableFilter forwards) is the platform's outage, not a
+ * bad token: 503 + Retry-After instead of 401.
+ */
+@Component
+public class ProblemDetailSecurityHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
+    private static final Logger log = LoggerFactory.getLogger(ProblemDetailSecurityHandler.class);
+    private static final String IDENTITY_PROVIDER = "identity provider";
+    private static final String RETRY_AFTER_SECONDS = "30";
+    private final AuthenticationEntryPoint bearerEntryPoint = new BearerTokenAuthenticationEntryPoint();
+    private final AccessDeniedHandler bearerAccessDenied = new BearerTokenAccessDeniedHandler();
+    private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
+
+    public ProblemDetailSecurityHandler(ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+        this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
+    }
+
+    @Override
+    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException e)
+            throws IOException, jakarta.servlet.ServletException {
+        if (e instanceof AuthenticationServiceException) {
+            identityProviderUnavailable(response, e);
+            return;
+        }
+        bearerEntryPoint.commence(request, response, e);
+        recordFailure("unauthenticated", e);
+        write(response, HttpStatus.UNAUTHORIZED, "Authentication is required.", ExceptionMessages.ERR_UNAUTHORIZED);
+    }
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException e)
+            throws IOException, jakarta.servlet.ServletException {
+        bearerAccessDenied.handle(request, response, e);
+        recordFailure("access_denied", e);
+        write(response, HttpStatus.FORBIDDEN, "Access is denied.", ExceptionMessages.ERR_FORBIDDEN);
+    }
+
+    public void identityProviderUnavailable(HttpServletResponse response, Exception e) throws IOException {
+        recordFailure("identity_provider_unavailable", e);
+        response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+        write(response, HttpStatus.SERVICE_UNAVAILABLE,
+            MessageFormat.format(ExceptionMessages.DEPENDENCY_UNAVAILABLE, IDENTITY_PROVIDER), ExceptionMessages.ERR_UNAVAILABLE);
+    }
+
+    private void recordFailure(String reason, Exception e) {
+        meterRegistry.counter("security.auth.failure", "reason", reason).increment();
+        log.warn("event=AUTH_FAILED reason={} type={}", reason, e.getClass().getSimpleName());
+    }
+
+    private void write(HttpServletResponse response, HttpStatus status, String detail, String errorCode) throws IOException {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setProperty("errorCode", errorCode);
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), problem);
+    }
+}

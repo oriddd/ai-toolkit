@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Git Commit Conventions Skill
@@ -45,13 +45,13 @@ Use conventional commit prefixes from https://www.conventionalcommits.org/ and c
 | Prefix      | Usage                                                                 | Examples                                              |
 |-------------|-----------------------------------------------------------------------|-------------------------------------------------------|
 | `feat`      | New feature for the user                                              | `feat: add user authentication`                       |
-| `fix`       | Bug fix                                                               | `fix: resolve null pointer in login handler`          |
+| `fix`       | Bug fix                                                               | `fix: resolve crash in login handler on empty password`          |
 | `docs`      | Documentation only changes                                            | `docs: update README with new installation steps`     |
 | `style`     | Code formatting, whitespace, missing semi-colons (no logic change)    | `style: format CSS according to style guide`          |
-| `refactor`  | Code change that neither fixes a bug nor adds a feature               | `refactor: extract validation logic to helper class`  |
+| `refactor`  | Code change that neither fixes a bug nor adds a feature               | `refactor: extract validation logic to helper`        |
 | `perf`      | Performance improvement                                               | `perf: optimize database query with index`            |
 | `test`      | Adding or updating tests                                              | `test: add edge case tests for parser`                |
-| `build`     | Changes to build system or external dependencies                      | `build: upgrade spring-boot to <version>`             |
+| `build`     | Changes to build system or external dependencies                      | `build: upgrade web framework to <version>`           |
 | `ci`        | Changes to CI/CD configuration                                        | `ci: add SonarQube analysis to pipeline`              |
 | `chore`     | Other changes that don't modify src or test files                     | `chore: remove unused dependencies`                   |
 | `revert`    | Reverts a previous commit                                             | `revert: revert commit abc1234`                       |
@@ -88,7 +88,7 @@ Fixes: #123
 Before coding, mentally outline the logical commit sequence:
 ```
 1. feat: add domain model
-2. feat: add repository layer  
+2. feat: add repository layer
 3. feat: add service layer
 4. feat: add REST controller
 5. test: add integration tests
@@ -100,13 +100,13 @@ a separate `test` commit is for tests added on top (integration tests, extra edg
 ### Step 2: Stage Changes Incrementally
 ```bash
 # Stage only files for commit 1
-git add src/main/model/
+git add src/domain/user.<ext>
 
 # Verify what's staged
 git diff --cached
 
 # Commit
-git commit -m "feat: add User domain model"
+git commit -m "feat: add user domain model"
 ```
 
 ### Step 3: Verify It Builds
@@ -115,14 +115,14 @@ does not contain. Build the **committed snapshot** in a throw-away worktree (nev
 ```bash
 # After EACH commit, verify the commit itself builds (and the fast tests pass)
 git worktree add --detach ../verify-commit HEAD
-(cd ../verify-commit && mvn -q clean compile)   # Java
-#   python -m compileall src  (or: mypy / pytest -x)   # Python
-#   npm ci && npm run typecheck                        # TypeScript / React Native
-#   cargo build                                        # Rust
+(cd ../verify-commit && <build command>)
+#   Java:                  mvn -q clean compile
+#   Python:                uv run mypy && uv run pytest -x -m "not integration"
+#   TypeScript / RN:       npm ci && npm run typecheck
 git worktree remove --force ../verify-commit
 ```
-For a whole branch the developer can run `git rebase -x 'mvn -q clean compile' <base>` (developer-run: it rewrites
-history and the commit guard asks first).
+For a whole branch the developer can run `git rebase -x '<build command>' <base>` (e.g. `-x 'mvn -q clean compile'`,
+`-x 'npm run typecheck'`, `-x 'uv run mypy'`; developer-run: it rewrites history and the commit guard asks first).
 
 If compilation fails, the commit is incomplete. Add the missing dependency or split differently.
 
@@ -130,7 +130,7 @@ If compilation fails, the commit is incomplete. Add the missing dependency or sp
 Only when the developer asked for the amend, and never on a commit that is already pushed:
 ```bash
 # Fix and amend the last commit (before pushing)
-git add missing-file.java
+git add path/to/missing-file
 git commit --amend --no-edit
 ```
 
@@ -198,13 +198,13 @@ Committing incomplete work that breaks the build:
 ```
 ✅ Commit both together or commit in correct order:
 ```bash
-git add src/repository/UserRepository.java
+git add src/repository/user_repository.<ext>
 git commit -m "feat: add user repository"
 
-git add src/service/UserService.java
+git add src/service/user_service.<ext>
 git commit -m "feat: add user service"
 
-mvn clean compile  # ✅ Compiles!
+<build command>  # ✅ Compiles at each commit
 ```
 
 ### 3. Vague Messages
@@ -215,7 +215,7 @@ mvn clean compile  # ✅ Compiles!
 ```
 ✅ Be specific:
 ```bash
-✅ "fix: prevent NPE when user email is null"
+✅ "fix: prevent crash when user email is null"
 ✅ "refactor: extract duplicate validation logic to shared utility"
 ✅ "chore: remove deprecated config properties"
 ```
@@ -230,14 +230,14 @@ mvn clean compile  # ✅ Compiles!
 Before requesting review:
 - [ ] Each commit has a proper prefix
 - [ ] Each commit message is clear and explains WHY
-- [ ] Each commit compiles independently (developer-run: `git rebase -i --exec "mvn clean compile"` — interactive rebases are not for agents, and the commit guard asks before any rebase)
+- [ ] Each commit compiles independently (developer-run: `git rebase -x '<build command>' <base>` — it rewrites history, so agents run it only when asked, and the commit guard asks before any rebase)
 - [ ] Commits are in logical order
-- [ ] No "fix typo" or "oops" commits (squash them with `git rebase -i` — developer-run; agents never rewrite history unless asked)
+- [ ] No "fix typo" or "oops" commits (squash them with `git rebase -i` — developer-run, it needs an editor; agents never rewrite history unless asked)
 
 ## Tools
 
 ### Git Hooks
-Add a commit-msg hook to enforce prefix. Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
+Add a commit-msg hook that enforces the prefix and the subject rules (≤ 72 characters, no trailing period, lowercase after the colon). Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
 `pre-commit` rather than copying it into the unversioned `.git/hooks/`:
 ```yaml
 # .pre-commit-config.yaml — then run once: pre-commit install --hook-type commit-msg
@@ -254,14 +254,29 @@ repos:
 #!/bin/sh
 # scripts/commit-msg.sh (chmod +x) — receives the message file as $1
 
-commit_msg=$(head -n 1 "$1")   # check the subject line only, not the body
-# Merge commits and the fixup!/squash!/amend! commits that `git rebase --autosquash` relies on are allowed through
-pattern="^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: |Revert \"|Merge |fixup! |squash! |amend! )"
+subject=$(head -n 1 "$1")   # check the subject line only, not the body
+# Merge commits, auto-generated reverts and the fixup!/squash!/amend! commits that `git rebase --autosquash` relies on are allowed through
+case "$subject" in
+    "Merge "*|"Revert \""*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
 
-if ! echo "$commit_msg" | grep -qE "$pattern"; then
-    echo "ERROR: Commit message must start with a valid prefix, optional (scope) and optional ! for breaking changes:"
+prefix="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: ."
+if ! echo "$subject" | grep -qE "$prefix"; then
+    echo "ERROR: Commit message must start with a valid prefix, optional (scope), optional ! for breaking changes, then a summary:"
     echo "  feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert   e.g. feat(api)!: drop v1"
     echo "  (mark breaking changes with ! and/or a BREAKING CHANGE: footer — see release-versioning)"
+    exit 1
+fi
+if [ "${#subject}" -gt 72 ]; then
+    echo "ERROR: Subject line is ${#subject} characters; the limit is 72."
+    exit 1
+fi
+if echo "$subject" | grep -q '\.$'; then
+    echo "ERROR: Subject line must not end with a period."
+    exit 1
+fi
+if echo "$subject" | grep -qE ": [A-Z]"; then
+    echo "ERROR: Start the summary with a lowercase letter after the colon (feat: add x, not feat: Add x)."
     exit 1
 fi
 ```
@@ -309,8 +324,8 @@ When creating commits, verify:
 
 ## Cross-references
 - [`release-versioning`](../release-versioning/SKILL.md) — consumes these prefixes to drive SemVer bumps, CHANGELOG generation, and `commitlint` enforcement.
-- `ci` / `github-actions-ci` — run the same commitlint check in the pipeline: the Jenkinsfile's PR-only `Commit messages` stage and `github-actions-ci`'s `lint-commits.yml` (copied from `release-versioning` §1). Make it a required check only once that job exists.
-- `quality-review` — commit hygiene is part of the pull-request review checklist.
+- The language's CI skill runs the same commitlint check in the pipeline — Java: the Jenkins `ci` PR-only `Commit messages` stage or `github-actions-ci`'s `lint-commits.yml`; Python / React Native: add `lint-commits.yml` from `release-versioning` §1 next to the `python-ci` / `react-native-ci` workflows. Make it a required check only once that job exists.
+- Pull-request review — commit hygiene is part of it: apply the PR Commit Checklist above alongside the language's review (Java `quality-review`; the `python-code-review` / `react-native-code-review` agents), which reviews the code, not the commits.
 
 ## References
 - [Conventional Commits](https://www.conventionalcommits.org/)

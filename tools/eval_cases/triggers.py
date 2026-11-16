@@ -86,3 +86,24 @@ OTHER_STACK = {
 }
 
 UNRELATED = "In two sentences, what is the difference between TCP and UDP?"
+
+NEAR_MISS = {
+    "ai-toolkit-docs": "Translate this sentence into French and reply with the translation only: \"The invoice service "
+                       "stores invoices in PostgreSQL.\"",
+    "ai-toolkit-quality": "In one sentence, what does this Java method return for x = 3? `int sq(int x) { return x * x; }`",
+    "ai-toolkit-workflow": "In one sentence, what does the commit message `fix(api): handle empty file id` tell a reader?",
+}
+
+TRIGGERS["python-graceful-shutdown"] = (
+    "Every rolling update of our FastAPI orders service on Kubernetes gives clients 502s and connection resets, and the "
+    "Kafka consumer worker sometimes reprocesses messages. Set up proper shutdown for both.")
+
+TRIGGERS["react-native-app-config-and-updates"] = (
+    "Our Expo app needs separate dev, preview and production builds installable side by side, and I want to ship JS "
+    "fixes over the air.")
+TRIGGERS["react-native-permissions-and-push"] = (
+    "Add push notifications to our Expo React Native app so users get notified when their order ships.")
+
+TRIGGERS["python-cd"] = (
+    "We need to deploy our FastAPI orders service and its Kafka consumer worker to Kubernetes. Write the Helm chart, "
+    "including how the Alembic migrations run on each release.")

@@ -14,7 +14,7 @@ Verify the **intended behavior** when inputs are valid and conditions are met:
 ```java
 // Positive test: caller allowed → the selected strategy verified the resource
 @Test
-void handle_allowedCaller_delegatesToSelectedStrategy() {
+void handle_allowedCaller_delegatesToSelectedStrategy() throws Exception {
     // given
     when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
     when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
@@ -50,7 +50,7 @@ void render_validPdf_returnsHtmlContent() {
 ### Negative Tests (Error Conditions)
 Verify that **error cases are handled correctly** — exceptions thrown,
 validation failures returned, fallback logic invoked. Domain exceptions are
-the unchecked hierarchy from `exception-handling` (here `ForbiddenException`,
+the checked hierarchy from `exception-handling` (here `ForbiddenException`,
 built by `ExceptionMessages`):
 
 ```java
@@ -119,7 +119,7 @@ class PermissionsHandlerTest {
 
     // Positive: the strategy selected for the caller context is the one that runs
     @Test
-    void handle_allowedCaller_delegatesToSelectedStrategy() {
+    void handle_allowedCaller_delegatesToSelectedStrategy() throws Exception {
         when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
         when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
 
@@ -151,7 +151,7 @@ class PermissionsHandlerTest {
 
     // Negative: strategy fails verification — its exception propagates unchanged
     @Test
-    void handle_strategyDeniesAccess_propagatesForbiddenException() {
+    void handle_strategyDeniesAccess_propagatesForbiddenException() throws Exception {
         when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
         when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
         ForbiddenException denied = ExceptionMessages.accessDenied("invoice-42");

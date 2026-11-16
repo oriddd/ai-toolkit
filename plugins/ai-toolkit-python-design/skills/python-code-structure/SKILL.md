@@ -1,7 +1,7 @@
 ---
 name: python-code-structure
 description: >
-  Python 3.12 service layout — src layout, api/operations/services/clients/models/config layers, pydantic-settings,
+  Python 3.14 (3.12+) service layout — src layout, api/operations/services/clients/models/config layers, pydantic-settings,
   constructor injection, one-way dependencies. Use before creating or editing ANY Python module, package, service or
   use case in a FastAPI, worker or CLI service.
 tier: must
@@ -10,7 +10,7 @@ depends_on: []
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -24,12 +24,14 @@ package layout, the dependency direction and how collaborators are wired.
 
 ```
 my-service/
-├── pyproject.toml
+├── pyproject.toml               # [project] + [build-system]: the service is an installable package (§1b)
+├── alembic.ini                  # only with a database (see `python-persistence`)
 ├── src/my_service/              # src layout: tests can never import the working tree by accident
 │   ├── main.py                  # create_app() + lifespan: the composition root
 │   ├── api/                     # FastAPI routers + dependencies: HTTP <-> model translation only
 │   ├── operations/              # one class/function per use case: orchestrates services
 │   ├── services/                # one domain capability each: business rules, no HTTP types
+│   ├── validation/              # rule objects that need collaborators (see `python-input-validation`)
 │   ├── clients/                 # outbound transport (httpx, SDKs) behind a Protocol (see `python-external-client`)
 │   ├── repositories/            # persistence behind a Protocol (see `python-persistence`)
 │   ├── messaging/               # outbox relay, event publisher, consumers (see `python-messaging`)
@@ -43,12 +45,38 @@ my-service/
 Create only the packages you need; never scaffold empty ones. A growing service may group by feature
 (`orders/api`, `orders/services`, ...) with the same layer names inside each feature.
 
+## 1b. A buildable package
+The service is an installable package, not a folder of scripts: the image installs it non-editable
+(`python-ci` §3) and Alembic finds its migrations as `my_service:alembic`. Start with
+`uv init --package my-service`, which writes:
+
+```toml
+[project]
+name = "my-service"              # the import package is the normalised name: src/my_service/
+version = "0.1.0"
+readme = "README.md"
+requires-python = ">=3.14"       # the version the image ships; 3.12 and 3.13 work too
+dependencies = []
+
+[project.scripts]
+my-service-worker = "my_service.worker:main"   # only for a worker process (`python-graceful-shutdown`)
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]   # written by `uv init` for the uv that ran it: keep what yours writes
+build-backend = "uv_build"
+```
+
+`uv_build` expects `src/<normalised project name>/__init__.py`; with another package name the build fails
+("Expected a Python module at: src/orders_api/__init__.py"). Rename the package, or set
+`[tool.uv.build-backend] module-name = "my_service"`. Non-Python files inside the package (Alembic's
+`script.py.mako` and `versions/`) are included in the wheel without extra configuration.
+
 ## 2. Dependency direction
 
 ```
-api ──► operations ──► services ──► repositories / clients
- │           │             │
- └───────────┴─────────────┴──► models, errors, config   (leaf packages, import nothing above them)
+api ──► operations ──► services ──► validation ──► repositories / clients
+ │           │             │             │
+ └───────────┴─────────────┴─────────────┴──► models, errors, config   (leaf packages, import nothing above them)
 ```
 
 - A layer imports only from layers to its right. `services` never import `fastapi`; `models` never import `services`.
@@ -56,6 +84,8 @@ api ──► operations ──► services ──► repositories / clients
   `TID` rules only ban specific named imports, they cannot express layer direction.
 - `clients/`, `repositories/`, `messaging/` and `security/` are adapters at the right-hand end: they may import
   the leaf packages (and `messaging/` the repositories), never `services/`, `operations/` or `api/`.
+- `validation/` holds rule objects that need data (`python-input-validation` §4): operations and services call
+  them; they may import repository and client Protocols and the leaf packages, never `services/` or above.
 - No cycles; if two modules need each other, extract the shared piece into a third brick.
 
 ## 3. The LEGO brick principle
@@ -148,9 +178,10 @@ class IsolatedDatabaseSettings(DatabaseSettings):    # tests/: constructor argum
 ## 6. Naming
 - Modules are `snake_case` nouns for what they hold: `invoice_total_calculator.py`, not `utils.py` / `helpers.py` / `common.py`.
 - Suffixes carry meaning: `*Service`, `*Client`, `*Repository`, `*Operation`, `*Rule`, `*Settings`, `*Error`.
-- Public functions have full type hints. Add `from __future__ import annotations` only where a forward
-  reference needs it (lazy annotations by default arrive with PEP 649 in 3.14, not 3.12); avoid it in FastAPI
-  and pydantic modules, which resolve annotations at runtime.
+- Public functions have full type hints. On 3.14 annotations are evaluated lazily (PEP 649), so a forward
+  reference needs neither quotes nor `from __future__ import annotations`; do not add it. On 3.12/3.13 add it
+  only where a forward reference needs it, and avoid it in FastAPI and pydantic modules, which resolve
+  annotations at runtime.
 - Immutable data: `@dataclass(frozen=True, slots=True)` or a frozen pydantic model.
 
 ## 7. Smallest pattern that fits

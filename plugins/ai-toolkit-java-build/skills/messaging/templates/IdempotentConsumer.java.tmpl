@@ -1,4 +1,5 @@
 package {{basePackage}}.messaging;
+import {{basePackage}}.exception.BaseDomainException;
 import java.nio.charset.StandardCharsets;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
@@ -22,15 +23,24 @@ public class IdempotentConsumer {
     public IdempotentConsumer(TransactionTemplate tx) { this.tx = tx; }
     @KafkaListener(topics = "${kafka.topics.example.name}",
                    groupId = "${kafka.topics.example.group-id}")
-    public void onMessage(ConsumerRecord<String, String> rec, Acknowledgment ack) {
+    public void onMessage(ConsumerRecord<String, String> rec, Acknowledgment ack) throws BaseDomainException {
         String eventId = eventId(rec);
-        // dedupe insert + business effect commit in ONE transaction (SKILL.md §4). Domain exceptions are unchecked,
-        // so a failing effect rolls back the dedupe row as well and the redelivery is processed again.
-        tx.executeWithoutResult(status -> {
-            if (tryRecord(eventId)) {               // false = already processed — skip the effect
-                processEvent(rec.value());
+        // dedupe insert + business effect commit in ONE transaction (SKILL.md §4). Domain exceptions are checked and
+        // TransactionTemplate rolls back on unchecked ones only: roll back explicitly, rethrow once the transaction ended.
+        BaseDomainException failure = tx.execute(status -> {
+            try {
+                if (tryRecord(eventId)) {           // false = already processed — skip the effect
+                    processEvent(rec.value());
+                }
+                return null;
+            } catch (BaseDomainException e) {
+                status.setRollbackOnly();
+                return e;
             }
         });
+        if (failure != null) {
+            throw failure;
+        }
         ack.acknowledge();                          // only after the transaction committed
     }
     /** A record without the header can never be deduplicated: fail it as non-retryable so it goes to the DLT. */
@@ -42,6 +52,8 @@ public class IdempotentConsumer {
         return new String(header.value(), StandardCharsets.UTF_8);
     }
     /** INSERT ... ON CONFLICT DO NOTHING into the processed-events table; true if the row was inserted. */
+    @SuppressWarnings("UnusedVariable")
     private boolean tryRecord(String eventId) { /* TODO */ return true; }
-    private void processEvent(String payload) { /* TODO */ }
+    @SuppressWarnings("UnusedVariable")
+    private void processEvent(String payload) throws BaseDomainException { /* TODO */ }
 }

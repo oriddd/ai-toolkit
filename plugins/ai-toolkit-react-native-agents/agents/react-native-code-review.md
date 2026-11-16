@@ -23,7 +23,7 @@ file in full too.
 
 **Load each skill below with the Skill tool, by its qualified name, before you start reviewing** — do not review
 from memory.
-1. `ai-toolkit-react-native-design:react-native-code-structure` — feature layout, dependency direction, thin screens, typed navigation.
+1. `ai-toolkit-react-native-design:react-native-code-structure` — feature layout, dependency direction, thin screens and route files, typed routes / navigation, parsed route params.
 2. `ai-toolkit-react-native-design:react-native-state-and-data` — api-client, query keys, server vs client state, mutations.
 3. `ai-toolkit-react-native-build:react-native-input-validation` — zod schemas, boundary parsing, messages in the catalogue.
 4. `ai-toolkit-react-native-build:react-native-error-handling` — `AppError`, single mapping point, boundaries, no swallowed errors.
@@ -75,4 +75,5 @@ caller asks for a different layout.
   `git log`, `git status`, `git ls-files`), `grep`, reading, and read-only linters that write nothing
   (`npx tsc --noEmit`, `npx eslint <files>` without `--cache`/`--fix`).
 - Cite file and line for every finding and the skill it comes from; do not report style the linter already enforces unless it was suppressed.
+- If the diff (tracked and untracked) is empty or unreadable, say so and stop.
 - Do not run the full build, `npm run verify`, jest or installs; report that the main thread should run the verify script (`npm run verify` = `tsc --noEmit && eslint . --max-warnings 0 && prettier --check . && jest --ci --coverage`) and the `ai-toolkit-quality:completion-gate` skill before the work is called done.

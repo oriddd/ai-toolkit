@@ -9,8 +9,8 @@ applies_to: [rest, monolith]
 depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Validation Pattern (Foundational)
@@ -64,7 +64,7 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 **Key Pattern:**
 ```java
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class EditableProductIdValidator 
         implements ConstraintValidator<EditableProductId, String> {
     private final ProductEditabilityRule rule;  // domain logic bean
@@ -101,6 +101,10 @@ public class ProductController {
 }
 ```
 
+The rule loads the product, so this shape fits only when `id` is not a permission-protected resource. When it is,
+the check runs in the operation after `PermissionsHandler` (`permissions` §10) and the parameter keeps only
+syntactic constraints — otherwise 400 vs 403 tells a caller which ids exist.
+
 ### 3. **Spring Validator** — Object/Cross-Field Validation
 - Implements `org.springframework.validation.Validator`
 - Is a `@Component`
@@ -132,7 +136,7 @@ public class CreateScheduleRequestValidator implements Validator {
 **Register in ValidationConfig:**
 ```java
 @ControllerAdvice
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ValidationConfig {
     private final CreateScheduleRequestValidator validator;
 
@@ -153,7 +157,7 @@ public class ValidationConfig {
 **Key Pattern:**
 ```java
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProductEditabilityRule {
     private final ConfigService configService;
 
@@ -175,7 +179,8 @@ public class ProductEditabilityRule {
 - ✅ Single field/parameter validation
 - ✅ Reusable across endpoints
 - ✅ Needs Spring beans (lookups, external calls)
-- Examples: email format, product existence, custom business rules
+- Examples: email format, existence of a *referenced* entity, custom business rules
+- ❌ Not the existence or attributes of the resource being authorized (see the note under the example above)
 
 **Spring Validator:**
 - ✅ Cross-field validation

@@ -1,7 +1,10 @@
 package {{basePackage}}.exception;
 
 import org.jspecify.annotations.Nullable;
-/** Maps to 406 — the caller asked for an API version / projection the service does not serve (response-mapper). */
+/**
+ * Maps to 406 — the Accept header asks for an API version / projection the service does not serve (response-mapper).
+ * Media-type versioning only: an unknown URI version is a NotFoundException (404) via ExceptionMessages.resourceNotFound.
+ */
 public class UnsupportedApiVersionException extends BaseDomainException {
     public UnsupportedApiVersionException(String errorCode, String message) { super(errorCode, message); }
     public UnsupportedApiVersionException(String errorCode, String message, @Nullable Throwable cause) { super(errorCode, message, cause); }

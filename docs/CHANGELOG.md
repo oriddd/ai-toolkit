@@ -7,6 +7,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Restored original conventions (2026-11-16)
+
+- Domain exceptions are checked again (`BaseDomainException extends Exception`), as in the user-tested originals. `GlobalExceptionHandler` maps both checked and unchecked exceptions (domain handler plus a catch-all 500). Checked exceptions do not roll back `@Transactional` by default, so every `@Transactional` carries `rollbackFor = Exception.class`, enforced by `ArchitectureTest`. New `exception-handling/references/checked-exceptions.md`.
+- Constructor injection uses `@RequiredArgsConstructor(onConstructor = @__(@Autowired))` again, so a class with several constructors still injects.
+- `external-client` asks which HTTP transport to use and shows a `RestClient` / `WebClient` comparison with a recommendation; `RestClient` stays the default.
+- Proved on a Spring Boot 3.5.16 service (Error Prone + NullAway at ERROR): 55 tests pass, including checked and unchecked error mapping, rollback with and without `rollbackFor`, and the idempotent consumer.
+
+## [2.4.0] - 2026-11-15
+
+### Independent review fix round (2026-11-15)
+Three independent reviewers rated `main` 7/10 (Java 7, Python 8, React Native 6.5). Every HIGH and MEDIUM finding was
+verified against the files and fixed, each change proven by a build, type-check or run.
+- **Java:**
+  - `ExceptionMessages` template compiles again (a duplicated `@Nullable` broke every scaffolded service).
+  - `external-client`'s Full 5-Layer transport uses `RestClient` `exchange` + `handleResponse` (was `WebClient` +
+    `.block()` on the servlet stack); the reactive form stays for WebFlux callers. New §6b: outbound OAuth2 client
+    credentials. Timeouts keep Boot's auto-detected HTTP client and `spring.http.client.*`.
+  - One strategy contract everywhere (`getSupported<X>()`, registry indexed at startup); Kafka consumers/producers
+    live in `messaging/consumer|producer` and ArchUnit layers them.
+  - No `return null` from non-`@Nullable` methods in examples (NullAway-clean); API versions: unknown URI version → 404,
+    unserved `Accept` version → 406.
+  - `create-repo`: Spring Boot 3.5 stays the default, 4.x is an explicit opt-in (README records the decision);
+    native structured logging; `lombok.config`.
+  - Helm chart rolls on Secret change, renders the PDB by default (`minReplicas: 2`), spreads across zones.
+  - Error Prone 2.52, NullAway 0.14.3, SpotBugs plugin 4.10.5.0, JaCoCo 0.8.16 (build-tested).
+- **Python:** baseline Python 3.14 (3.12+); new `python-graceful-shutdown` skill; one active outbox relay by default
+  (two `SKIP LOCKED` relays reordered one aggregate's events on a real PostgreSQL); ownership check after load in
+  `python-new-endpoint`; CORS allows PUT/PATCH/DELETE + `If-Match` and exposes `ETag`; `validation` layer in
+  import-linter; `uv init --package` skeleton; migration round-trip test.
+- **React Native:** Expo Router is the default structure (React Navigation documented as the alternative); app
+  version/build read at runtime (an unset `EXPO_PUBLIC_*` crashed production EAS builds at launch); `mapHttpError`
+  honours the server's problem `code`; request timeout + abort signal; single-flight token refresh; Maestro
+  `clearKeychain` on iOS; feature-internal import direction enforced by ESLint.
+- **Neutral:** `documentation-and-adr`, `context-maintenance` and `uml-diagram` are language-neutral (per-language
+  skill table) and agree on one diagram location; context templates mark SLO/DR sections "required for services";
+  `release-versioning` accepts an existing Keep-a-Changelog file; HOW-TO no longer lists a check that always fails.
+- **Evals:** behaviour cases for all 10 language-neutral skills (were 4); agent cases grant Write/Edit and grade the
+  agent's output (the file it must write, or `file:line` in a review), plus a case that does not name the agent;
+  near-miss negatives for the neutral plugins. CI also runs weekly so freshness fails before it fails a PR.
+- **Second re-review (Java 6.5, Python 8, React Native 7.5, repo 7), every finding fixed with a before/after proof:**
+  - Java: scaffolded services start again — `HttpCacheProperties` is conditional like its config (any non-http cache
+    provider failed to boot) and `spring-boot-starter-oauth2-resource-server` is required with auth (startup
+    `NoClassDefFoundError`); `create-repo` generates a default-profile context-load test. `golden-path` #20/#22/#23 agree
+    with the skills (Spring Kafka/AMQP are accepted facades; no class-level `@Validated` on Boot 3.2+; `RestClient`
+    `exchange`). New `ProblemDetailSecurityHandler` (401/403 as problem+json, `security.auth.failure` metric); SSRF
+    host allow-list interceptor; rate limits never thrown from a filter; `$ref` enums with a scanned converter package;
+    readiness only for hard dependencies; `sdk-publishing` on `RestClient`; existence checks on the authorized id run
+    after authorization; `OutboxEntity` versioned and `Clock`-driven; Spotless 3.11, google-java-format 2.0,
+    Checkstyle 14.4, PIT 1.30.2 (`withHistory` removed), archunit-junit5 in the ci pom.
+  - Python: new `python-cd` (Helm chart: api + worker, migration hook Job, hardened pods, HPA/PDB, ServiceMonitor,
+    NetworkPolicy); stdlib tracebacks rendered in JSON logs; worker heartbeat liveness and immediate idle shutdown;
+    `--proxy-headers` with a required `FORWARDED_ALLOW_IPS`; scheduled `pip-audit`; 202 job resource; local run.
+  - React Native: new `react-native-app-config-and-updates` and `react-native-permissions-and-push`; the detail screen
+    obeys its own boundaries; server field-error codes map to messages; signup goes through the feature `api/`; error
+    class names survive minification.
+  - Repo: agent evals are granted Write/Edit (`run-evals.sh agents`) and grade a successful subagent write, one grader
+    per key skill; Spring Boot 3.5's end of OSS support (2026-06-30) is stated in README and `create-repo`; the
+    pre-push hook works without the private blocklist; CI actions bumped with Dependabot; `check-versions.sh` counts
+    `plugin.json` description/dependency changes.
+- **Eval results (2026-11-16, Claude Code 2.1.311), measured on this release, not carried over from 2.3.0:**
+  - Routing: 112/112 (every skill's trigger case loads its skill; negatives, including the near-miss ones, load none).
+  - Agents (25 cases, one run each, with Write/Edit granted, graded on a successful subagent write and one skill rule in the
+    written file): 24 fully pass. React Native `new-screen` scores 0.80: it wrote a screen without `accessibilityRole`.
+    Two cases passed only after their prompts told the agent that nobody can answer questions (a subagent stops and asks
+    otherwise, by design).
+  - Behaviour (with vs without the plugin, 3 runs each arm): every case was last measured in this release and shows a lift;
+    cases whose graders or skills changed in the final rounds were re-run, unchanged ones were not repeated. Lifts quoted for
+    pruned graders are optimistic (scored on the same runs). Lowest: React Native `git-commit-conventions--react-native`
+    +0.25, `react-native-app-config-and-updates` and `react-native-permissions-and-push` below +0.30 before their graders were
+    rewritten; the trimmed `uml-diagram` +0.40 and `context-maintenance` +0.93 keep their lift.
+  - Not exercised by any eval: the commit guard and routing hooks (`tools/test-hooks.sh`, about 250 cases), `scaffold-repo`
+    (interactive), device/EAS/push behaviour, and the Boot 4 variants beyond the listed templates.
+- **Final independent review (Java 8, Python 8.5, React Native 7.5, neutral 7.5, repo 8); every finding fixed with a proof:**
+  - Java: with persistence the context-load test is a Testcontainers `ApplicationContextIT` (a default-profile test cannot
+    pass without a database); the datasource is defined end to end (`persistence` §3b, local profile, README rows, Helm
+    `database:` block); yaml snippets say to merge under the existing top-level keys (appending a second `spring:` block broke
+    every context); `spring-kafka` / `spring-boot-starter-amqp` are listed; every error body has an `errorCode` (404, 405, 415
+    included); auth=no + persistence compiles (`SystemAuditorAware`); `code-review` bans raw `RestClient` as well as `WebClient`.
+  - Python/React Native: `python-ci` SHA-pins every action like `react-native-ci`; the Python review/feature/refactor agents load
+    `python-cd` and `python-graceful-shutdown`; the `app.config.ts` snippet passes the skill's own ESLint gate.
+  - Neutral: Python and React Native variants of the completion-gate, git-commit-conventions, parallel-delegation and
+    pr-description evals; `commit-msg.sh` enforces length, trailing period and case; `pr-description` examples obey their
+    rules; `parallel-delegation` falls back to `general-purpose` when an agent plugin is absent; `completion-gate` has an
+    other-stack row; `update-context` bootstraps a missing `context/`; `uml-diagram` (580 → 203 lines) and
+    `context-maintenance` (475 → 232) keep their rules and templates, with the tutorial text moved to `references/` (grouped
+    section numbers and a few Java-flavoured example types reworded; the marketing headings are gone).
+  - Repo: the 400 KB guard timing test allows 10 s (it flaked at 3 s under load); the setup guide's token figures are measured.
+- **Executed, not just compiled** (Docker via Colima, a throwaway `kind` cluster; the shared cluster was never touched):
+  - Java: 28 integration tests on real PostgreSQL, Kafka and Redis; the image runs non-root with a read-only root
+    filesystem and drains an in-flight request on `docker stop`; the Helm chart installs on `kind`, rolls on a Secret
+    change and served a looping client with 0 failures across two rollouts. Defects found by running and fixed: the
+    chart's hard-coded AppArmor profile made the kubelet reject every pod (`appArmor.enabled` toggle); WireMock with
+    Boot's default HTTP client sent an empty PUT body (`http2PlainDisabled`); a skill example used `StringUtils`
+    without its dependency; a database-only integration test blocked ~45 s on an absent Kafka broker; the Kafka
+    container class and retry-topic naming were undocumented.
+  - Python: 22 integration tests on real PostgreSQL and Kafka (two relays keep per-aggregate order; the test fails
+    without the lock); the image builds and drains on `docker stop`; the `python-cd` chart installs on `kind` with its
+    migration hook (a failed migration leaves the old pods serving). Defects fixed: the chart failed to install on a
+    cluster without Prometheus CRDs (monitors are now guarded by capability); `testcontainers.kafka` is deprecated
+    (use `testcontainers.community.kafka`); `str(url)` masks the Alembic password. Unproven: HPA scaling, NetworkPolicy
+    enforcement, the real `ghcr.io` pull, one transient 503 in 917 requests during one of three rolling updates.
+- **Spring Boot 4.1.2 is a verified second target** (3.5 stays the default): the same rendered service passes the same
+  26 tests on both (component tests, ArchUnit, default-profile boot, Postgres IT); the differences are in
+  `spring-boot-conventions/references/spring-boot-4.md`. A real defect surfaced: with only the 3.5 class names, Boot 4
+  silently started a database in component tests (the skill now lists both name sets). Not built on 4.x: Flyway,
+  outbound OAuth2, springdoc, openapi-generator, Resilience4j, Bucket4j, ShedLock, Kafka retry against a broker.
+- **Neutral plugins** are language-neutral: Java commands and names are per-language rows (Java / Python / React
+  Native) in `documentation-and-adr`, `context-maintenance`, `git-commit-conventions`, `parallel-delegation`,
+  `pr-description`, `uml-diagram`, `completion-gate` and `update-context`; their examples obey their own rules (commit
+  subjects were run through `commit-msg.sh`, workflows through `actionlint` and Mermaid through its parser during review; CI does not enforce these); the quality plugin says what to
+  do when installed alone.
+- **Evals measure quality:** 16 behaviour cases got graders for rules a model does not follow unprompted (graders the
+  baseline passes were removed; lifts after pruning are optimistic because they were scored on the same runs);
+  `sonar-quality-gate` got a self-contained prompt; four graders threw on a JavaScript-regex incompatibility; the
+  build no longer deletes eval results; `new-validation` now loads `validation-pattern`.
+- **Final review (Java 7.5, Python 7.5, React Native 7.5, repo 7.5), every finding fixed with a before/after proof:**
+  - Java: the static-analysis pom block is well-formed XML (a `--` inside a comment made Maven reject it); generated
+    component tests set an issuer URI; `application-local.yaml`, the README and the Helm chart carry `JWT_ISSUER_URI` /
+    `JWT_AUDIENCE`; `GlobalExceptionHandler` has tagged `[validation]` / `[security]` / `[persistence]` blocks with a
+    tested strip recipe, so no-auth and no-DB scaffolds compile; an unreachable identity provider returns 503
+    problem+json (new `IdentityProviderUnavailableFilter`), not a 500; the templates compile warning-free under
+    Error Prone; `golden-path` #6 says an adapter is its port's client.
+  - Python: `python-cd` pod labels no longer duplicate `app.kubernetes.io/name|instance` (strict YAML parsers rejected
+    them); only `helm template` enforces the required `forwardedAllowIps`, not `helm lint`; `run_worker` exits non-zero
+    when the relay or consumer crashes (it used to wait for SIGTERM forever); the relay beats a heartbeat; the worker
+    serves `/metrics` with a PodMonitor.
+  - React Native: workflow inputs go through `env`, not into the shell; actions are SHA-pinned; OTA publish is gated on
+    `eas fingerprint:compare`; the push-registration snippet compiles.
+  - Repo: eval results are never tracked (`evals/**/results/` ignored); `run-evals.sh all` runs the agent cases with
+    Write/Edit and a scaffold; the review-agent grader is tied to the Agent result; agent graders check a skill rule in
+    the written file; the validator fails when `marketplace.json` and the latest CHANGELOG release disagree.
+- **Deliberate corrections of original rules** (substance kept, mechanism changed): `external-client` (`.block()` +
+  `exchangeToMono` → `RestClient` `exchange`; same single non-2xx mapping and synchronous API) and the strategy registry
+  (indexed by `getSupported<X>()` instead of iterating `canHandle`; same routing, add-a-strategy-never-touch-the-handler).
+  Also corrected, each with a failing-then-passing proof: `permissions` requires the resource-server starter; downstream
+  probes are readiness-only; `new-kafka-consumer` dedupes on the `event-id` header in the same transaction (no Redis
+  store); `sdk-publishing` uses `RestClient`; the inline-enum "redundant validator" example uses a `$ref` enum;
+  `feature-flags` keeps "close to the business logic" as one decision point per flag.
+
+## [2.3.0] - 2026-11-11
+
 ### Audit fix round (2026-11-11)
 - Java: about 50 verified fixes from an independent audit and a real build (Kafka DLT loop, lost domain events, `@Validated`
   on Boot 3.2+, `/api/v2` denied, NullAway/SpotBugs/Spotless build breaks, contract-test override, IT-only command, guard gaps).
@@ -30,6 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are fixed here: `@Nullable` exception causes (+ JSpecify in the ci pom), a transaction manager and Kafka switches for
   component tests with persistence/messaging, Resilience4j-annotated client mocks, a parseable health-indicator test
   URL; ShedLock setup documented. Testcontainers ITs did not run (no Docker).
+
+## [2.2.0] - 2026-11-11
 
 ### Added
 - **Eval suites** (`evals/<plugin>/`, run with `tools/run-evals.sh`): one trigger case per skill (73), negative cases per

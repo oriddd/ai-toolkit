@@ -49,7 +49,7 @@ public class ComponentTestConfiguration {
     // production bean is still created: if it does heavy work at startup,
     // gate it with @Profile("!component-test") (see SKILL.md §1b). Example
     // (PermissionsHandler.handle(String resourceId) from the permissions skill;
-    // domain exceptions are unchecked and built from ExceptionMessages). Needs:
+    // domain exceptions are checked: the mocked method declares them, built from ExceptionMessages). Needs:
     //   import {{basePackage}}.exception.constants.ExceptionMessages;
     //   import {{basePackage}}.permission.PermissionsHandler;
     //

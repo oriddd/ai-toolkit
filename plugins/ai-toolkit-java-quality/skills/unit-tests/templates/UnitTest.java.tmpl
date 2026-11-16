@@ -28,7 +28,7 @@ class {{classUnderTest}}Test {
 
     // ─── happy path ──────────────────────────────────────────────
     @Test
-    void {{methodName}}_{{condition}}_returns{{Outcome}}() {
+    void {{methodName}}_{{condition}}_returns{{Outcome}}() throws Exception {
         // given
         when({{collaborator1Name}}.{{stub}}(...)).thenReturn(...);
 
@@ -41,8 +41,8 @@ class {{classUnderTest}}Test {
     }
 
     // ─── error branches (parameterised) ──────────────────────────
-    // Domain exceptions are unchecked; Mockito rejects a checked exception the stubbed method does not declare
-    private record ExceptionCase(RuntimeException thrown, Class<? extends RuntimeException> expected) {}
+    // Domain exceptions are checked; Mockito rejects a checked exception the stubbed method does not declare
+    private record ExceptionCase(Exception thrown, Class<? extends Exception> expected) {}
 
     static Stream<ExceptionCase> exceptions() {
         return Stream.of(
@@ -53,7 +53,7 @@ class {{classUnderTest}}Test {
 
     @ParameterizedTest
     @MethodSource("exceptions")
-    void {{methodName}}_when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) {
+    void {{methodName}}_when{{Collaborator1}}Throws_propagatesAndShortCircuits(final ExceptionCase tc) throws Exception {
         when({{collaborator1Name}}.{{stub}}(any())).thenThrow(tc.thrown());
 
         assertThatThrownBy(() -> {{instanceName}}.{{methodName}}(...)).isInstanceOf(tc.expected());

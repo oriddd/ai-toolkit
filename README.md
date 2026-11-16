@@ -35,11 +35,24 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 | Language | Status | Prerequisites |
 | --- | --- | --- |
 | Java | **Supported** — the user-tested core of the catalogue; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
-| Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.12, FastAPI, uv |
+| Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.14 (3.12+ supported), FastAPI, uv |
 | React Native | **Experimental** — required concerns only, not yet validated on production projects | React Native with TypeScript, Expo (EAS) or bare workflow (Fastlane), npm |
 
 The Java skills' examples and templates use Lombok (`@Slf4j`, `@RequiredArgsConstructor`, `@Builder`, …). The
 `create-repo` and `ci` POM templates already include it; add it to an existing project before applying the skills.
+
+**Spring Boot 3.5 is the default, tested baseline; Boot 4.1 is a verified second target.** `create-repo` generates 3.5 and
+accepts 4.x as a supported variant. A service rendered from the `ci` POM (Error Prone + NullAway at ERROR, JDK 21) with the
+exception-handling, permissions, `external-client` HTTP adapter, persistence (`BaseEntity`, auditing, outbox entity on Postgres),
+messaging (compile only), request-metrics, graceful-shutdown, component-test and `ArchitectureTest` templates was built on 3.5.16
+and on 4.1.2 and passed the same 26 tests on both. A few edits are dual-compatible and already in the templates; the rest
+differ on 4.x (Jackson 3, modular starters, renamed packages and auto-configuration classes, Hibernate 7 `hibernate-processor`,
+Testcontainers 2, `TestRestTemplate` module): see
+[`spring-boot-4.md`](./plugins/ai-toolkit-java-design/skills/spring-boot-conventions/references/spring-boot-4.md). Not verified
+on 4.x: Flyway on Postgres, outbound OAuth2 client, springdoc, openapi-generator, Resilience4j, Bucket4j, ShedLock, Kafka retry/DLT
+against a broker, the JPA metamodel generation, and the Spotless/SpotBugs/JaCoCo/PIT gates. **Open-source support for 3.5 ended on 2026-06-30**
+([support window](https://spring.io/projects/spring-boot#support)): new 3.5 patches need commercial support, so plan the
+Boot 4 move; `create-repo` says so when it asks for the Boot version.
 Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see
 [`docs/AUTHORING.md` §9](./docs/AUTHORING.md#9-freshness-policy).
 
@@ -94,7 +107,9 @@ setup/   client setup notes
 See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) and [`docs/AUTHORING.md`](./docs/AUTHORING.md). Before a PR:
 
 ```bash
-bash tools/validate-skills.sh && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh
-# maintainers, before a release: bash prepare-for-publish.sh   (needs a local .publication-blocklist)
+bash tools/validate-skills.sh && python3 tools/build-indexes.py --check && python3 tools/build-evals.py --check \
+  && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh && bash tools/check-versions.sh
+# maintainers, before a release: bash prepare-for-publish.sh   (confidential-term checks need a local .publication-blocklist)
+#   it also scans local git objects: if it reports unreachable objects you never pushed, run `git gc --prune=now` and re-run
 # or run it on every push: pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
 ```

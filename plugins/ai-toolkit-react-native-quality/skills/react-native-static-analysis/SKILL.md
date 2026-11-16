@@ -9,7 +9,7 @@ depends_on: [react-native-code-structure]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -80,6 +80,13 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import jest from 'eslint-plugin-jest';
 import prettier from 'eslint-config-prettier';
 
+// inside a feature: screens -> components/hooks -> api -> model, never upward, never into another feature's layers
+const LAYERS = { screens: ['screens', 'components', 'hooks', 'model'], components: ['components', 'model'],
+  hooks: ['hooks', 'api', 'model'], api: ['api', 'model'], model: ['model'] };
+const sameFeature = (types) =>
+  ({ to: { element: { types, captured: { feature: '{{ from.element.captured.feature }}' } } } });
+const ALL = ['routes', 'bootstrap', 'feature', ...Object.keys(LAYERS)];
+
 export default defineConfig(
   { ignores: ['node_modules', 'ios', 'android', 'coverage', '.expo'] },
   tseslint.configs.strictTypeChecked,
@@ -88,11 +95,13 @@ export default defineConfig(
     linterOptions: { reportUnusedDisableDirectives: 'error' },
     plugins: { 'react-hooks': reactHooks, boundaries },
     settings: {
-      // without this resolver the @app/* @shared/* aliases do not resolve and boundaries checks nothing
+      // without this resolver the @bootstrap/* @features/* @shared/* aliases do not resolve and boundaries checks nothing
       'import/resolver': { typescript: { project: './tsconfig.json' } },
       'boundaries/elements': [
-        { type: 'app', pattern: 'src/app/**' },
-        { type: 'feature', pattern: 'src/features/*', capture: ['name'] },
+        { type: 'routes', pattern: 'src/app/**' },                 // Expo Router routes (React Navigation: composition root)
+        { type: 'bootstrap', pattern: 'src/bootstrap/**' },
+        ...Object.keys(LAYERS).map((type) => ({ type, pattern: `src/features/*/${type}`, capture: ['feature'] })),
+        { type: 'feature', pattern: 'src/features/*', capture: ['feature'] },   // after the layers: index.ts lands here
         { type: 'shared', pattern: 'src/shared/**' },
       ],
     },
@@ -108,11 +117,13 @@ export default defineConfig(
         selector: 'JSXAttribute[name.name=/(^s|S)tyle$/] ObjectExpression > Property > :matches(Literal, UnaryExpression).value',
         message: 'No inline styles: use StyleSheet.create or a design-system primitive.',
       }],
-      // app -> features -> shared; another feature only through its index.ts (imports inside a feature are not checked)
+      // routes -> bootstrap -> features -> shared; another feature only through its index.ts
       'boundaries/dependencies': ['error', { default: 'disallow', policies: [
-        { from: { element: { types: ['app', 'feature'] } },
-          allow: { to: { element: { type: 'feature', fileInternalPath: 'index.ts' } } } },
-        { from: { element: { types: ['app', 'feature', 'shared'] } }, allow: { to: { element: { type: 'shared' } } } },
+        { from: { element: { types: ALL } }, allow: { to: { element: { type: 'feature', fileInternalPath: 'index.ts' } } } },
+        { from: { element: { type: 'routes' } }, allow: { to: { element: { type: 'bootstrap' } } } },
+        { from: { element: { type: 'feature' } }, allow: sameFeature(Object.keys(LAYERS)) },
+        ...Object.entries(LAYERS).map(([type, to]) => ({ from: { element: { type } }, allow: sameFeature(to) })),
+        { from: { element: { types: [...ALL, 'shared'] } }, allow: { to: { element: { type: 'shared' } } } },
       ] }],
     },
   },
@@ -129,17 +140,22 @@ export default defineConfig(
 ```
 
 `eslint-plugin-react-hooks` 7's `recommended` rules include the React Compiler checks. `boundaries/dependencies` turns the
-dependency direction from `react-native-code-structure` into a failing check and limits cross-feature imports to a
-feature's `index.ts`. It is the `eslint-plugin-boundaries` 7 syntax: `element-types` and `entry-point`, `rules:` and
+dependency direction from `react-native-code-structure` §2 into a failing check: routes may import `bootstrap`, features'
+`index.ts` and `shared`; another feature only through its `index.ts`; and inside one feature each layer imports only the
+layers below it (the `captured: { feature }` template keeps a layer from reaching into another feature's layers). The
+layer elements must come before `feature`, so only files at a feature's root (its `index.ts`) are type `feature`. A React
+Navigation app without `src/bootstrap/` uses the same config: `src/app/` is its composition root and needs no other rights. It is the `eslint-plugin-boundaries` 7 syntax: `element-types` and `entry-point`, `rules:` and
 string selectors are the deprecated v5 form and print migration warnings on every run. The selector rule flags
 `style={{ color: 'red' }}` and `[styles.box, { padding: 8 }]` but not computed values (`{ width: wide ? 10 : 5 }`). Keep the `disableTypeChecked` override last (before `prettier`), otherwise
 type-aware rules throw on config files ("not found by the project service").
 
-Prove the boundaries once after setup: add `import { App } from '@app/App'` to a file under `src/shared/` and
-`import { x } from '@features/orders/hooks/x'` to a file under `src/app/`. `npm run lint` must fail twice with
-`boundaries/dependencies`; then delete both. If it passes, the resolver is not resolving the aliases. (Verified
-2026-11-11 on ESLint 10.14, `typescript-eslint` 8.72, `eslint-plugin-boundaries` 7.4, resolver 4.4,
-`eslint-plugin-react-hooks` 7.1, `eslint-plugin-testing-library` 7.16, `eslint-plugin-jest` 29.17, TypeScript 6.0, Expo SDK 58.)
+Prove the boundaries once after setup: add `import { createServices } from '@bootstrap/createServices'` to a file under
+`src/shared/`, `import { useOrders } from '@features/orders/hooks/useOrders'` to a file under `src/app/`, and
+`import { useOrders } from '../hooks/useOrders'` to a file under `src/features/orders/components/`. `npm run lint` must
+fail three times with `boundaries/dependencies`; then delete them. If it passes, the resolver is not resolving the
+aliases. (Verified 2026-11-15 on ESLint 10.15, `typescript-eslint` 8.72, `eslint-plugin-boundaries` 7.4.3, resolver 4.4,
+`eslint-plugin-react-hooks` 7.1, `eslint-plugin-testing-library` 7.16, `eslint-plugin-jest` 29.17, TypeScript 6.0,
+Expo SDK 58 with Expo Router 58: seven such probes failed, cross-feature imports through `index.ts` passed.)
 
 ## 3. Prettier
 

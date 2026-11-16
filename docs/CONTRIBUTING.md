@@ -7,9 +7,10 @@ We welcome improvements to our patterns and skills!
 ## Authoring Rules
 - Keep it **vendor-neutral**. No employer-, product- or environment-specific names, hosts or code.
 - Java 21 / Spring Boot 3 is the reference language; Python and React Native follow `LANGUAGE_CONTRACT.md`.
-- Run the same gates as CI before submitting: `bash tools/validate-skills.sh && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh && bash tools/check-versions.sh origin/main`.
+- Run the same gates as CI before submitting: `bash tools/validate-skills.sh && python3 tools/build-indexes.py --check && python3 tools/build-evals.py --check && python3 tools/check-links.py && bash tools/test-hooks.sh && bash tools/check-repo-hygiene.sh && bash tools/check-versions.sh origin/main`.
 - Bump `version` in `.claude-plugin/plugin.json` of every plugin whose content you change — installed users only receive changes when the version changes.
 - Use `ships_templates: true` if you add files to the `templates/` subfolder.
-- Update the frontmatter `version` and `last_reviewed` date.
+- Bump the skill's frontmatter `version` only when its contract changes (`AUTHORING.md` §2), and set `last_reviewed` only
+  after a full review of the skill (`AUTHORING.md` §9) — never just because you edited it.
 ## Code of Conduct
 Be professional and constructive.

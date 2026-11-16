@@ -9,8 +9,8 @@ applies_to: [rest, event, monolith]
 depends_on: [code-structure, pluggable-architecture]
 ships_templates: true
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Persistence Skill
@@ -44,7 +44,9 @@ src/main/resources/
 Also put the metamodel generator on the compiler's processor path, with its transitive JAXB jars (on the plain classpath
 `spring-boot-starter-test` wins the `jakarta.xml.bind-api` mediation as `test` scope and compilation fails with
 `NoClassDefFoundError: jakarta/xml/bind/JAXBException`). Explicit processor paths switch off classpath discovery, so
-list Lombok too:
+this is **one merged list** with the `static-analysis` processors (Error Prone, NullAway — same versions as there),
+Lombok and the configuration processor (`spring-boot-conventions` §1); a second list or a dropped entry silently
+disables that processor:
 
 ```xml
 <plugin>
@@ -52,9 +54,13 @@ list Lombok too:
     <artifactId>maven-compiler-plugin</artifactId>
     <configuration>
         <annotationProcessorPaths>
+            <path><groupId>com.google.errorprone</groupId><artifactId>error_prone_core</artifactId><version>2.52.0</version></path>
+            <path><groupId>com.uber.nullaway</groupId><artifactId>nullaway</artifactId><version>0.14.3</version></path>
             <path><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>${lombok.version}</version></path>
             <path><groupId>org.hibernate.orm</groupId><artifactId>hibernate-jpamodelgen</artifactId><version>${hibernate.version}</version></path>
+            <path><groupId>org.springframework.boot</groupId><artifactId>spring-boot-configuration-processor</artifactId></path>
         </annotationProcessorPaths>
+        <!-- compilerArgs (-Xplugin:ErrorProne …) unchanged from static-analysis -->
     </configuration>
 </plugin>
 ```
@@ -123,8 +129,8 @@ Rules:
   and a primitive version it falls back to the id check, treats the entity as existing, runs `merge()` (an extra SELECT) and never fills `createdAt` / `createdBy`.
 - **`@Version`** on every aggregate root. Concurrent updates fail with
   `OptimisticLockingFailureException` — caught by the
-  `@RestControllerAdvice` and mapped to `409 Conflict` — add an `@ExceptionHandler(OptimisticLockingFailureException.class)` returning `409`; the
-  catch-all handler would otherwise turn it into a `500`.
+  `@RestControllerAdvice` and mapped to `409 Conflict` — the `exception-handling` template ships that handler (tag `[persistence]`, keep it); without it the
+  catch-all handler would turn the failure into a `500`.
 - **Enums stored as `STRING`**, never ordinal (renaming breaks history).
 - **JPA auditing** (`@EnableJpaAuditing` + `AuditorAware<String>`) fills
   `createdAt/Updated/By` automatically. The `AuditorAware` bean
@@ -132,10 +138,11 @@ Rules:
   that reads `SecurityContextHolder`; `AuditConfig` in `config/` only enables
   auditing. It records an opaque subject id, falls back to `"system"` only
   outside an HTTP request (schedulers, consumers), and returns empty for an
-  unauthenticated request. `AuditConfig` carries `@Profile("!component-test")`:
+  unauthenticated request. Without Spring Security (create-repo auth = no) it does not compile: use `SystemAuditorAware` instead. `AuditConfig` carries `@Profile("!component-test")`:
   component tests that exclude the DataSource / JPA auto-configuration would
   otherwise fail at startup (`JPA metamodel must not be empty`); remove it if
-  your component tests run against a real database.
+  your component tests run against a real database. A default-profile test cannot use this guard, so it
+  needs a real database too (`ApplicationContextIT`, `component-tests` §3b).
 - **Soft delete** with `@SQLRestriction("deleted_at is null")` (Hibernate 6.3+; `@Where` is deprecated) and an `@SQLDelete` that sets `deleted_at`,
   if hard-delete is forbidden by domain rules; otherwise hard-delete.
   A soft-deleted row still holds its PII: on a right-to-be-forgotten request
@@ -199,41 +206,46 @@ Rules:
 
 ## 3a. Multi-tenancy
 
-When a service must manage data for multiple tenants (e.g., different organizations or customers), choose one of the following patterns:
+A shared schema (Hibernate `@TenantId` discriminator, with a test that tenant A cannot read tenant B's id),
+schema-per-tenant or database-per-tenant; start with the discriminator column. Full comparison and rules, load only
+when the service is multi-tenant: [`references/multi-tenancy.md`](./references/multi-tenancy.md).
 
-1. **Discriminator Column (Shared Schema)**:
-   - Add a `tenant_id` column to every table.
-   - Mark it with Hibernate 6 `@TenantId` and register a `CurrentTenantIdentifierResolver`
-     that reads the tenant from the request (via `permission/`). Hibernate then adds the
-     tenant to every entity query **including `findById` / `getReferenceById`** and sets it on insert.
-   - Do **not** rely on Hibernate `@Filter` alone: filters do not apply to `find` by id,
-     `getReferenceById`, native queries or bulk updates, so tenants' data leaks.
-   - Native and bulk queries still bypass `@TenantId`: add `tenant_id` to them by hand, or
-     enforce isolation in the database with Postgres row-level security (RLS).
-   - Add a test that tenant A's `findById` on tenant B's id returns empty.
-   - **Pro**: Simple, low infra cost. **Con**: Risk of data leakage if filters are bypassed.
+## 3b. Datasource configuration
 
-2. **Separate Schema (per tenant)**:
-   - Every tenant has their own Postgres schema.
-   - Use a `MultiTenantConnectionProvider` to switch schemas based on a tenant identifier in the request.
-   - **Pro**: Stronger isolation. **Con**: Harder to run migrations across all schemas (Flyway needs a loop).
+Nothing else defines the connection, so add it to `application.yaml` — **merge under the existing top-level `spring:`
+key**, never a second `spring:` block (duplicate key, `code-structure` template):
 
-3. **Separate Database**:
-   - Every tenant has their own DB instance.
-   - **Pro**: Maximum isolation, no noisy neighbor. **Con**: Highest cost and complexity.
+```yaml
+spring:
+  datasource:
+    url: ${DB_URL}              # jdbc:postgresql://<host>:5432/<db> — no default: it differs per environment
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}    # secret: NO default (spring-boot-conventions §2)
+  jpa:
+    hibernate.ddl-auto: validate
+```
 
-**Recommendation**: Start with **Discriminator Column** unless strict regulatory requirements demand otherwise.
+- The base file carries no credentials (golden-path #16), so a plain `mvn spring-boot:run` fails on the unresolved
+  `${DB_URL}`; the `local` profile supplies the docker-compose values (`local-dev-experience`) in `application-local.yaml`:
+  `spring.datasource.url: jdbc:postgresql://localhost:5432/foo`, `username: foo`, `password: foo`.
+- Kubernetes: `cd` turns `database.url` / `database.username` (REQUIRED in `values.yaml`) into `DB_URL` / `DB_USER`;
+  `DB_PASSWORD` comes from the credentials Secret (`credentials.existingSecret` with key `DB_PASSWORD`; `credentials.values`
+  only for dev clusters).
+- README: add `DB_URL`, `DB_USER` and `DB_PASSWORD` rows to the Configuration table (`create-repo` template).
+- Tests need no values: component tests exclude the DataSource (`component-tests` §3b); the context-load and repository
+  tests are `*IT` classes on a Testcontainers Postgres, whose `@ServiceConnection` supplies the connection
+  (`integration-tests`).
 
 ## 4. Transactions
 
 ```java
 @Service
 public class InvoiceService {
-    @Transactional                              // write boundary
-    public Invoice create(CreateRequest req) { … }
+    @Transactional(rollbackFor = Exception.class)                    // write boundary
+    public Invoice create(CreateRequest req) throws BaseDomainException { … }
 
-    @Transactional(readOnly = true)             // read boundary — important for replicas
-    public Optional<Invoice> findById(UUID id) { … }
+    @Transactional(readOnly = true, rollbackFor = Exception.class)   // read boundary — important for replicas
+    public Optional<Invoice> findById(UUID id) throws BaseDomainException { … }
 }
 ```
 
@@ -244,11 +256,11 @@ Rules:
   hint the database and Hibernate skips dirty checking and flushing. It does
   **not** route to a replica by itself: that needs a routing `DataSource`
   (e.g. `AbstractRoutingDataSource` keyed on the read-only flag).
-- **Domain exceptions are unchecked** (`exception-handling`), so
-  `@Transactional` rolls back on them by default. Never catch and swallow a
-  failure inside the boundary. If a method throws a **checked** exception
-  (e.g. from a third-party API), declare `rollbackFor` for it, or wrap it in
-  a domain exception — a checked exception otherwise commits.
+- **Domain exceptions are checked** (`exception-handling`), and Spring rolls back on unchecked exceptions only, so a
+  checked domain exception would **commit** the transaction. Every `@Transactional` method or class declares
+  `rollbackFor = Exception.class`; the `ArchitectureTest` template fails the build when one does not. Never catch and
+  swallow a failure inside the boundary. Programmatic transactions (`TransactionTemplate`) do not roll back on a checked
+  exception either: catch it, call `status.setRollbackOnly()` and rethrow after `execute`.
 - Never call a `@Transactional` method from another method of the same
   class — Spring proxying does not intercept it.
 - A transaction never spans a network call to another service.
@@ -268,9 +280,16 @@ Rules:
    or via the [datasource-proxy](https://github.com/jdbc-observations/datasource-proxy)
    spy in integration tests.
 
+## Reference map — load only the part you are working on
+
+| Sections | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3a | multi-tenancy patterns | the service serves several tenants | [`multi-tenancy.md`](./references/multi-tenancy.md) |
+
 ## 6. Templates
 
 - [`BaseEntity.java.tmpl`](./templates/BaseEntity.java.tmpl) — Base class with ID and auditing.
 - [`AuditConfig.java.tmpl`](./templates/AuditConfig.java.tmpl) — Enables JPA auditing (in `config/`).
 - [`SecurityAuditorAware.java.tmpl`](./templates/SecurityAuditorAware.java.tmpl) — The `AuditorAware` bean (in `permission/`).
+- [`SystemAuditorAware.java.tmpl`](./templates/SystemAuditorAware.java.tmpl) — Replaces `SecurityAuditorAware` when the service has no Spring Security (auth = no).
 - [`ExampleSpecifications.java.tmpl`](./templates/ExampleSpecifications.java.tmpl) — Reference implementation for Specification pattern.

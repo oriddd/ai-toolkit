@@ -2,9 +2,9 @@
 description: "the main session delegates to `test-writer` for a matching task in a java project"
 tags: [agent]
 plugins: ["../../../plugins/ai-toolkit-java-agents", "../../../plugins/ai-toolkit-docs", "../../../plugins/ai-toolkit-java-design", "../../../plugins/ai-toolkit-java-build", "../../../plugins/ai-toolkit-java-quality", "../../../plugins/ai-toolkit-java-ops", "../../../plugins/ai-toolkit-java-scaffold", "../../../plugins/ai-toolkit-workflow", "../../../plugins/ai-toolkit-quality"]
-max_turns: 8
-timeout_seconds: 600
-allowed_tools: [Agent, Skill, Read, Glob, Grep]
+max_turns: 40
+timeout_seconds: 2400
+allowed_tools: [Agent, Skill, Read, Glob, Grep, Write, Edit]
 ---
 
 Use the test-writer agent: The production code is done. Write the JUnit tests for the existing OrderService and OrderController classes. OrderService also POSTs to the payment service through a RestTemplate it creates itself; do not change production code — write characterisation tests through the HTTP API with the payment service stubbed, and report the seam you used. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.

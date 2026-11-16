@@ -10,7 +10,7 @@ depends_on: [pluggable-architecture, unit-tests]
 ships_templates: false
 hitl: false
 version: 1.0
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-15
 ---
 
 # Adapter Contract Tests Skill
@@ -68,19 +68,19 @@ public abstract class CachePortContract {
     @BeforeEach protected void setUp() { clearBackend(); cache = newCache(); }
 
     @Test
-    protected void get_missingKey_returnsEmpty() {
+    protected void get_missingKey_returnsEmpty() throws Exception {
         assertThat(cache.get(new CacheKey("absent"))).isEmpty();
     }
 
     @Test
-    protected void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() throws Exception {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).map(b -> new String(b, UTF_8)).contains("v1");
     }
 
     @Test
-    protected void evict_storedKey_removesValue() {
+    protected void evict_storedKey_removesValue() throws Exception {
         var key = new CacheKey("k2");
         cache.put(key, "v".getBytes(UTF_8), Duration.ofMinutes(5));
         cache.evict(key);
@@ -124,7 +124,26 @@ class RedisCacheAdapterContractIT extends CachePortContract {   // *IT: Failsafe
     static final GenericContainer<?> REDIS =
         new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
-    private RedisTemplate<String, byte[]> template;
+    private static LettuceConnectionFactory factory;
+    private static RedisTemplate<String, byte[]> template;
+
+    /** Runs after the @Container is started; outside a Spring context the factory and template are started by hand. */
+    @BeforeAll
+    static void connect() {
+        factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getMappedPort(6379)));
+        factory.afterPropertiesSet();
+        factory.start();
+        template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(RedisSerializer.string());
+        template.setValueSerializer(RedisSerializer.byteArray());
+        template.afterPropertiesSet();
+    }
+
+    @AfterAll
+    static void disconnect() {
+        factory.destroy();
+    }
 
     @Override
     protected CachePort newCache() {
@@ -133,27 +152,13 @@ class RedisCacheAdapterContractIT extends CachePortContract {   // *IT: Failsafe
 
     @Override
     protected void clearBackend() {
-        template = redisTemplate(REDIS.getHost(), REDIS.getMappedPort(6379));
         template.execute((RedisCallback<Void>) c -> { c.serverCommands().flushDb(); return null; });
-    }
-
-    /** Outside a Spring context the factory and template must be initialised and started by hand. */
-    private static RedisTemplate<String, byte[]> redisTemplate(String host, int port) {
-        var factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration(host, port));
-        factory.afterPropertiesSet();
-        factory.start();
-        var t = new RedisTemplate<String, byte[]>();
-        t.setConnectionFactory(factory);
-        t.setKeySerializer(RedisSerializer.string());
-        t.setValueSerializer(RedisSerializer.byteArray());
-        t.afterPropertiesSet();
-        return t;
     }
 }
 ```
 
-(In a real suite create the template once per class and close the factory in
-`@AfterAll`; the per-test creation above keeps the example short.)
+The template is built once per class in `@BeforeAll`: NullAway (`static-analysis`) accepts a field initialised there,
+but not one first assigned in an overridden method such as `clearBackend()`.
 
 ```java
 class NoOpCacheAdapterContractTest extends CachePortContract {
@@ -164,7 +169,7 @@ class NoOpCacheAdapterContractTest extends CachePortContract {
     // That is its documented contract (pluggable-architecture safe default), not a bug.
     @Override
     @Test
-    protected void get_afterPut_returnsStoredValue() {
+    protected void get_afterPut_returnsStoredValue() throws Exception {
         var key = new CacheKey("k1");
         cache.put(key, "v1".getBytes(UTF_8), Duration.ofMinutes(5));
         assertThat(cache.get(key)).isEmpty();
@@ -213,6 +218,8 @@ many delegates are active.
 
 - TCK + in-memory adapter contracts run on every `mvn test`.
 - Real-backend adapter contracts run on `mvn verify` (Failsafe + Testcontainers).
+- The `external-client` HTTP cache adapter (`HttpCacheAdapter`) is an adapter too: the coverage check below fails until it has an
+  `HttpCacheAdapterContractTest` (an in-process fake server is enough, so Surefire runs it).
 - Treat a missing adapter contract as a **build gap**: an ArchUnit / custom
   check can assert that every class ending in `Adapter` has a matching
   `*ContractTest` (or `*ContractIT` for real-backend adapters).

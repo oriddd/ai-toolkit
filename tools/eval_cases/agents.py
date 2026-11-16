@@ -218,7 +218,7 @@ AGENTS = {
         "new-kafka-consumer": "Use the new-kafka-consumer agent: Add a Kafka consumer to this service for PaymentCompleted events that marks the order as paid. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
         "new-metric": "Use the new-metric agent: Add a Micrometer timer metric for the POST /api/v1/orders endpoint of this service. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
         "new-microservice-client": "Use the new-microservice-client agent: Integrate the Inventory service's REST API (GET /items/{id}) into this service as a new downstream client. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
-        "new-validation": "Use the new-validation agent: Add a validation rule to this service: an order's quantity must be between 1 and 100, and its sku must match the format ABC-12345 (three capital letters, a dash, five digits). Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
+        "new-validation": "Use the new-validation agent: Add a validation rule to this service: an order's quantity must be between 1 and 100, and its sku must match the format ABC-12345 (three capital letters, a dash, five digits). Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization. Nobody can answer questions during this run: accept every default and write the files.",
         "refactor": "Use the refactor agent: OrderService in this repo uses @Value fields, a hand-built RestTemplate and raw RuntimeExceptions. Migrate it to our canonical patterns safely, step by step. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
         "test-writer": "Use the test-writer agent: The production code is done. Write the JUnit tests for the existing OrderService and OrderController classes. OrderService also POSTs to the payment service through a RestTemplate it creates itself; do not change production code — write characterisation tests through the HTTP API with the payment service stubbed, and report the seam you used. Orders are stored through OrderRepository (Spring Data JPA, PostgreSQL); the API is internal and needs no authorization.",
     }),
@@ -232,8 +232,8 @@ AGENTS = {
     "ai-toolkit-react-native-agents": ("react-native", {
         "react-native-code-review": "Use the react-native-code-review agent: Review my changes to src/screens/LoginScreen.tsx against our React Native standards before I open the pull request. Do not change anything.",
         "react-native-new-feature": "Use the react-native-new-feature agent: Implement a wishlist feature end to end in this React Native app: a Wishlist screen in the root stack, the data layer on the existing api client (src/api/client.ts) — GET /wishlist returns { items: { productId: string, name: string }[] }, POST /wishlist { productId } adds, DELETE /wishlist/{productId} removes — with optimistic add/remove, validation, error handling and tests. No authentication changes are needed.",
-        "react-native-new-screen": "Use the react-native-new-screen agent: Add an OrderDetails screen to this React Native app, added to the root stack in src/navigation/RootNavigator.tsx with an orderId param and opened from OrdersScreen. It shows one order from GET /orders/{id} on the existing api client (src/api/client.ts), which returns { id: string, status: 'PENDING' | 'SHIPPED', total: number }. No authentication changes are needed.",
-        "react-native-refactor": "Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed.",
+        "react-native-new-screen": "Use the react-native-new-screen agent: Add an OrderDetails screen to this React Native app, added to the root stack in src/navigation/RootNavigator.tsx with an orderId param and opened from OrdersScreen. It shows one order from GET /orders/{id} on the existing api client (src/api/client.ts), which returns { id: string, status: 'PENDING' | 'SHIPPED', total: number }. No authentication changes are needed. Nobody can answer questions during this run: accept every default you would propose (add what is missing, keep the existing folder layout), state each assumption in your final answer, and implement.",
+        "react-native-refactor": "Use the react-native-refactor agent: LoginScreen.tsx fetches inside the component and handles errors ad hoc. Migrate it to our canonical patterns safely, one step at a time. The backend API already exists at https://api.example.com; no authentication changes are needed. Nobody can answer questions during this run: accept every default you would propose (add what is missing, keep the existing folder layout), state each assumption in your final answer, and implement.",
         "react-native-test-writer": "Use the react-native-test-writer agent: The production code is done. Write the Jest and React Native Testing Library tests for the existing LoginScreen component. The backend API already exists at https://api.example.com; no authentication changes are needed.",
     }),
     "ai-toolkit-docs": ("java", {
@@ -272,4 +272,54 @@ AGENT_SKILLS = {
     "react-native-refactor": ["react-native-code-structure", "react-native-state-and-data"],
     "react-native-test-writer": ["react-native-unit-tests"],
     "update-context": ["context-maintenance"],
+}
+
+# What each agent must produce. ("write", path regex): the subagent itself writes or edits a matching file.
+# ("report", regex): the final answer contains it (read-only agents).
+AGENT_OUTPUT = {
+    "code-review": ("report", r"Order(?:Service|Controller)\.java:\d+"),
+    "new-endpoint": ("write", r"src/test/java/\S+Test\.java"),
+    "new-feature": ("write", r"src/test/java/\S+Test\.java"),
+    "new-kafka-consumer": ("write", r"src/main/java/\S+Consumer\.java"),
+    "new-metric": ("write", r"src/main/java/\S+Recorder\.java"),
+    "new-microservice-client": ("write", r"src/main/java/\S+/client/inventory/\S+\.java"),
+    "new-validation": ("write", r"src/main/java/\S+Validator\.java"),
+    "refactor": ("write", r"src/main/java/\S+(?:Properties|OrderService)\.java"),
+    "test-writer": ("write", r"src/test/java/\S+Test\.java"),
+    "python-code-review": ("report", r"orders\.py:\d+"),
+    "python-new-endpoint": ("write", r"tests/\S+\.py"),
+    "python-new-feature": ("write", r"tests/\S+\.py"),
+    "python-refactor": ("write", r"src/orders/\S+\.py"),
+    "python-test-writer": ("write", r"tests/\S+\.py"),
+    "react-native-code-review": ("report", r"\w+\.tsx?:\d+"),
+    "react-native-new-feature": ("write", r"src/\S+\.tsx?"),
+    "react-native-new-screen": ("write", r"src/\S+Screen\.tsx"),
+    "react-native-refactor": ("write", r"src/\S+\.tsx?"),
+    "react-native-test-writer": ("write", r"\S+\.test\.tsx?"),
+    "update-context": ("write", r"(?:context/\S+\.md|CHANGELOG\.md)"),
+}
+
+# Delegation without naming the agent: the routing (parallel-delegation, the hooks) must pick it.
+UNNAMED = {
+    "ai-toolkit-java-agents": [
+        ("delegate-test-writer-unnamed", "java", "test-writer",
+         "The production code is done. Write JUnit tests for OrderService and for OrderController — they are "
+         "independent, so do them in parallel. OrderService also POSTs to the payment service through a RestTemplate "
+         "it creates itself; do not change production code — write characterisation tests through the HTTP API with "
+         "the payment service stubbed. The API is internal and needs no authorization."),
+    ],
+}
+
+# A rule from the agent's own skills that the written file must show (checked in the subagent's Write/Edit input).
+AGENT_RULE = {
+    "new-endpoint": r"void [a-z]\w*_\w+_\w+\(",
+    "new-feature": r"void [a-z]\w*_\w+_\w+\(",
+    "test-writer": r"void [a-z]\w*_\w+_\w+\(",
+    "python-new-endpoint": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-new-feature": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-test-writer": r"def test_[a-z]\w*_[a-z]+[A-Z]\w*",
+    "python-refactor": r"BaseSettings",
+    "react-native-new-feature": r"accessibilityRole",
+    "react-native-new-screen": r"accessibilityRole",
+    "update-context": r"## \d\. [^\\\x22]{3,60}\(REQUIRED",
 }

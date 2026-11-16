@@ -18,8 +18,8 @@ wants a **new feature** that spans several layers. Work in the order below.
 Load each skill with the Skill tool, by its qualified name, first — before any CLARIFY question or code — do not work from memory. Also
 load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` before you finish (see the gate below).
 
-1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder layout, dependency direction, typed navigation,
-   path aliases, providers for dependency injection.
+1. `ai-toolkit-react-native-design:react-native-code-structure` — feature folder layout, dependency direction, Expo Router routes
+   (or React Navigation, §4b), path aliases, providers for dependency injection.
 2. `ai-toolkit-react-native-design:react-native-state-and-data` — api-client layer, feature api module, query keys, query and
    mutation hooks, optimistic updates, Zustand for client state, offline/retry stance.
 3. `ai-toolkit-react-native-build:react-native-input-validation` — zod schemas, cross-field rules, react-hook-form, shared types.
@@ -31,6 +31,9 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 8. `ai-toolkit-react-native-quality:react-native-e2e-tests` — Maestro flows for the critical journeys only.
 9. `ai-toolkit-react-native-quality:react-native-static-analysis` and `ai-toolkit-react-native-ops:react-native-ci` — keep gates green; update CI only if the
    feature adds build or env requirements.
+10. `ai-toolkit-react-native-build:react-native-permissions-and-push` — only if the feature needs a device permission or push.
+11. `ai-toolkit-react-native-ops:react-native-app-config-and-updates` — only if the feature needs a feature flag, an app
+   config change (plugin, permission string, variant) or ships as an OTA update.
 
 ## Step-by-step procedure
 
@@ -38,14 +41,18 @@ load `ai-toolkit-quality:completion-gate` and `ai-toolkit-quality:code-hygiene` 
 1. CLARIFY (only if missing): user stories, screens, endpoints and payloads,
    offline expectations, analytics events, feature flags, auth rules.
 
-2. DESIGN: list the files per layer; confirm the folder and route plan with
-   the developer when it changes existing structure.
+2. DESIGN: detect the navigation the app already uses and keep it — Expo Router
+   (`expo-router`, `src/app/_layout.tsx`) or React Navigation (a
+   `NavigationContainer`); never migrate unasked. List the files per layer;
+   confirm the folder and route plan with the developer when it changes
+   existing structure.
 
 3. GENERATE (in order):
    a. Types and zod schemas + message catalogue entries.
    b. Feature api module and query-key factory; AppError mapping if new errors.
    c. Query/mutation hooks; Zustand store if client state is needed.
-   d. Screen hooks, then components and screens (all states), typed routes.
+   d. Screen hooks, then components and screens (all states); routes (thin
+      `src/app/` files with parsed params, or typed param-list entries).
    e. Analytics and observability hooks through the existing interfaces.
    f. Secure storage / deep-link handling if the feature needs them.
 
@@ -74,7 +81,7 @@ steps inline, in order.
    contracts the rest depends on.
 2. **Parallel leaves, one message (optional):** `general-purpose` — one per independent screen/component group, only
    when they share no files.
-3. **Sequential (you):** wire the screens into the navigator and the remaining shared files (step 3e–3f), and add the
+3. **Sequential (you):** wire the screens into the navigator (or add the `src/app/` route files) and the remaining shared files (step 3e–3f), and add the
    MSW handlers and fixtures the tests need.
 4. **Parallel fan-out, one message — only once all code exists:**
    - `ai-toolkit-react-native-agents:react-native-test-writer` — one per independent group of hooks/modules/components;

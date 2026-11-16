@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: []
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-03
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Parallel Delegation Skill
@@ -26,7 +26,7 @@ Delegate when **all** hold:
 - each unit has a checkable result (tests pass, file exists, report returned).
 
 Do the work yourself when it is a handful of edits, a strict dependency chain
-(migration → entity → repository → service → controller), or it needs decisions the
+(schema migration → data model → data access → business logic → API / UI), or it needs decisions the
 developer has not confirmed yet.
 
 ## 2. What to delegate, what to keep
@@ -81,6 +81,10 @@ as a question — hand over the task.
   language's code-review agent (`ai-toolkit-java-agents:code-review`, `ai-toolkit-python-agents:python-code-review`,
   `ai-toolkit-react-native-agents:react-native-code-review` — not the built-in `/code-review` skill);
   `general-purpose` only for generation that has no dedicated agent.
+- **Agent not installed.** Qualified agents come from other plugins (`ai-toolkit-<lang>-agents`, `ai-toolkit-docs`). When
+  the Agent tool does not list one, dispatch `general-purpose` with the same brief (§4), naming the skills it must apply
+  (for a test-writer the language's unit-test skill; for docs `context-maintenance`), or do that unit inline. Never invent a
+  qualified name that is not in the Agent tool's list.
 - Tell every test-writer in its brief: **do not run builds or tests — the main thread owns builds** (concurrent runs
   corrupt shared build output and coverage files).
 - A subagent can spawn subagents (one more level) when the Agent tool is available to it; if it is not, do the same
@@ -99,7 +103,7 @@ A subagent's summary describes what it intended, not necessarily what it did.
 ## Anti-patterns
 
 - ❌ Delegating a three-line change — the brief costs more than the edit.
-- ❌ Two subagents editing the same file or the same package's `package-info`/config.
+- ❌ Two subagents editing the same file or the same package's index/config file (`__init__.py`, `index.ts`, `package-info`).
 - ❌ Fan-out before the shared contract (DTOs, exceptions, interfaces) exists.
 - ❌ Trusting "all tests pass" from a subagent without running them.
 - ❌ Asking a subagent to make a design decision the developer has not approved.
@@ -107,6 +111,6 @@ A subagent's summary describes what it intended, not necessarily what it did.
 
 ## Cross-references
 
-- `unit-tests`, `component-tests` and their Python / React Native counterparts — what the test-writer agents apply.
-- `quality-review` and `golden-path` (Java), the `python-*` / `react-native-*` skills (their Do/Don't lists) — what the language's code-review agent applies to the combined diff.
+- Java `unit-tests` and `component-tests`, Python `python-unit-tests` and `python-integration-tests`, React Native `react-native-unit-tests` and `react-native-e2e-tests` — what the test-writer agents apply.
+- Java `quality-review` and `golden-path`, the `python-*` / `react-native-*` skills (their Do/Don't lists) — what the language's code-review agent applies to the combined diff.
 - `context-maintenance` — what `ai-toolkit-docs:update-context` applies.

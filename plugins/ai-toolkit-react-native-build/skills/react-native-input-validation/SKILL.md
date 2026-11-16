@@ -9,8 +9,8 @@ applies_to: [mobile]
 depends_on: [react-native-code-structure, react-native-error-handling]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 > ⚠️ **Experimental.** Not yet validated on production projects; conventions may change before promotion to stable.
@@ -28,10 +28,13 @@ handlers assume data is already valid.
 ## Layout
 
 ```
-features/signup/model/
-├── signupSchema.ts       # zod schema + inferred type
-├── passwordRules.ts      # reusable field schemas
-└── signupSchema.test.ts
+features/signup/
+├── model/
+│   ├── signupSchema.ts       # zod schema + inferred form and request types
+│   ├── passwordRules.ts      # reusable field schemas
+│   └── signupSchema.test.ts
+├── api/signupApi.ts          # the only caller of the http client (react-native-state-and-data)
+└── hooks/useSignup.ts        # mutation + server field errors -> form (section 7)
 shared/validation/
 ├── fieldSchemas.ts       # email, phone, money used across features
 └── messages.ts           # validation message catalogue
@@ -82,6 +85,7 @@ export const signupSchema = z
   .refine((v) => v.password === v.confirmPassword, { path: ['confirmPassword'], message: vm.passwordMismatch });
 
 export type SignupForm = z.infer<typeof signupSchema>;
+export type SignupRequest = Pick<SignupForm, 'email' | 'password'>;   // what the server receives: no confirmPassword
 ```
 
 Cross-field and conditional rules live in `.refine` / `.superRefine` on the object schema, never in the screen.
@@ -151,23 +155,39 @@ mapper's `ValidationError.fieldErrors` (`VALIDATION_FAILED`, see `react-native-e
 APIs and camelCase forms both work. A server error that matches no rendered field must not vanish: show the
 `VALIDATION_FAILED` message as a form-level error instead.
 
+The server's `code` is the backend's vocabulary, not a client catalogue key: a Python backend sends the pydantic
+error type (`missing`, `string_too_short`, `value_error`; `FieldError.code` in `python-error-handling` §3), a Java
+backend its own constraint codes. Map each rendered field's known codes to catalogue messages explicitly, next to
+the wire key; an unmapped code gets `vm.serverRejected`.
+
+```ts
+// features/signup/api/signupApi.ts: the feature api is the only caller of the http client
+export const createSignupApi = (http: HttpClient) => ({
+  signup: (body: SignupRequest): Promise<void> => http.request({ path: '/signup', method: 'POST', body }, z.undefined()),
+});
+// features/signup/hooks/useSignupApi.ts, as useOrdersApi in react-native-state-and-data
+export const useSignupApi = () => { const { http } = useServices(); return useMemo(() => createSignupApi(http), [http]); };
+```
+
 ```ts
 // features/signup/hooks/useSignup.ts
-// wire key -> form field; a Map, so a server key such as `toString` can never match a prototype member
-const SERVER_FIELDS = new Map<string, keyof SignupForm>([['email', 'email'], ['password', 'password']]);
-const serverMessage = (code: string): string =>
-  Object.hasOwn(vm, code) ? vm[code as keyof typeof vm] : vm.serverRejected;
+// wire key -> form field + server code -> message; Maps, so a key such as `toString` never hits a prototype member
+type ServerField = { field: keyof SignupForm; messages: ReadonlyMap<string, string> };
+const SERVER_FIELDS = new Map<string, ServerField>([
+  ['email', { field: 'email', messages: new Map([['missing', vm.required], ['value_error', vm.email]]) }],
+  ['password', { field: 'password', messages: new Map([['missing', vm.required], ['string_too_short', vm.passwordShort]]) }],
+]);
 
 export function useSignup(setError: UseFormSetError<SignupForm>) {
-  const { http } = useServices();
+  const signupApi = useSignupApi();
   return useMutation({
-    mutationFn: (v: SignupForm) => http.request({ path: '/signup', method: 'POST', body: v }, z.undefined()),
+    mutationFn: ({ email, password }: SignupForm) => signupApi.signup({ email, password }),   // never confirmPassword
     onError: (e) => {
       if (!(e instanceof ValidationError)) return;          // other AppErrors go to the toast/banner
       let matched = false;
       for (const [wireKey, code] of Object.entries(e.fieldErrors)) {
-        const field = SERVER_FIELDS.get(wireKey);
-        if (field) { setError(field, { message: serverMessage(code) }); matched = true; }
+        const target = SERVER_FIELDS.get(wireKey);
+        if (target) { setError(target.field, { message: target.messages.get(code) ?? vm.serverRejected }); matched = true; }
       }
       if (!matched) setError('root.server', { message: errorMessages.VALIDATION_FAILED });  // never silent
     },
@@ -183,10 +203,12 @@ the catalogue, never from the server's text.
 - ✅ One schema per form or payload, next to its model; infer the type.
 - ✅ Test every schema with valid, invalid and boundary values.
 - ✅ Validate on the client for UX, and treat the server as the authority.
+- ✅ Send the request type (`SignupRequest`), never the whole form: confirmation fields stay on the device.
 - ❌ Inline `if` checks or regexes in components, handlers or hooks.
 - ❌ Hand-written duplicate interface beside a schema.
 - ❌ Validation message literals scattered across schemas.
 - ❌ Using `any`/`as` casts to bypass a failed parse.
+- ❌ Looking up a server error code in the client catalogue by name, or calling the http client from a hook.
 
 ## Cross-references
 

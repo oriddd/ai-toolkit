@@ -1,4 +1,4 @@
 ---
 type: regex
-pattern: '@Tag\(\"integration\"\)'
+pattern: '@Tag\(\x22integration\x22\)'
 ---

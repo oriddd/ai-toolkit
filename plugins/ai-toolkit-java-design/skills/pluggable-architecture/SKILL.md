@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [code-structure, spring-boot-conventions]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-11
+version: 1.1
+last_reviewed: 2026-11-15
 ---
 
 # Pluggable Architecture Skill
@@ -51,7 +51,12 @@ anything other than an adapter (or its vendor `@Configuration` in the same
 port, and the other skills use them directly: Spring Data repository interfaces
 (`persistence`; the dialect is swapped by driver + configuration) and the
 Micrometer `MeterRegistry` / Observation API (`observability`, `request-metrics`;
-the registry is the adapter). Do not wrap them in another port. The rule still
+the registry is the adapter), and Spring Kafka / Spring AMQP in `messaging/`
+(`messaging`): `@KafkaListener` / `@RabbitListener` consumers in
+`messaging/consumer/` are driving adapters and the outbox relay's
+`KafkaTemplate` in `messaging/producer/` is the driven adapter — `messaging/` is
+their adapter package, and services/operations only call the outbox and stay
+broker-free. Do not wrap them in another port. The rule still
 applies to the vendor types *behind* them (e.g. no JDBC-driver class or
 backend-specific registry class imported in business code).
 
@@ -91,15 +96,20 @@ Rules:
 - **`config/x/`** holds the conditional wiring and nothing else — no business
   logic, no vendor calls, no vendor imports: it `@Import`s the vendor
   configurations and declares the fallback, guarded by `@ConditionalOn…`.
+- **Adapter-specific properties** (`platform.x.redis.*`, `platform.x.http.*`) carry
+  the **same `@ConditionalOnProperty`** as their vendor configuration.
+  `@ConfigurationPropertiesScan` binds and validates every
+  `@ConfigurationProperties` record it finds, so an unconditional `@Validated`
+  record of an inactive adapter fails startup for every other provider.
 
 ## 2. The port contract (DIP + OCP)
 
 ```java
 // spi/x/CachePort.java  — vendor-free, this is what the domain depends on
 public interface CachePort {
-    Optional<byte[]> get(CacheKey key);
-    void put(CacheKey key, byte[] value, Duration ttl);
-    void evict(CacheKey key);
+    Optional<byte[]> get(CacheKey key) throws BaseDomainException;     // checked: an adapter reports an outage as UnavailableException
+    void put(CacheKey key, byte[] value, Duration ttl) throws BaseDomainException;
+    void evict(CacheKey key) throws BaseDomainException;
     String providerId();           // for observability + composition routing
 }
 
