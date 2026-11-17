@@ -31,6 +31,13 @@ Dockerfile                  # exec-form CMD with --timeout-graceful-shutdown (`p
 deploy/                     # api and worker Deployments: preStop, terminationGracePeriodSeconds (§3, `python-cd`)
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §6 | SIGTERM drain test: real uvicorn subprocess under load, zero failed requests, negative control | Proving a service shuts down without dropping requests | [references/sigterm-drain-test.md](./references/sigterm-drain-test.md) |
+
 ## 1. What uvicorn does on SIGTERM
 1. It closes the listening socket at once: a new connection is **refused**, not queued.
 2. It waits for in-flight requests to finish, for at most `--timeout-graceful-shutdown` seconds. Without the flag
@@ -40,6 +47,9 @@ deploy/                     # api and worker Deployments: preStop, terminationGr
 4. Only then does the lifespan's shutdown half (the code after `yield`) run, and the process exits.
 
 Step 1 is why the pod needs a `preStop` sleep (§3); step 2 is why the timeout must fit the grace period.
+After a clean drain uvicorn re-raises the signal, so the process exits with status `-15` (shell `143`), not `0`:
+that is success, so a smoke script or a CI check must not require exit code 0 from the api container. (The worker,
+§5, exits `0`.)
 
 ## 2. Run uvicorn so it receives the signal
 - Exec-form `CMD ["uvicorn", ..., "--timeout-graceful-shutdown", "20"]` (`python-ci` §3). In shell form,
@@ -85,13 +95,16 @@ async def stop_and_wait(task: asyncio.Task[None], stop: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    async with AsyncExitStack() as stack:            # closes in reverse order, also when one close fails
+    async with AsyncExitStack() as stack:   # closes in reverse order, even when a close fails
         engine = create_async_engine(resolved.db.sqlalchemy_url(), pool_size=resolved.db.pool_size)
         stack.push_async_callback(engine.dispose)                            # closed last
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         billing_http = await stack.enter_async_context(build_billing_http_client(resolved.billing))
         producer = await stack.enter_async_context(AIOKafkaProducer(  # started now, stopped on exit
-            bootstrap_servers=resolved.kafka.bootstrap_servers, enable_idempotence=True, acks="all"))
+            bootstrap_servers=resolved.kafka.bootstrap_servers,
+            enable_idempotence=True,
+            acks="all",
+        ))
         relay = OutboxRelay(session_factory, KafkaEventPublisher(producer), batch_size=100)
         stop = asyncio.Event()
         relay_task = asyncio.create_task(run_relay(relay, stop, idle_seconds=1.0))
@@ -118,22 +131,24 @@ async def run_worker(settings: AppSettings) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)       # PID 1: without a handler SIGTERM is ignored
-    start_http_server(settings.metrics_port)         # prometheus_client: /metrics for the PodMonitor (`python-cd` §5)
-    async with worker_resources(settings) as resources:   # engine, producer, consumer; closed on exit
+    # prometheus_client: /metrics for the PodMonitor (`python-cd` §5)
+    start_http_server(settings.metrics_port)
+    # engine, producer, consumer; closed on exit
+    async with worker_resources(settings) as resources:
         relay = asyncio.create_task(
             run_relay(resources.relay, stop, settings.relay_idle_seconds, Heartbeat("relay")))
         consumer = asyncio.create_task(resources.consumer_loop.run(stop))
         loops = {relay, consumer}
         stopper = asyncio.create_task(stop.wait())
         await asyncio.wait({stopper, *loops}, return_when=asyncio.FIRST_COMPLETED)
-        stop.set()                                   # SIGTERM, or a loop ended first: stop the other one too
+        stop.set()                    # SIGTERM, or a loop ended first: stop the other one too
         stopper.cancel()
         done, pending = await asyncio.wait(loops, timeout=settings.drain_seconds)
         for task in pending:
-            task.cancel()                            # idle consumer waiting for a record: nothing in flight
+            task.cancel()             # idle consumer waiting for a record: nothing in flight
         await asyncio.gather(*pending, return_exceptions=True)
         for task in done:
-            task.result()                            # a loop that crashed re-raises: the process exits non-zero
+            task.result()             # a loop that crashed re-raises: the process exits non-zero
 
 def main() -> None:
     asyncio.run(run_worker(AppSettings()))
@@ -159,7 +174,7 @@ def main() -> None:
   module checks the ages; an exec probe runs it, so a hung or deadlocked loop restarts the pod:
 
 ```python
-HEARTBEAT_DIR = Path(os.environ.get("HEARTBEAT_DIR", "/tmp/heartbeat"))  # noqa: S108  (an emptyDir mount)
+HEARTBEAT_DIR = Path(os.environ.get("HEARTBEAT_DIR", "/tmp/heartbeat"))  # noqa: S108 (emptyDir)
 MAX_AGE_SECONDS = float(os.environ.get("HEARTBEAT_MAX_AGE_SECONDS", "60"))
 
 class Heartbeat:                                     # my_service/liveness.py: imports nothing heavy
@@ -170,7 +185,8 @@ class Heartbeat:                                     # my_service/liveness.py: i
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.touch()
 
-def main() -> None:                                  # livenessProbe: exec ["python", "-m", "my_service.liveness"]
+# livenessProbe: exec ["python", "-m", "my_service.liveness"]
+def main() -> None:
     now = time.time()
     stale = [p.name for p in HEARTBEAT_DIR.glob("*") if now - p.stat().st_mtime > MAX_AGE_SECONDS]
     sys.exit(f"stale loops: {stale}" if stale else 0)
@@ -188,8 +204,12 @@ if __name__ == "__main__":
 - Unit: `run_worker`'s drain with fake loops — the in-flight record finishes and is committed, an idle consumer
   returns within one poll (nothing is cancelled), and a loop that raises makes `run_worker` raise after the other
   loop has stopped; `liveness.main` exits non-zero for a stale heartbeat file.
-- Smoke, once per service: start uvicorn with the production flags, send a slow request, send `SIGTERM`; the
-  request completes with `200`, a new connection is refused, the lifespan shutdown logs after the request.
+- Under load, once per service (`references/sigterm-drain-test.md`): start uvicorn with the production flags in a
+  subprocess, keep 20 clients sending 1-second requests, send `SIGTERM`; every request sent before the signal
+  completes with `200`, the process exits with `-15`, and a new connection is refused. The same test with `SIGKILL`
+  fails, so the assertions are not vacuous.
+- Worker, with a real broker (`python-messaging` `references/kafka-worker.md`): start `my-service-worker` as a
+  subprocess, process one record, send `SIGTERM`; it exits `0` within seconds and both heartbeat files exist.
 
 ## Do / Don't
 - ✅ Exec-form `CMD`; `--timeout-graceful-shutdown` below the grace period minus `preStop` and lifespan shutdown.

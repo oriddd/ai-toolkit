@@ -31,6 +31,7 @@ helm-chart/
     ├── deployment-api.yaml         # uvicorn: probes, preStop, FORWARDED_ALLOW_IPS
     ├── deployment-worker.yaml      # my-service-worker: heartbeat liveness, no Service (§4)
     ├── migration-job.yaml          # alembic upgrade head as a pre-install/pre-upgrade hook (§3)
+    ├── cronjob.yaml                # one CronJob per entry of `jobs:`, concurrencyPolicy Forbid (§7)
     ├── service.yaml                # api only
     ├── serviceaccount.yaml
     ├── hpa.yaml                    # api only
@@ -116,6 +117,8 @@ spec:
 - Migrations stay compatible with the running version (add nullable → backfill → enforce, `python-persistence` §5),
   because old pods serve while the Job runs and during the rollout.
 - Never `alembic upgrade` in the lifespan or an init container: every replica would race to migrate.
+- The Job reads `DB_URL` and `DB_PASSWORD` through the same `env.py` as the CLI, which escapes `%` before handing the
+  URL to Alembic's config (`python-integration-tests` §2): a password such as `p%40ss` or `p@ss/w` migrates correctly.
 
 ## 4. Api and worker Deployments
 | | api | worker |
@@ -161,8 +164,22 @@ kubectl apply -n orders --dry-run=server -f /tmp/rendered.yaml   # only against 
 missing value. Run `helm template` with the values file of every environment in CI, so a missing `required` value
 fails the build, not the deploy.
 
+## 7. Scheduled jobs: CronJob, never a sleep loop in a replica
+Periodic work (outbox and processed-message retention, PII retention, report builds) is a `CronJob` per entry
+of `jobs:` in `values.yaml`, running `my-service-job <name>` from the same image (`python-messaging` §7).
+```yaml
+jobs:
+  purge-outbox: { schedule: "0 3 * * *" }          # activeDeadlineSeconds defaults to 600, suspend: false
+```
+- `concurrencyPolicy: Forbid` stops a slow run from overlapping the next one; `startingDeadlineSeconds: 300` skips a
+  run the cluster missed instead of firing it late; `backoffLimit: 1`, bounded history, same hardened contexts as §2.
+- `Forbid` guards one CronJob only. A manual `kubectl create job --from=cronjob/...`, a second release or an
+  in-process APScheduler in every replica bypasses it, so the job itself takes a PostgreSQL advisory lock
+  (`run_exclusive`) and exits `0` when another instance holds it.
+- Jobs must be idempotent and bounded (batched deletes): a run killed at the deadline is simply repeated.
+
 ## Do / Don't
-- ✅ One image, three entrypoints: uvicorn, `my-service-worker`, `alembic upgrade head`.
+- ✅ One image, four entrypoints: uvicorn, `my-service-worker`, `my-service-job`, `alembic upgrade head`.
 - ✅ Hardened contexts on every pod, including the migration Job; `/tmp` as an `emptyDir`.
 - ✅ Shutdown budgets copied from `python-graceful-shutdown`, written next to the numbers.
 - ✅ Secrets only through `existingSecret`; `FORWARDED_ALLOW_IPS` set per cluster.
@@ -171,6 +188,7 @@ fails the build, not the deploy.
 - ❌ A readiness probe or a Service on the worker; dependency checks in any liveness probe.
 - ❌ `runAsUser: 0`, a writable root filesystem, or added capabilities.
 - ❌ Secret values in `values.yaml` or the chart.
+- ❌ `time.sleep` loops or a scheduler thread in the api replicas for periodic work: N replicas run it N times.
 - ❌ Including both `app.labels` and `app.selector` in a pod template: both emit `name` and `instance`, so every pod
   would carry duplicate YAML keys. Pod labels are `app.labels` plus one `component` line; the selector helper is for
   `matchLabels` and Service selectors only.

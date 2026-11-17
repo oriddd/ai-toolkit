@@ -67,6 +67,10 @@ If a class has no logic (pure DTO / record / `@Getter` Lombok holder) –
 **do not generate a test**. Add it to `jacoco-maven-plugin`'s `<excludes>`
 instead.
 
+Classes that ship from a template are not exempt: the exception hierarchy, `ExceptionMessages` and `GlobalExceptionHandler`
+come with their tests (`exception-handling` templates). Copy the test with the class, so the per-class Jacoco gate and PIT
+pass on a fresh skeleton; never exclude shipped classes from Jacoco.
+
 ## Reference map — load only the part you are working on
 
 Sections below keep their numbers but live in `references/` so this file stays small. Read only the file you need; do not load them all.

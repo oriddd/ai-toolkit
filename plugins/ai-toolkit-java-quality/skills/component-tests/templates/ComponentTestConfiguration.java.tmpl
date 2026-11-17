@@ -6,11 +6,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-// Security imports: only when spring-boot-starter-security is on the classpath (create-repo Q9 auth = yes).
-// Without Spring Security, delete these three imports and the testSecurityFilterChain bean below.
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;   // [security]
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;   // [security]
+import org.springframework.security.web.SecurityFilterChain;   // [security]
+import org.springframework.transaction.PlatformTransactionManager;   // [persistence]
+import org.springframework.transaction.TransactionDefinition;   // [persistence]
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;   // [persistence]
+import org.springframework.transaction.support.DefaultTransactionStatus;   // [persistence]
 
 import java.time.Duration;
 
@@ -21,16 +23,41 @@ import static org.mockito.Mockito.*;
 @Profile("component-test")
 public class ComponentTestConfiguration {
 
+    // [security:begin]
     // Must be the only SecurityFilterChain: annotate the production security
     // config with @Profile("!component-test"), otherwise Spring Security 6
     // fails at startup (two any-request chains) or the production chain wins.
-    // Delete this bean when the service has no Spring Security (see the imports above).
     @Bean
     public SecurityFilterChain testSecurityFilterChain(final HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
+    // [security:end]
+
+    // [persistence:begin]
+    // The component-test profile excludes the DataSource and JPA auto-configuration, which also removes the only
+    // PlatformTransactionManager: @Transactional beans and an injected TransactionTemplate (messaging consumers)
+    // fail at startup without one. The fakes hold the state, so there is nothing to begin, commit or roll back.
+    @Bean
+    public PlatformTransactionManager noOpTransactionManager() {
+        return new AbstractPlatformTransactionManager() {
+            @Override
+            protected Object doGetTransaction() {
+                return new Object();
+            }
+
+            @Override
+            protected void doBegin(final Object transaction, final TransactionDefinition definition) {}
+
+            @Override
+            protected void doCommit(final DefaultTransactionStatus status) {}
+
+            @Override
+            protected void doRollback(final DefaultTransactionStatus status) {}
+        };
+    }
+    // [persistence:end]
 
     @Bean
     @Primary

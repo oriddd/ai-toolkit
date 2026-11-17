@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Independent full-scan fixes (2026-11-17)
+
+- Java: component-test security recipe is now a tested `SecurityTest` template; `ComponentTestConfiguration` ships the no-op `PlatformTransactionManager`; shipped exception classes, `ExceptionMessages` and `GlobalExceptionHandler` have skeleton tests, so a fresh skeleton passes `mvn verify` with JaCoCo and PIT. New tested health-indicator templates, outbox relay/marker/writer templates, RabbitMQ reference, field-encryption reference and Redis-backed Bucket4j adapter.
+- Java fixes found by executing: `RestClient` no longer follows redirects silently (a 302 is a `DependencyException`; this was the PIT "did not pass without mutation" cause); a revoked OAuth2 token is evicted and replayed once; security-hardening properties are registered; the circuit breaker ignores `DependencyException`; stale names and constructor/logging styles aligned with `code-structure`.
+- Verified on Boot 4.1.2: Resilience4j (`resilience4j-spring-boot4`), Bucket4j, outbound OAuth2, Kafka outbox on Flyway/Postgres, openapi-generator under the full gates.
+- Python: Alembic `%` password crash fixed, snippets pass the skills' own ruff/mypy settings, defined `SigningKeySource`, Colima and BuildKit prerequisites, generated Alembic files pass the ruff gate. Added caching, scheduled jobs, PII/GDPR and circuit-breaker guidance (inside existing skills) and ran the Kafka worker and a uvicorn SIGTERM drain.
+- React Native: 401 refresh-then-sign-out is wired end to end across state-and-data and security; Sentry snippet passes lint; jest helper stops query/mutation gc timers; added consent and account deletion, iOS privacy manifest and deep-link server setup; prebuild output checked against `app.config.ts`.
+- Neutral: commit-msg lint accepts acronyms and identifiers and counts UTF-8 correctly; `update-context` prints the full updated files again; guard covers `find -exec git commit`, `twine upload`, `uv publish`; `parallel-delegation` and `completion-gate` agree; `release-versioning` states release-please's real `perf` behaviour and the config to change it; `check-versions.sh` notes an unbumped marketplace version.
+
 ### Restored original conventions (2026-11-16)
 
 - Domain exceptions are checked again (`BaseDomainException extends Exception`), as in the user-tested originals. `GlobalExceptionHandler` maps both checked and unchecked exceptions (domain handler plus a catch-all 500). Checked exceptions do not roll back `@Transactional` by default, so every `@Transactional` carries `rollbackFor = Exception.class`, enforced by `ArchitectureTest`. New `exception-handling/references/checked-exceptions.md`.

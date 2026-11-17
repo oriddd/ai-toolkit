@@ -119,10 +119,36 @@ export function createAuthSession(secure: SecureStore, anonymousHttp: HttpClient
 }
 ```
 
-`bootstrap/createServices.ts` builds it: `createHttpClient(env.apiBaseUrl, createAuthSession(secure,
-createHttpClient(env.apiBaseUrl, anonymousSession)))`. Wire the remaining 401 once: the `QueryCache` / `MutationCache`
-`onError` in `QueryProvider` (`react-native-state-and-data` §7) calls `signOut` when the error is an
-`UnauthorizedError`, which now means "refresh failed", never "access token expired".
+`bootstrap/createServices.ts` builds it, and puts `secure` into `Services` so the sign-out path can reach it:
+
+```ts
+export const createServices = (env: AppEnv): Services => {
+  const secure = createKeychainStore('app');
+  const session = createAuthSession(secure, createHttpClient(env.apiUrl, anonymousSession));
+  return { http: createHttpClient(env.apiUrl, session), secure, /* storage, consent, logger, errorReporter, analytics */ };
+};
+```
+
+The remaining 401 is wired once, in `QueryProvider` (`react-native-state-and-data` §7): `createQueryClient({ errorReporter,
+onUnauthorized })` calls `signOut(client, secure)` from the `QueryCache` / `MutationCache` `onError` when the error is an
+`UnauthorizedError`, which now means "refresh failed", never "access token expired". `signOut` empties the session store, and
+the root navigator reacts to that store, so no handler navigates by hand:
+
+```tsx
+// bootstrap/RootNavigator.tsx
+export const RootNavigator = () => {
+  const signedIn = useSessionStore((s) => s.userId !== null);
+  return (
+    <Stack>
+      <Stack.Protected guard={signedIn}><Stack.Screen name="orders/index" /><Stack.Screen name="orders/[id]" /></Stack.Protected>
+      <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" /></Stack.Protected>
+    </Stack>
+  );
+};
+```
+
+Proved with a jest test (`react-native-unit-tests` §3a): 401, one failed refresh call, tokens removed, cache cleared, router on
+`/sign-in`; and the twin where the refresh works and the user stays.
 
 ## 2. No secrets in the bundle
 
@@ -183,7 +209,7 @@ React Navigation apps pass the initial URL from `Linking.getInitialURL()` and la
 its own route params (`react-native-code-structure` §4), because a link that maps to a route file is a route param. Test the mapping as a pure function (`react-native-unit-tests`)
 and the entry as one Maestro flow (`react-native-e2e-tests`).
 
-Prefer verified universal/app links over custom schemes. Never navigate to a route or open a URL taken
+Prefer verified universal/app links over custom schemes: the server files, `app.config.ts` entries and the verification\ncommands are in [deep-link-server-setup.md](./references/deep-link-server-setup.md). Never navigate to a route or open a URL taken
 from a link without the allow-list. Links never carry tokens or trigger a state-changing action without a confirm step.
 
 ## 4. Transport
@@ -221,6 +247,19 @@ that writes to the console (a file-level override in `eslint.config.mjs`, see `r
 - Hide sensitive screens in the app switcher (`FLAG_SECURE` / blur on inactive) where appropriate.
 - Gate biometrics with `react-native-keychain` access control, not a JS boolean.
 - Run `npm audit` (or an equivalent) in CI and pin native dependency versions.
+
+## 7. Personal data, consent and deletion
+
+Telemetry and push are opt-in when the app serves the EU: consent state gates Sentry, analytics and push registration, a
+withdrawal takes effect at once, and the app offers an in-app account deletion request (an App Store requirement as well).
+The code, the data-subject rules and the tests are in `react-native-observability`, `references/consent-and-data-deletion.md`.
+
+## References
+
+| Topic | Load when | File |
+| --- | --- | --- |
+| apple-app-site-association, `assetlinks.json`, `associatedDomains`, `intentFilters`, verification commands | registering a universal / app link or debugging one that opens the browser | [deep-link-server-setup.md](./references/deep-link-server-setup.md) |
+| Consent gating, data-subject deletion (observability skill) | the app collects analytics, crashes or push tokens, or a user can delete an account | `react-native-observability` references |
 
 ## Do / Don't
 

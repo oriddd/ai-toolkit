@@ -4,6 +4,12 @@ Part of the [`exception-handling`](../SKILL.md) skill. Section headings are stab
 
 ## Tests
 
+**Shipped classes are tested.** `ExceptionHierarchyTest`, `ExceptionMessagesTest` and `GlobalExceptionHandlerTest` ship as templates
+(`MockMvc` `standaloneSetup` with a throwing controller: every mapped status, `Retry-After` rounding, the 5xx generic detail,
+the Spring MVC `errorCode`, the validation shapes, the security rethrow). Copy them with the classes; without them the
+per-class JaCoCo gate fails on `ExceptionMessages` and `GlobalExceptionHandler` and the exception classes, and the build is red
+on a fresh skeleton. Add a case there whenever you add an exception, a factory method or a handler.
+
 For the handler, use the `unit-tests` skill with the
 `@WebMvcTest(FooController.class)` slice (it picks up `@RestControllerAdvice`
 beans automatically; add `@Import(GlobalExceptionHandler.class)` if you

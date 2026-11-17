@@ -51,7 +51,7 @@ origins:
 
 ```java
 @ConfigurationProperties(prefix = "security.cors")
-public record CorsProperties(List<String> allowedOrigins, boolean allowCredentials) {}
+public record CorsProperties(List<String> allowedOrigins, boolean allowCredentials) {}   // register it: @EnableConfigurationProperties(CorsProperties.class) on the config class (or @ConfigurationPropertiesScan)
 
 @Bean
 public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
@@ -71,7 +71,10 @@ public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
 Never `*` for origins when `allowCredentials = true`.
 
 The bean only takes effect through Spring Security: the `permissions` `SecurityConfig` template calls
-`.cors(Customizer.withDefaults())`, which picks up this `CorsConfigurationSource` bean.
+`.cors(Customizer.withDefaults())`, which picks up this `CorsConfigurationSource` bean. The path pattern is matched
+without the servlet context path, so `/api/**` is right for a service under `server.servlet.context-path: /orders`.
+Verified: a preflight from the listed origin answers 200 with `Access-Control-Allow-Origin`, `Max-Age: 3600` and no
+`Allow-Credentials`; any other origin gets 403.
 
 ## 4. Rate limiting
 
@@ -124,7 +127,9 @@ http.headers(h -> h
 ```
 
 Spring Security writes HSTS only on HTTPS requests. Behind a TLS-terminating ingress the app sees HTTP, so set
-`server.forward-headers-strategy=framework` (and let the ingress set `X-Forwarded-Proto`).
+`server.forward-headers-strategy=framework` (and let the ingress set `X-Forwarded-Proto`). Verified: without the
+forwarded header the response has `Referrer-Policy`, `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` but no
+HSTS; with `X-Forwarded-Proto: https` it adds `Strict-Transport-Security: max-age=31536000 ; includeSubDomains`.
 
 ## 7. Actuator lockdown
 
@@ -202,6 +207,7 @@ public class OutboundHostAllowList implements ClientHttpRequestInterceptor {
 }
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(OutboundHttpConfig.OutboundProperties.class)   // without it the record is no bean and startup fails
 public class OutboundHttpConfig {
 
     @ConfigurationProperties(prefix = "security.outbound")
@@ -220,7 +226,8 @@ security:
     allowed-hosts: ${OUTBOUND_ALLOWED_HOSTS}   # comma list, no default — an empty list blocks every outbound call
 ```
 
-List every downstream host the service calls, including the ones only a readiness indicator probes
+A refused call throws an unchecked `IllegalStateException` before any connection is opened (a misconfiguration, not an
+outage, so it is not a domain exception). List every downstream host the service calls, including the ones only a readiness indicator probes
 (`health-indicator` builds its client from the same builder).
 
 ## Do / Don't

@@ -1,0 +1,114 @@
+package {{basePackage}}.health.indicator;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.ExpectedCount.times;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withRawStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import {{basePackage}}.health.config.{{Dep}}ReadinessProperties;
+import java.io.IOException;
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.Status;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+
+class {{Dep}}HealthIndicatorTest {
+
+    private static final String BASE_URL = "http://dependency.test{{baseUrlPath}}";
+    private static final String READINESS_URL = BASE_URL + "{{readinessEndpoint}}";
+    private static final Duration LONG_TTL = Duration.ofHours(1);
+
+    private final RestClient.Builder builder = RestClient.builder();
+    private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+    private {{Dep}}HealthIndicator indicator(final RestClient client, final Duration cacheTtl) {
+        return new {{Dep}}HealthIndicator(
+                client, new {{Dep}}ReadinessProperties(BASE_URL, "{{readinessEndpoint}}", cacheTtl));
+    }
+
+    private {{Dep}}HealthIndicator indicator(final Duration cacheTtl) {
+        return indicator(builder.build(), cacheTtl);
+    }
+
+    @Test
+    void health_expectedStatus_isUpAndNamesTheService() {
+        server.expect(requestTo(READINESS_URL)).andRespond(withRawStatus({{successStatusCode}}));
+
+        final Health health = indicator(LONG_TTL).health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.UP);
+        assertThat(health.getDetails()).containsEntry("service", "{{dependencyDisplayName}}");
+        server.verify();
+    }
+
+    @Test
+    void health_otherStatus_isDownWithTheStatusAsReason() {
+        final int other = {{successStatusCode}} == 503 ? 200 : 503;
+        server.expect(requestTo(READINESS_URL)).andRespond(withRawStatus(other));
+
+        final Health health = indicator(LONG_TTL).health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails()).containsEntry("reason", String.valueOf(other));
+    }
+
+    @Test
+    void health_transportFailure_isDown() {
+        server.expect(requestTo(READINESS_URL)).andRespond(request -> {
+            throw new IOException("connection refused");
+        });
+
+        final Health health = indicator(LONG_TTL).health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails()).containsEntry("reason", "ResourceAccessException");
+    }
+
+    @Test
+    void health_unexpectedRuntimeException_isDown() {
+        final RestClient failing =
+                RestClient.builder()
+                        .requestInterceptor(
+                                (request, body, execution) -> {
+                                    throw new IllegalStateException("boom");
+                                })
+                        .build();
+
+        final Health health = indicator(failing, LONG_TTL).health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails()).containsEntry("reason", "IllegalStateException");
+    }
+
+    @Test
+    void health_secondCallInsideTtl_doesNotCallTheDependencyAgain() {
+        server.expect(once(), requestTo(READINESS_URL)).andRespond(withSuccess());
+        final {{Dep}}HealthIndicator indicator = indicator(LONG_TTL);
+
+        final Health first = indicator.health();
+        final Health second = indicator.health();
+
+        assertThat(second).isSameAs(first);
+        server.verify();
+    }
+
+    @Test
+    void health_zeroTtl_callsTheDependencyEveryTime() {
+        server.expect(times(2), requestTo(READINESS_URL)).andRespond(withSuccess());
+        final {{Dep}}HealthIndicator indicator = indicator(Duration.ZERO);
+
+        indicator.health();
+        indicator.health();
+
+        server.verify();
+    }
+
+    @Test
+    void getReadinessURI_baseUrlAndEndpoint_areConcatenated() {
+        assertThat(indicator(LONG_TTL).getReadinessURI()).isEqualTo(READINESS_URL);
+    }
+}

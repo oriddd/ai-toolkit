@@ -57,11 +57,16 @@ SHARED: list[Processor] = [
     structlog.processors.add_log_level,
     structlog.processors.TimeStamper(fmt="iso", utc=True),
     add_trace_id,
+    mask_pii,   # PII never reaches a log line: `python-security` §7
 ]
 
 def configure_logging(level: str = "INFO") -> None:
     structlog.configure(
-        processors=[*SHARED, structlog.processors.format_exc_info, structlog.processors.JSONRenderer()],
+        processors=[
+            *SHARED,
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level)),
         cache_logger_on_first_use=True,
     )
@@ -71,7 +76,8 @@ def configure_logging(level: str = "INFO") -> None:
         foreign_pre_chain=SHARED,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.processors.format_exc_info,        # else stdlib tracebacks render as "<traceback object>"
+            # else stdlib tracebacks render as "<traceback object>"
+            structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
     ))

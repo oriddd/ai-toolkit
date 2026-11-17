@@ -80,7 +80,7 @@ Fixes: #123
 - **Body**: Wrap at 72 characters, explain WHY not WHAT (code shows what)
 - **Blank line** between subject and body
 - **No period** at end of subject line
-- **Lowercase** after colon
+- **Lowercase** after colon, unless the first word is an acronym (`feat: SSO login`), an identifier (`fix: UserService NPE`) or a product name (`build: Docker base image`); only a capitalised ordinary word (`feat: Add x`) is rejected
 
 ## Workflow
 
@@ -237,7 +237,7 @@ Before requesting review:
 ## Tools
 
 ### Git Hooks
-Add a commit-msg hook that enforces the prefix and the subject rules (≤ 72 characters, no trailing period, lowercase after the colon). Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
+Add a commit-msg hook that enforces the prefix and the subject rules (≤ 72 characters, no trailing period, no capitalised ordinary word after the colon; acronyms, identifiers and listed product names pass). Keep it versioned in the repo (`scripts/commit-msg.sh`) and register it with
 `pre-commit` rather than copying it into the unversioned `.git/hooks/`:
 ```yaml
 # .pre-commit-config.yaml — then run once: pre-commit install --hook-type commit-msg
@@ -267,16 +267,20 @@ if ! echo "$subject" | grep -qE "$prefix"; then
     echo "  (mark breaking changes with ! and/or a BREAKING CHANGE: footer — see release-versioning)"
     exit 1
 fi
-if [ "${#subject}" -gt 72 ]; then
-    echo "ERROR: Subject line is ${#subject} characters; the limit is 72."
+chars=$(printf '%s' "$subject" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')   # characters, not bytes, in any shell/locale
+if [ "$chars" -gt 72 ]; then
+    echo "ERROR: Subject line is $chars characters; the limit is 72."
     exit 1
 fi
 if echo "$subject" | grep -q '\.$'; then
     echo "ERROR: Subject line must not end with a period."
     exit 1
 fi
-if echo "$subject" | grep -qE ": [A-Z]"; then
-    echo "ERROR: Start the summary with a lowercase letter after the colon (feat: add x, not feat: Add x)."
+first=$(printf '%s' "$subject" | sed -E 's/^[^:]*: //; s/ .*//')
+if printf '%s' "$first" | grep -qE '^[A-Z][a-z]+$' &&
+   ! printf '%s' "$first" | grep -qxE 'Docker|Redis|Kafka|Spring|Java|Python|Kotlin|Swift|GitHub|GitLab|Maven|Gradle|Kubernetes|Helm|Jenkins|Postgres|Flyway|Jackson|Lombok|Sonar|Mockito|React|Node|Jira|Bitbucket|Oracle|Prometheus|Grafana|Hibernate|Jakarta|Android|Expo|Metro'; then
+    echo "ERROR: Start the summary with a lowercase verb after the colon (feat: add x, not feat: Add x)."
+    echo "  Acronyms (SSO, JWT), identifiers (UserService) and listed product names (Redis) are fine; extend the list in scripts/commit-msg.sh."
     exit 1
 fi
 ```

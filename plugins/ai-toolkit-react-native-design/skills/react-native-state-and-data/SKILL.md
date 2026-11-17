@@ -255,22 +255,51 @@ focusManager.setEventListener((handleFocus) => {          // React Native has no
   return () => { sub.remove(); };
 });
 
-// exported so the retry and reporting policy is unit-tested without rendering the provider
-export const createQueryClient = (errorReporter: ErrorReporter) => new QueryClient({
-  queryCache: new QueryCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
-  mutationCache: new MutationCache({ onError: (e) => { if (isReportable(e)) errorReporter.report(e); } }),
-  defaultOptions: {
-    queries: { retry: (n, e) => n < 2 && e.retryable, networkMode: 'offlineFirst' },
-    mutations: { retry: 0 },
-  },
-});
+type QueryClientDeps = {
+  errorReporter: ErrorReporter;
+  onUnauthorized: (client: QueryClient) => void;          // the client it was built into: sign-out clears its cache
+};
+
+// exported so the retry, reporting and sign-out policy is unit-tested without rendering the provider
+export const createQueryClient = ({ errorReporter, onUnauthorized }: QueryClientDeps) => {
+  const handleError = (e: unknown) => {
+    if (e instanceof UnauthorizedError) onUnauthorized(client);   // refresh already failed (section 1): the session is over
+    else if (isReportable(e)) errorReporter.report(e);
+  };
+  const client = new QueryClient({
+    queryCache: new QueryCache({ onError: handleError }),
+    mutationCache: new MutationCache({ onError: handleError }),
+    defaultOptions: {
+      queries: { retry: (n, e) => n < 2 && e.retryable, networkMode: 'offlineFirst' },
+      mutations: { retry: 0 },
+    },
+  });
+  return client;
+};
+
+export const createAppQueryClient = ({ errorReporter, secure }: Services) =>
+  createQueryClient({
+    errorReporter,
+    onUnauthorized: (client) => {
+      signOut(client, secure).catch((e: unknown) => { errorReporter.report(e); });   // react-native-security §1
+    },
+  });
 
 export const QueryProvider = ({ children }: PropsWithChildren) => {
-  const { errorReporter } = useServices();                  // the client lives inside the services provider
-  const [client] = useState(() => createQueryClient(errorReporter));
+  const services = useServices();                           // the client lives inside the services provider
+  const [client] = useState(() => createAppQueryClient(services));
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 };
 ```
+
+`Services` carries `secure: SecureStore` (built in `createServices` next to the `AuthSession`, `react-native-security` §1b).
+The whole chain for an expired session: the api-client gets a 401, `session.refresh()` runs once for all concurrent
+requests and returns `null` (the server rejected the refresh token), the retry is skipped, `UnauthorizedError` reaches
+the cache's `onError`, `signOut` clears the tokens, the query and mutation caches and the session store, and the
+root navigator redirects because it reads that store (`RootNavigator`, `react-native-security` §1b).
+React Navigation apps render `{signedIn ? <AppStack /> : <AuthStack />}` from the same flag.
+`UnauthorizedError` is deliberately never reported: it is an expected outcome, not a bug. Both the 401-then-signed-out
+flow and the refresh-succeeds-so-stay-signed-in flow are tested in `react-native-unit-tests` §3a.
 
 `isReportable` is the "report unexpected errors only" rule from `react-native-error-handling` §6. Render
 `QueryProvider` inside `ServicesProvider`. With `offlineFirst`, a query with no cached data pauses while
@@ -298,4 +327,5 @@ that as `isOffline` so the screen shows an offline state instead of a spinner.
 - `react-native-code-structure`: where api, hooks and model files live.
 - `react-native-error-handling`: `AppError` and `mapHttpError`, used by the client.
 - `react-native-input-validation`: shared zod schemas for request and response types.
-- `react-native-unit-tests`: testing hooks with MSW and a fresh `QueryClient`.
+- `react-native-unit-tests`: testing hooks with MSW and a fresh `QueryClient`; the 401 to sign-out test.
+- `react-native-security`: `signOut`, `createAuthSession` and the single-flight refresh.

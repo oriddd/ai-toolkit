@@ -34,7 +34,7 @@ Every commit message:
 | `feat`    | Minor bump |
 | `fix`     | Patch bump |
 | `refactor` / `style` / `docs` / `chore` / `test` / `build` / `ci` | No bump |
-| `perf` | Patch bump (the default rules of both release-please and semantic-release) |
+| `perf` | Patch bump **by default** in both tools (release-please lists it under Performance Improvements; semantic-release's default rules patch it). The pre-toolkit convention was no bump: configure it, see "Tuning the bump" in §3 |
 | `!` after any type/scope (`feat!:`, `fix(api)!:`) or a `BREAKING CHANGE:` footer — either is enough | **Major** bump |
 
 Enforced by `commitlint` (npm) in pre-commit / CI (see `git-commit-conventions` for the local commit-msg hook).
@@ -123,6 +123,25 @@ the manifest holds the last released version and the bot updates it.
 ```json
 { ".": "1.3.0" }
 ```
+
+**Tuning the bump** (checked against the release-please source and the `conventionalcommits` preset): breaking → major,
+`feat` → minor, and any other releasable commit → patch. Releasable means the type is visible in the changelog: `feat`,
+`fix`, `perf`, `revert` are; `docs`, `style`, `chore`, `refactor`, `test`, `build`, `ci` are hidden, so a batch of only
+those opens no release PR ("No user facing commits found") and rides along unversioned with the next release. So `perf`
+patches by default. To make `perf` not release by itself, hide it in `release-please-config.json`:
+```json
+{
+  "packages": { ".": { "release-type": "maven", "package-name": "my-service",
+    "changelog-sections": [
+      { "type": "feat", "section": "Features" }, { "type": "fix", "section": "Bug Fixes" },
+      { "type": "perf", "section": "Performance Improvements", "hidden": true },
+      { "type": "revert", "section": "Reverts" }
+    ] } }
+}
+```
+`changelog-sections` replaces the whole default list: re-list every visible type. Pre-1.0, defaults are breaking → major and
+`feat` → minor; set `"bump-minor-pre-major": true` (breaking → minor) and `"bump-patch-for-minor-pre-major": true`
+(`feat` → patch) to stay on 0.x. semantic-release instead takes `releaseRules` (`{ "type": "perf", "release": false }`) in its config.
 
 ### b) `semantic-release`
 

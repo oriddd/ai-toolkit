@@ -1,0 +1,78 @@
+package {{basePackage}}.security;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.config.ProblemDetailSecurityHandler;
+import {{basePackage}}.config.SecurityConfig;
+import {{basePackage}}.controller.{{ControllerClass}};
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.exception.handler.GlobalExceptionHandler;
+import {{basePackage}}.monitor.ClientIdParser;   // [request-metrics]
+import {{basePackage}}.monitor.MetricNameResolver;   // [request-metrics]
+import {{basePackage}}.monitor.MetricsRecorderRegistry;   // [request-metrics]
+import {{basePackage}}.operation.{{OperationClass}};
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(
+        controllers = {{ControllerClass}}.class,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
+@Import({
+    SecurityConfig.class,
+    ProblemDetailSecurityHandler.class,
+    GlobalExceptionHandler.class,
+    {{ControllerClass}}SecurityTest.MeterRegistryConfiguration.class
+})
+class {{ControllerClass}}SecurityTest {
+
+    @TestConfiguration
+    static class MeterRegistryConfiguration {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
+    @Autowired MockMvc mvc;
+    @MockitoBean {{OperationClass}} operation;
+    @MockitoBean JwtDecoder jwtDecoder;
+    // [request-metrics:begin]
+    @MockitoBean MetricNameResolver metricNameResolver;
+    @MockitoBean MetricsRecorderRegistry metricsRecorderRegistry;
+    @MockitoBean ClientIdParser clientIdParser;
+    // [request-metrics:end]
+
+    @Test
+    void get_noToken_returns401() throws Exception {
+        mvc.perform(get("{{apiPath}}")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void get_jwtWithRequiredScope_returns200() throws Exception {
+        mvc.perform(get("{{apiPath}}")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void get_unknownPathWithToken_returns403ProblemJson() throws Exception {
+        mvc.perform(get("/no-such-path").with(jwt()))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_FORBIDDEN));
+    }
+}

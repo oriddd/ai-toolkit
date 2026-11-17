@@ -277,8 +277,9 @@ new enum value – never modify the handler.
 ✅ Keep the `PermissionsHandler.handle(...)` call **inside the operation**,
 not the controller – the operation owns the use case.
 ✅ Keep the `CallerContextResolver` as the only place that reads
-`SecurityContextHolder` / token internals. Strategies depend on the resolver
-or on injected scope lists, not on the security framework directly.
+`SecurityContextHolder` / token internals **for authorization**. Strategies depend on the resolver
+or on injected scope lists, not on the security framework directly. The one other reader is `persistence`'s
+`SecurityAuditorAware` (audit subject only); both live in `permission/`, the only package that may read it (ArchUnit).
 ❌ Never short-circuit a context with a TODO; always provide an explicit
 strategy (even a documented no-op) so the dispatcher does not throw
 `UNRECOGNIZED_CALLER_CONTEXT`.

@@ -96,44 +96,20 @@ public class InvoiceService {
     public Invoice create(CreateRequest req) throws BaseDomainException {
         var invoice = new Invoice(req.id(), req.name());
         invoiceRepo.save(invoice);
-        outbox.append(new InvoiceCreatedEvent(invoice.getId(), invoice.getName(), now()));  // also stores the current traceparent
+        outbox.append("invoice", invoice.getId(), new InvoiceCreatedEvent(invoice.getId(), invoice.getName(), now()));  // OutboxWriter: MANDATORY tx, stores the traceparent
         return invoice;
     }
 }
-
-@Component
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
-@Slf4j
-public class OutboxRelay {
-    private final OutboxRepository outboxRepo;
-    private final OutboxMarker outboxMarker;          // separate bean: markPublished runs in its own short @Transactional
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final OutboxProperties props;             // @ConfigurationProperties record: batch size, send timeout
-
-    @Scheduled(fixedDelayString = "${outbox.relay.delay:PT0.2S}")     // property-driven, never a literal
-    @SchedulerLock(name = "outbox-relay", lockAtMostFor = "PT1M")      // ShedLock: ONE active relay keeps per-aggregate order (§6)
-    public void publishPending() {
-        try {
-            for (OutboxEntity row : outboxRepo.findByPublishedAtIsNullOrderByCreatedAtAsc(Limit.of(props.batchSize()))) {   // no DB transaction / row locks held here
-                // topic from the aggregate type (a constant map, never a literal per row); key = aggregate id (§6)
-                var record = new ProducerRecord<>(topicFor(row.getAggregateType()), row.getAggregateId(), row.getPayload());
-                record.headers().add("event-id", row.getId().toString().getBytes(StandardCharsets.UTF_8));
-                if (row.getTraceparent() != null) {
-                    record.headers().add("traceparent", row.getTraceparent().getBytes(StandardCharsets.UTF_8));
-                }
-                kafkaTemplate.send(record).get(props.sendTimeout().toMillis(), TimeUnit.MILLISECONDS);  // bounded wait for the broker ack
-                outboxMarker.markPublished(row.getId());   // short transaction, after the ack
-            }
-        } catch (Exception e) {                        // a scheduled job never throws (spring-boot-conventions §7b)
-            log.warn("Outbox relay stopped at the first failed row; it retries on the next tick", e);
-        }
-    }
-}
-
-public interface OutboxRepository extends JpaRepository<OutboxEntity, UUID> {
-    List<OutboxEntity> findByPublishedAtIsNullOrderByCreatedAtAsc(Limit limit);   // Limit: Spring Data 3.2+
-}
 ```
+
+The relay is `OutboxRelay.java.tmpl`: a `@Scheduled` + `@SchedulerLock` poll of `findByPublishedAtIsNullOrderByCreatedAtAsc(Limit.of(batch))`
+(no transaction or row lock held), one `ProducerRecord` per row (topic from `outbox.relay.topics.<aggregateType>`, key =
+aggregate id, `event-id` and `traceparent` headers), a bounded `send(...).get(timeout)` for the broker ack, then
+`OutboxMarker.markPublished(id)` in its own short `@Transactional` (a separate bean so the call goes through the proxy).
+It catches everything: a scheduled job never throws (`spring-boot-conventions` §7b). Companion templates:
+`OutboxWriter` (the `append` above), `OutboxRepository`, `OutboxProperties`. The writer, relay, marker and `IdempotentConsumer`
+need the database and the broker, so they carry `@Profile("!component-test")` (`component-tests` §3b): a service that calls
+`OutboxWriter` gets a `@MockitoBean` of it in its component test.
 
 Stopping at the first failed row keeps per-aggregate order. **One active
 relay** (ShedLock, as for every `@Scheduled` job — setup in `references/delivery-and-testing.md`) is the default. Several
@@ -287,6 +263,7 @@ Sections below keep their names and numbers but live in `references/` so this fi
 
 | Sections | Topic | Load when | File |
 | --- | --- | --- | --- |
+| RabbitMQ | confirms, `messageId`, DLX/DLQ, listener retry | the broker is RabbitMQ | [`rabbitmq.md`](./references/rabbitmq.md) |
 | §2 | schema formats and compatibility rules | choosing or evolving the event schema | [`schema-management.md`](./references/schema-management.md) |
 | §3 Outbox Performance & Clean-up, §5a, §5b, §7 | outbox indexes / partitioning / retention, exactly-once scope, retry topology and DLT headers, testing | tuning the outbox, choosing blocking vs non-blocking retries, considering Kafka transactions, writing messaging tests | [`delivery-and-testing.md`](./references/delivery-and-testing.md) |
 
@@ -312,5 +289,6 @@ than you need, don't hand off. Never ack early: an ack before the work commits l
 - [`KafkaConfig.java.tmpl`](./templates/KafkaConfig.java.tmpl) — Baseline Kafka producer/consumer configuration.
 - [`IdempotentConsumer.java.tmpl`](./templates/IdempotentConsumer.java.tmpl) — Pattern for deduplicating incoming events.
 - [`OutboxEntity.java.tmpl`](./templates/OutboxEntity.java.tmpl) — Database entity for the Transactional Outbox.
+- [`OutboxWriter`](./templates/OutboxWriter.java.tmpl), [`OutboxRelay`](./templates/OutboxRelay.java.tmpl), [`OutboxMarker`](./templates/OutboxMarker.java.tmpl), [`OutboxRepository`](./templates/OutboxRepository.java.tmpl), [`OutboxProperties`](./templates/OutboxProperties.java.tmpl) — writer, relay and its support classes.
 - [`outbox-migration.sql.tmpl`](./templates/outbox-migration.sql.tmpl) — Flyway migration for the outbox and processed-events tables (save as the next `V<n>__create_outbox.sql`).
 - [`DlqHandler.java.tmpl`](./templates/DlqHandler.java.tmpl) — Standard Dead Letter Queue processing.

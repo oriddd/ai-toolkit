@@ -1,0 +1,107 @@
+package {{basePackage}}.exception;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import java.util.function.BiFunction;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+class ExceptionHierarchyTest {
+
+    private static final String CODE = "ERR-TEST";
+    private static final String MESSAGE = "something happened";
+    private static final RuntimeException CAUSE = new IllegalStateException("root cause");
+
+    @FunctionalInterface
+    private interface WithCause {
+        BaseDomainException create(String errorCode, String message, Throwable cause);
+    }
+
+    static Stream<Arguments> exceptionTypes() {
+        return Stream.of(
+                of(BadRequestException::new, BadRequestException::new),
+                of(ForbiddenException::new, ForbiddenException::new),
+                of(NotFoundException::new, NotFoundException::new),
+                of(ConflictException::new, ConflictException::new),
+                of(DependencyException::new, DependencyException::new),
+                of(UnsupportedApiVersionException::new, UnsupportedApiVersionException::new),
+                of(UnavailableException::new, UnavailableException::new),
+                of(TooManyRequestsException::new, TooManyRequestsException::new));
+    }
+
+    private static Arguments of(
+            BiFunction<String, String, BaseDomainException> plain, WithCause withCause) {
+        return Arguments.of(plain, withCause);
+    }
+
+    @ParameterizedTest
+    @MethodSource("exceptionTypes")
+    void constructor_codeAndMessage_keepsBothAndHasNoCause(
+            BiFunction<String, String, BaseDomainException> plain, WithCause ignored) {
+        final BaseDomainException e = plain.apply(CODE, MESSAGE);
+
+        assertThat(e.getErrorCode()).isEqualTo(CODE);
+        assertThat(e.getMessage()).isEqualTo(MESSAGE);
+        assertThat(e.getCause()).isNull();
+    }
+
+    @ParameterizedTest
+    @MethodSource("exceptionTypes")
+    void constructor_withCause_keepsCodeMessageAndCause(
+            BiFunction<String, String, BaseDomainException> ignored, WithCause withCause) {
+        final BaseDomainException e = withCause.create(CODE, MESSAGE, CAUSE);
+
+        assertThat(e.getErrorCode()).isEqualTo(CODE);
+        assertThat(e.getMessage()).isEqualTo(MESSAGE);
+        assertThat(e.getCause()).isSameAs(CAUSE);
+    }
+
+    @Test
+    void unavailable_noRetryAfter_isEmpty() {
+        assertThat(new UnavailableException(CODE, MESSAGE).getRetryAfter()).isEmpty();
+        assertThat(new UnavailableException(CODE, MESSAGE, CAUSE).getRetryAfter()).isEmpty();
+    }
+
+    @Test
+    void unavailable_positiveRetryAfter_isReturned() {
+        final Duration wait = Duration.ofSeconds(5);
+
+        assertThat(new UnavailableException(CODE, MESSAGE, wait).getRetryAfter()).contains(wait);
+        assertThat(new UnavailableException(CODE, MESSAGE, CAUSE, wait).getRetryAfter())
+                .contains(wait);
+    }
+
+    @Test
+    void unavailable_zeroOrNegativeRetryAfter_isEmpty() {
+        assertThat(new UnavailableException(CODE, MESSAGE, Duration.ZERO).getRetryAfter()).isEmpty();
+        assertThat(new UnavailableException(CODE, MESSAGE, Duration.ofSeconds(-1)).getRetryAfter())
+                .isEmpty();
+    }
+
+    @Test
+    void tooManyRequests_noRetryAfter_isEmpty() {
+        assertThat(new TooManyRequestsException(CODE, MESSAGE).getRetryAfter()).isEmpty();
+        assertThat(new TooManyRequestsException(CODE, MESSAGE, CAUSE).getRetryAfter()).isEmpty();
+    }
+
+    @Test
+    void tooManyRequests_positiveRetryAfter_isReturned() {
+        final Duration wait = Duration.ofSeconds(9);
+
+        assertThat(new TooManyRequestsException(CODE, MESSAGE, wait).getRetryAfter()).contains(wait);
+        assertThat(new TooManyRequestsException(CODE, MESSAGE, CAUSE, wait).getRetryAfter())
+                .contains(wait);
+    }
+
+    @Test
+    void tooManyRequests_zeroOrNegativeRetryAfter_isEmpty() {
+        assertThat(new TooManyRequestsException(CODE, MESSAGE, Duration.ZERO).getRetryAfter())
+                .isEmpty();
+        assertThat(new TooManyRequestsException(CODE, MESSAGE, Duration.ofSeconds(-1)).getRetryAfter())
+                .isEmpty();
+    }
+}

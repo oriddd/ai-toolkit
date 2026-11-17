@@ -113,6 +113,12 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 Pin image tags to the production major version; never `latest`. Without the Docker check, a machine without
 Docker gets a `DockerException` *error* in every integration test instead of a skip.
 
+Colima (and Rancher Desktop) expose the Docker socket under the home directory, not at `/var/run/docker.sock`.
+testcontainers then fails with `error while creating mount source path ... docker.sock` when it starts Ryuk, the
+cleanup container that bind-mounts the socket. Tell it the path that exists inside the VM:
+`export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` (with `DOCKER_HOST` or the active Docker
+context pointing at the Colima socket). Keep Ryuk enabled; `TESTCONTAINERS_RYUK_DISABLED=true` leaks containers on a crash.
+
 `run_alembic_upgrade` is a project helper, not a library function. A minimal version runs the real
 migrations on the engine's connection. The default async `alembic/env.py` creates its own engine and calls
 `asyncio.run()`, which fails inside the test's running loop, so `env.py` needs one extra branch:
@@ -128,10 +134,22 @@ def run_migrations_online() -> None:
 ```
 
 Read the URL in `env.py` from the same settings class the app uses, and only when no connection was
-passed (`if config.attributes.get("connection") is None: config.set_main_option("sqlalchemy.url", ...)`); render the
-URL with `url.render_as_string(hide_password=False)`, because `str(url)` masks the password as `***`.
-Move the generated module-level `fileConfig(config.config_file_name)` into that CLI branch too: run from a test,
-it would reset logging (`disable_existing_loggers=True`) in the middle of the session.
+passed:
+
+```python
+if config.attributes.get("connection") is None:     # CLI, Helm migration Job, CI: not a test
+    if config.config_file_name is not None:
+        fileConfig(config.config_file_name)         # from a test it would reset logging mid-session
+    url = DatabaseSettings().sqlalchemy_url().render_as_string(hide_password=False)
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+```
+
+`str(url)` masks the password as `***`, so render it with `hide_password=False`. `set_main_option` stores the value
+in a `ConfigParser`, which treats `%` as interpolation syntax, and `render_as_string` percent-encodes
+reserved characters (`@` becomes `%40`, a literal `%` becomes `%25`): without `.replace("%", "%%")` a password such as
+`p%40ss` or `p@ss` raises `ValueError: invalid interpolation syntax`. The doubled `%%` is read back as `%`, so
+the engine gets the right URL. The Helm migration Job (`python-cd` §3) runs the same `alembic upgrade head` with
+the same `env.py`, so this one line covers it.
 
 ```python
 async def run_alembic_upgrade(engine: AsyncEngine) -> None:
@@ -205,10 +223,14 @@ handled once.
 
 ## 4. Other dependencies
 HTTP downstreams are stubbed with `respx` (unit/integration) or a WireMock container; brokers and caches
-use their testcontainers module. Use `wait_for_logs`/the module's readiness strategy, never `sleep`.
+use their testcontainers module (`testcontainers.community.redis.RedisContainer` with the `redis` extra). Use
+`wait_for_logs`/the module's readiness strategy, never `sleep`; where nothing signals readiness (a TTL, a consumer
+catching up) poll with a deadline.
 
 Kafka: import from `testcontainers.community.kafka` (`testcontainers.kafka` is deprecated); it needs no extra beyond
-`testcontainers`. KRaft mode starts without ZooKeeper:
+`testcontainers`. Its `KafkaContainer` runs Confluent images (default `confluentinc/cp-kafka`); KRaft mode starts
+without ZooKeeper. To test against `apache/kafka:3.9.1` use a plain `DockerContainer` with a fixed host port instead
+(`python-messaging`, `references/kafka-worker.md`).
 ```python
 from testcontainers.community.kafka import KafkaContainer
 
@@ -223,6 +245,9 @@ URL: `monkeypatch.setenv("DB_URL", postgres_url)` and `monkeypatch.setenv("DB_PA
 (`PostgresContainer` defaults to `test`). The end-to-end test commits an order, runs `run_relay` and the consumer loop on the
 real containers, waits (polling with a deadline, not `sleep`) for the handler's row, then sets `stop` and asserts both loops
 return within a few seconds and left their heartbeat files (`monkeypatch.setattr(liveness, "HEARTBEAT_DIR", tmp_path)`).
+Run the worker as a real subprocess (`python -c "from my_service.worker import main; main()"`, settings through the
+environment) and send it `SIGTERM`; add `patch = ["subprocess"]` under `[tool.coverage.run]` so its lines count
+towards `fail_under`. A uvicorn subprocess drain test is in `python-graceful-shutdown` §6.
 
 ## 5. Speed and isolation
 Reuse the session container, isolate tests with transaction rollback or per-test schema, and run

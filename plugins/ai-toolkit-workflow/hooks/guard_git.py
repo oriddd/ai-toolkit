@@ -30,6 +30,10 @@ OPERATORS = set(";&|()")
 KEYWORDS = {"then", "do", "else", "elif", "if", "while", "until", "{", "}", "!", "time"}
 WRAPPERS = {"sudo", "command", "env", "nohup", "exec", "builtin", "xargs", "nice", "ionice", "timeout", "stdbuf",
             "doas", "watch", "caffeinate", "chronic", "unbuffer", "flock", "setsid", "script"}
+PY_PROG = re.compile(r"^(python[0-9.]*|py|pypy[0-9.]*)(\.exe)?$")
+PUBLISH_LAUNCHERS = {"uv", "uvx", "pipx", "poetry", "pdm", "hatch", "pipenv", "rye"}
+EXEC_FINDERS = {"find", "fd", "fdfind", "gfind"}
+EXEC_FLAGS = {"-exec", "-execdir", "-ok", "-okdir", "-x", "--exec", "-X", "--exec-batch"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish", "ash", "mksh"}
 MAX_DEPTH = 6
 
@@ -89,7 +93,7 @@ GRADLE_VALUE_OPTS = {"-x", "--exclude-task", "-p", "--project-dir", "-b", "--bui
                      "-g", "--gradle-user-home", "-I", "--init-script", "--include-build", "--project-cache-dir"}
 OTHER_PUBLISH = {("twine", "upload"), ("poetry", "publish"), ("cargo", "publish"), ("uv", "publish"),
                  ("hatch", "publish"), ("flit", "publish"), ("gem", "push"), ("pdm", "publish")}
-KNOWN_PROGS = {"git", "gh"} | JS_PMS | MAVEN | GRADLE | SHELLS | {p for p, _ in OTHER_PUBLISH}
+KNOWN_PROGS = {"git", "gh", "python", "python3", "find"} | JS_PMS | MAVEN | GRADLE | SHELLS | {p for p, _ in OTHER_PUBLISH}
 
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 IFS_RE = re.compile(r"\$\{IFS\}|\$IFS(?![A-Za-z0-9_])")  # `git commit$IFS-m x` splits into words at run time
@@ -474,6 +478,12 @@ def risky(cmd, depth=0):
             return True
         if (prog, args[0] if args else "") in OTHER_PUBLISH:
             return True
+        if (PY_PROG.match(prog) or prog in PUBLISH_LAUNCHERS) and any(pair in OTHER_PUBLISH for pair in zip(args, args[1:])):
+            return True
+        if prog in EXEC_FINDERS:
+            for j, a in enumerate(args):
+                if a in EXEC_FLAGS and risky(" ".join(shlex.quote(x) for x in args[j + 1:]), depth + 1):
+                    return True
         if prog.startswith("$") and any(a in RISKY_WORDS for a in args[:3]):
             return True  # `$GIT push` — the program is a variable; assume the worst
         if prog in SHELLS:

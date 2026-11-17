@@ -236,7 +236,7 @@ def render_generated_skills():
               f"description: The Java / Spring Boot golden path — the apply-order of the skills and the {n_rules} non-negotiables every diff must satisfy. "
               "Use when planning a change (which skills, in which order), when validating a finished diff, and when reviewing a PR against the non-negotiables.\n"
               "tier: must\napplies_to: [rest, event, scheduler, library, monolith]\ndepends_on: [code-structure, quality-review]\n"
-              f"ships_templates: false\nhitl: false\nversion: 1.0\nlast_reviewed: {reviewed}\n---\n\n")
+              f"ships_templates: false\nhitl: false\nversion: 1.1\nlast_reviewed: {reviewed}\n---\n\n")
         out[os.path.join(ROOT, "plugins", "ai-toolkit-java-quality", "skills", "golden-path", "SKILL.md")] = (
             fm + "# Golden Path Skill\n\n" + GENERATED_NOTE.format(src="docs/BACKEND_GUILD.md §2 and §4") + "\n\n" + body)
     ps = os.path.join(DOCS, "PATTERN_SELECTION_GUIDE.md")

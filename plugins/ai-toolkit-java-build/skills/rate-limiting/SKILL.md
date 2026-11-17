@@ -43,6 +43,20 @@ resilience4j:
         timeoutDuration: 0
 ```
 
+```java
+@RateLimiter(name = "search-api", fallbackMethod = "throttled")
+public SearchResult search(final String query) throws TooManyRequestsException { … }
+
+private SearchResult throttled(final String query, final RequestNotPermitted e) throws TooManyRequestsException {
+    throw ExceptionMessages.rateLimitExceeded(1);   // wait ≈ limitRefreshPeriod, in seconds
+}
+```
+
+The aspect needs `resilience4j-spring-boot3` + `spring-boot-starter-aop` (`resilience-patterns`). The fallback keeps the checked
+domain exception: the caller sees `TooManyRequestsException` (429 + `Retry-After`) instead of the library's unchecked
+`RequestNotPermitted`. With `timeoutDuration: 0` the third call inside the period is refused at once and the
+next period admits calls again.
+
 ### 2b. Local Rate Limiting with Bucket4j
 
 ```xml
@@ -119,9 +133,41 @@ When running multiple instances, use **Redis + Bucket4j** to have a shared count
 Add a second `RateLimiterPort` adapter (`adapter/ratelimit/redis/`) selected by
 `platform.ratelimit.provider: redis`. It uses `com.bucket4j:bucket4j_jdk17-lettuce` (`${bucket4j.version}`, the same release as core) and a
 Lettuce-based `ProxyManager` (`LettuceBasedProxyManager`): `proxyManager.getProxy(clientKey, () -> configuration)`
-returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. Check the
-builder API of the Bucket4j version you pin — it changed across 8.x releases. Prove both adapters with one
-`RateLimiterPort` contract suite (`adapter-contract-tests`).
+returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. The Lettuce
+module does **not** pull Lettuce in: add `io.lettuce:lettuce-core` (managed by the Spring Boot BOM, or use
+`spring-boot-starter-data-redis`). Verified on Bucket4j 8.22.0 against Redis 7:
+
+```java
+public class RedisBucket4jRateLimiter implements RateLimiterPort {
+    private static final BucketConfiguration CONFIGURATION = BucketConfiguration.builder()
+            .addLimit(limit -> limit.capacity(10).refillIntervally(10, Duration.ofMinutes(1)))
+            .build();
+    private final LettuceBasedProxyManager<byte[]> proxyManager;
+
+    public RedisBucket4jRateLimiter(final RedisClient client) {
+        final StatefulRedisConnection<byte[], byte[]> connection = client.connect(ByteArrayCodec.INSTANCE);
+        this.proxyManager = LettuceBasedProxyManager.builderFor(connection)
+                .withExpirationStrategy(
+                        ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(2)))
+                .build();
+    }
+
+    @Override
+    public RateLimitDecision tryConsume(final String clientKey) {
+        final ConsumptionProbe probe = proxyManager.builder()
+                .build(clientKey.getBytes(UTF_8), () -> CONFIGURATION)
+                .tryConsumeAndReturnRemaining(1);
+        return new RateLimitDecision(probe.isConsumed(),
+                TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+    }
+}
+```
+
+Imports: `io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager`, `io.github.bucket4j.distributed.ExpirationAfterWriteStrategy`,
+`io.lettuce.core.RedisClient`, `io.lettuce.core.api.StatefulRedisConnection`, `io.lettuce.core.codec.ByteArrayCodec`. Two
+adapter instances on two `RedisClient`s (two pods) share one bucket: 20 calls split across them admit exactly 10.
+Prove both adapters with one `RateLimiterPort` contract suite (`adapter-contract-tests`); the Redis one runs against a
+Testcontainers `redis:7-alpine`.
 
 ## 4. Where to Limit?
 

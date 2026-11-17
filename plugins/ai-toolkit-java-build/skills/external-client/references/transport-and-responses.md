@@ -31,7 +31,8 @@ public class FooClientConfig {
         // only the timeouts are per dependency.
         final ClientHttpRequestFactorySettings settings = requestFactorySettings
                 .withConnectTimeout(props.timeouts().connect())
-                .withReadTimeout(props.timeouts().read());
+                .withReadTimeout(props.timeouts().read())
+                .withRedirects(ClientHttpRequestFactorySettings.Redirects.DONT_FOLLOW);
         // clone Boot's auto-configured builder: a static RestClient.builder() loses Micrometer observation
         // (client metrics + W3C trace propagation)
         return restClientBuilder.clone()
@@ -45,7 +46,7 @@ public class FooClientConfig {
 
 Never `new SimpleClientHttpRequestFactory()`: it swaps Boot's detected client (Apache HttpClient / Jetty / Reactor /
 JDK) for `HttpURLConnection` — no connection pooling, no `PATCH`, and `spring.http.client.*` is ignored.
-**Boot 4.x (opt-in):** the settings type is `HttpClientSettings` (same `with*Timeout` methods); the rest is unchanged.
+**Boot 4.x (opt-in):** the settings type is `HttpClientSettings` (same `with*Timeout` methods; `withRedirects(HttpRedirects.DONT_FOLLOW)`); the rest is unchanged.
 
 ### `<Dep>Client` — thin transport, one method per remote endpoint
 
@@ -113,6 +114,9 @@ Rules:
   it, the error body, then throw the domain exception **after** the lambda (it cannot declare a checked exception).
   (`retrieve()` + `onStatus(...)` is the equivalent for a one-off call; its handler cannot throw a checked exception
   either, so it must record the status and throw afterwards.)
+- **Redirects are not followed** (`withRedirects(...DONT_FOLLOW)` above): Boot's default follows them, so a 302 would be
+  answered by whatever it points to — a silent success, or a call to a host outside the allow-list — instead of the
+  `DependencyException` the 3xx rule below promises. A test with a `302` stub fails without this line.
 - **Every call has a timeout**: set the connect and read timeouts on the request factory (see `FooClientConfig`),
   never rely on the defaults (none).
 - **Always translate non-2xx to a domain exception** before it escapes the
@@ -181,15 +185,20 @@ public RestClient fooRestClient(final RestClient.Builder restClientBuilder,
                                 final ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
                                 final ClientHttpRequestFactorySettings requestFactorySettings,
                                 final OAuth2AuthorizedClientManager serviceAuthorizedClientManager,
+                                final OAuth2AuthorizedClientService authorizedClients,
                                 final FooProperties props) {
     final OAuth2ClientHttpRequestInterceptor oauth2 =
             new OAuth2ClientHttpRequestInterceptor(serviceAuthorizedClientManager);
     oauth2.setClientRegistrationIdResolver(request -> FooClient.DEPENDENCY);
+    // without this a revoked / rotated token stays cached and every call answers 401 until it expires
+    oauth2.setAuthorizationFailureHandler(
+            OAuth2ClientHttpRequestInterceptor.authorizationFailureHandler(authorizedClients));
     return restClientBuilder.clone()
             .baseUrl(props.baseUrl())
             .requestFactory(requestFactoryBuilder.build(requestFactorySettings
                     .withConnectTimeout(props.timeouts().connect())
-                    .withReadTimeout(props.timeouts().read())))
+                    .withReadTimeout(props.timeouts().read())
+                    .withRedirects(ClientHttpRequestFactorySettings.Redirects.DONT_FOLLOW)))
             .requestInterceptor(oauth2)
             .build();
 }
@@ -199,16 +208,31 @@ Rules:
 - `OAuth2ClientHttpRequestInterceptor` (Spring Security 6.4+, in Boot 3.5) adds `Authorization: Bearer …` on the
   cloned builder of **this** dependency only — never on a shared builder, or every downstream receives the token.
 - Boot auto-configures `ClientRegistrationRepository` and `OAuth2AuthorizedClientService` from the properties (also
-  in a non-web scheduler or consumer). Its default `oauth2Login` filter chain backs off when the service defines its
+  in a non-web scheduler or consumer: proven with `webEnvironment = NONE`). Its default `oauth2Login` filter chain backs off when the service defines its
   own `SecurityFilterChain` (`permissions`).
 - The manager caches the token in the `OAuth2AuthorizedClientService` and requests a new one shortly before expiry —
   never fetch a token per call or cache it yourself.
 - Client id / secret come from environment variables backed by a Kubernetes Secret (`cd`), never from
   `application.yaml` or the repo.
+- **401 recovery.** The failure handler above drops the cached token when the API answers 401, but the request that got
+  the 401 is not replayed. Replay it once in the `Client` (the second send fetches a new token); a 401 that persists
+  is a `DependencyException`:
+
+  ```java
+  Reply<FooSearchResponseDto> reply = send(request);
+  if (reply.status().value() == HttpStatus.UNAUTHORIZED.value()) {
+      reply = send(request);          // the failure handler removed the token: this attempt authenticates afresh
+  }
+  return bodyOrThrow(reply);
+  ```
 - A failed token request (identity provider down or answering an error) surfaces as an
   `OAuth2AuthorizationException` (`ClientAuthorizationException`) from the interceptor, not as
-  `ResourceAccessException`: catch it in the `Client` next to `ResourceAccessException` and map it to
-  `UnavailableException`.
+  `ResourceAccessException`: catch both around the call and map them to `UnavailableException`
+  (`catch (ResourceAccessException | ClientAuthorizationException e)`); the API is not called at all in that case.
+- Proven against a stub token endpoint + stub API: one token request for three calls (Basic auth + `scope` in the
+  request), a new token once the old one is within the 60 s clock skew of its expiry, a revoked token replaced and the
+  call succeeding on the replay, a token endpoint answering 401 or 500 → `UnavailableException`, API 503 →
+  `UnavailableException`, API 403 → `DependencyException`.
 
 ## 7. Response handlers — `<Dep>ResponseParser` + `<Dep>ResponseVerifier`
 

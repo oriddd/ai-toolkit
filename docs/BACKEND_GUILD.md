@@ -1,5 +1,7 @@
 # Backend Guild — Golden Path
 
+Last reviewed: 2026-11-17
+
 This is the **curated bundle** that every backend service your team
 builds should follow when an agent (or a human) generates code. It
 filters the atomic skills in [`REGISTRY.md`](./REGISTRY.md) into a
@@ -467,7 +469,7 @@ producing code must validate the diff against this list before returning.
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
     exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
-    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    `readReply` handles all non-2xx (`WebClient`/`exchangeToMono` only for
     reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).

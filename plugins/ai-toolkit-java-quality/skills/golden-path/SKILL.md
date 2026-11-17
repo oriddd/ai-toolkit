@@ -6,8 +6,8 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [code-structure, quality-review]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-03
+version: 1.1
+last_reviewed: 2026-11-17
 ---
 
 # Golden Path Skill
@@ -144,7 +144,7 @@ producing code must validate the diff against this list before returning.
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
     exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
-    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    `readReply` handles all non-2xx (`WebClient`/`exchangeToMono` only for
     reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).

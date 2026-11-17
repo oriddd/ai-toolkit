@@ -1,0 +1,10 @@
+package {{basePackage}}.messaging;
+import java.time.Duration;
+import java.util.Map;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+/** `outbox.relay.topics` maps an aggregate type to its topic, e.g. `outbox.relay.topics.invoice: invoices`. */
+@ConfigurationProperties(prefix = "outbox.relay")
+public record OutboxProperties(@DefaultValue("100") int batchSize,
+                               @DefaultValue("5s") Duration sendTimeout,
+                               Map<String, String> topics) {}

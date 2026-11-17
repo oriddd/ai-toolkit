@@ -49,6 +49,10 @@ ASK=(
   # discarding uncommitted work (completion-gate §1)
   'git clean -fdx' 'git clean -f' 'git restore .' 'git restore src/A.java' 'git restore --staged --worktree f' 'git checkout -- f'
   'git checkout .' 'git checkout HEAD f' 'git checkout -f main' 'git switch --discard-changes main'
+  # launchers and find -exec (best effort)
+  'find . -name x -exec git commit -m x {} \;' 'find . -exec git push {} +' "find . -exec sh -c 'git commit -m x' \\;" 'find . -execdir git tag v1 \;'
+  'python -m twine upload dist/*' 'python3 -m twine upload dist/*' 'python3.12 -m twine upload dist/*' 'uv publish' 'uv run twine upload dist/*'
+  'uvx twine upload dist/*' 'pipx run twine upload dist/*' 'poetry run twine upload dist/*' 'poetry publish --build' 'fd -e py -x git commit'
 )
 # cases the no-python fallback is not expected to catch (it does not handle substitutions, aliases or heredocs)
 FB_SKIP_ASK=('$(echo git) push' '`which git` commit -m x' 'git -c alias.ci=commit ci -m x' 'git -c alias.p="!git push" p')
@@ -74,6 +78,7 @@ QUIET=(
   'yarn version --help' 'npm publish --help' "gh api graphql -f query='{ viewer { login } }'" 'git reset HEAD~1 -- file.txt'
   'git reset HEAD~1 a.txt b.txt' 'git clean -n' 'git clean -fdn' 'git clean --dry-run' 'git restore --staged f' 'git checkout main'
   'git checkout -b x origin/x' 'git switch main'
+  'find . -name x -exec ls {} \;' "find . -name '*.py' -exec grep commit {} +" 'python3 -m twine check dist/*' 'python3 -m pytest' 'uv run pytest' 'uv sync' 'poetry build'
 )
 FB_SKIP_QUIET=($'cat <<EOF\ngit commit -m x\nEOF' $'cat > f <<\'EOF\'\ngit push\nEOF\necho ok')
 for c in "${ASK[@]}";   do expect_ask "$c";   done
@@ -117,6 +122,34 @@ out="$(mk_json 'git commit -m x' | "$HD/guard-git.sh" 2>/dev/null)"; rc=$?
 out="$(mk_json 'git status' | "$HD/guard-git.sh" 2>/dev/null)"; [ -z "$out" ] || { echo "FAIL: fallback fired on git status"; fail=1; }
 rm -rf "$HD"
 [ $fail -eq 0 ] && echo "guard-git: ${#ASK[@]} ask-cases and ${#QUIET[@]} quiet-cases OK"
+
+# commit-msg hook from git-commit-conventions/SKILL.md, extracted and run under dash and bash
+CM="$(mktemp -d)"
+python3 - "$ROOT/plugins/ai-toolkit-workflow/skills/git-commit-conventions/SKILL.md" > "$CM/commit-msg.sh" <<'PYEOF'
+import re, sys
+for block in re.findall(r"```bash\n(.*?)```", open(sys.argv[1], encoding="utf-8").read(), re.S):
+    if "scripts/commit-msg.sh" in block:
+        print(block)
+        break
+PYEOF
+[ -s "$CM/commit-msg.sh" ] || { echo "FAIL: commit-msg.sh block not found in git-commit-conventions/SKILL.md"; fail=1; }
+cm_rc() { printf '%s\n' "$2" > "$CM/msg"; env LC_ALL="${3:-C}" "$1" "$CM/commit-msg.sh" "$CM/msg" >/dev/null 2>&1; echo $?; }
+long72="feat: $(python3 -c 'print("a"*66)')"; long73="${long72}a"
+utf72="feat: $(python3 -c 'print("é"*66)')"; utf73="${utf72}é"
+for sh_ in sh bash dash; do
+  command -v "$sh_" >/dev/null || continue
+  for m in 'feat: SSO login' 'fix: JWT parsing' 'docs: README' 'fix(api): UserService NPE' 'feat!: drop v1' 'build: Docker base image' 'chore: iOS build' 'feat: add x' 'Merge branch main' 'fixup! feat: x' "$long72" "$utf72"; do
+    [ "$(cm_rc "$sh_" "$m")" = 0 ] || { echo "FAIL ($sh_ commit-msg should accept): $m"; fail=1; }
+  done
+  for m in 'feat: Add x' 'fix: Fixed the bug' 'feat: add x.' 'wip' 'feat:x' "$long73" "$utf73"; do
+    [ "$(cm_rc "$sh_" "$m")" = 1 ] || { echo "FAIL ($sh_ commit-msg should reject): $m"; fail=1; }
+  done
+done
+for loc in C en_US.UTF-8 C.UTF-8; do
+  [ "$(cm_rc dash "$utf72" "$loc")" = 0 ] && [ "$(cm_rc dash "$utf73" "$loc")" = 1 ] || { echo "FAIL: UTF-8 character count wrong under LC_ALL=$loc"; fail=1; }
+done
+rm -rf "$CM"
+[ $fail -eq 0 ] && echo "commit-msg hook OK"
 
 # session-start: routing + stale-copy warning; remove-old-copies is a safe dry run / backup
 WF="$ROOT/plugins/ai-toolkit-workflow"

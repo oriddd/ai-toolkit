@@ -66,6 +66,8 @@ requires = ["uv_build>=0.13.7,<0.14.0"]   # written by `uv init` for the uv that
 build-backend = "uv_build"
 ```
 
+`uv init --package` also writes a `main()` with a `print` into `__init__.py` and a script entry for it: empty the
+file and delete the entry (ruff's T20 would flag it, and uvicorn starts the service, `python-persistence` §5).
 `uv_build` expects `src/<normalised project name>/__init__.py`; with another package name the build fails
 ("Expected a Python module at: src/orders_api/__init__.py"). Rename the package, or set
 `[tool.uv.build-backend] module-name = "my_service"`. Non-Python files inside the package (Alembic's
@@ -148,7 +150,7 @@ class DatabaseSettings(BaseSettings):
     def sqlalchemy_url(self) -> URL:     # the one place the secret joins the URL
         return make_url(self.url).set(password=self.password.get_secret_value())
 
-class AppSettings(BaseSettings):         # the composition root reads this once: create_app(settings)
+class AppSettings(BaseSettings):    # the composition root reads this once: create_app(settings)
     model_config = SettingsConfigDict(frozen=True)
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -168,7 +170,7 @@ class IsolatedDatabaseSettings(DatabaseSettings):    # tests/: constructor argum
         cls,
         settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,       # pydantic-settings passes all sources by keyword
+        env_settings: PydanticBaseSettingsSource,   # pydantic-settings passes sources by keyword
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:

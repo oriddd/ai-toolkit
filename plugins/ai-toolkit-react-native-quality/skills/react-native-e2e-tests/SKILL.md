@@ -47,6 +47,8 @@ brew tap mobile-dev-inc/tap && brew install mobile-dev-inc/tap/maestro       # d
 # export MAESTRO_VERSION=<pinned-version>; curl -Ls "https://get.maestro.mobile.dev" | bash
 ```
 
+Syntax needs no device: `maestro check-syntax .maestro/flows/sign-up.yaml` prints `OK` or the invalid command with its
+line (checked with Maestro 2.12.1: the flows below pass, a misspelled `tapOnn` fails). Run it on every flow in the PR gate.
 Record the pinned version in the repo (README or `.maestro/config.yaml` comment) and in the CI image, then run:
 
 ```sh
@@ -113,6 +115,24 @@ tags: [critical]
 - assertVisible:
     id: orders-list
 ```
+
+```yaml
+# .maestro/flows/deep-link-order.yaml
+appId: com.example.app
+tags: [critical]
+---
+- runFlow: ../subflows/launch-signed-out.yaml
+- openLink: https://evil.example.net/orders?orderId=${E2E_ORDER_ID}
+- assertNotVisible:
+    id: order-detail
+- openLink: https://app.example.com/orders?orderId=${E2E_ORDER_ID}
+- assertVisible:
+    id: order-detail
+```
+
+The first link must leave the app where it is (`resolveDeepLink` allow-list, `react-native-security` section 3). A signed-out launch lands on sign-in, so seed a signed-in subflow if the target
+route is protected. Verified-link setup, not the flow, decides whether the OS opens the app (`react-native-security`
+`references/deep-link-server-setup.md`).
 
 `E2E_USER` is an address the seeded test backend resets before each run (section 4), so the sign-up
 succeeds every time. Other journeys (sign-in, place order) follow the same shape with their own screens' IDs.

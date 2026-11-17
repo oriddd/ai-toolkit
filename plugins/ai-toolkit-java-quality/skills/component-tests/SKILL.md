@@ -170,7 +170,7 @@ the canonical template.
 
 Keep the database out of the component-test context: exclude the DataSource / JPA / Flyway auto-configuration in
 `application-component-test.yaml` (all six Boot 3.5 and Boot 4 names), replace every repository with a deterministic
-mock or fake in `ComponentTestConfiguration`, register a no-op transaction manager, and switch Kafka listeners off.
+mock or fake in `ComponentTestConfiguration`, keep the template's `[persistence]` block (the no-op transaction manager), and switch Kafka listeners off.
 `AuditConfig` is `@Profile("!component-test")`. A **default-profile** context test (`ApplicationContextTest`, auth = yes)
 cannot use that guard: with persistence it is a Testcontainers-backed `ApplicationContextIT`. Full recipe:
 [`references/persistence.md`](./references/persistence.md) (load only when the service has persistence).
@@ -294,4 +294,5 @@ test (`integration-tests`), never part of `mvn test`.
 ## 4. Templates
 
 - [`ComponentTest.java.tmpl`](./templates/ComponentTest.java.tmpl) — Ready-to-fill component test skeleton.
-- [`ComponentTestConfiguration.java.tmpl`](./templates/ComponentTestConfiguration.java.tmpl) — Standard test configuration for component tests.
+- [`ComponentTestConfiguration.java.tmpl`](./templates/ComponentTestConfiguration.java.tmpl) — Standard test configuration for component tests. Optional parts are tagged: `[security]` (Spring Security: the permissive chain) and `[persistence]` (the no-op transaction manager); for each tag the service lacks, delete the tagged lines and the `[tag:begin]` … `[tag:end]` block (the `exception-handling` §3a `sed` recipe).
+- [`SecurityTest.java.tmpl`](./templates/SecurityTest.java.tmpl) — The `@WebMvcTest` security slice test (no token 401, JWT 200, unknown path 403), see [`references/security-slice-test.md`](./references/security-slice-test.md).

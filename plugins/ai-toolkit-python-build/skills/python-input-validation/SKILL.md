@@ -92,7 +92,7 @@ class Rule[T](Protocol):
     async def check(self, value: T) -> None: ...      # raises a DomainError
 
 class EmailAlreadyRegisteredError(ConflictError):
-    code = ErrorCodes.EMAIL_ALREADY_REGISTERED          # catalogue entry: see `python-error-handling`
+    code = ErrorCodes.EMAIL_ALREADY_REGISTERED   # catalogue entry: see `python-error-handling`
 
 class EmailNotRegisteredRule:
     def __init__(self, users: UserRepository) -> None:
@@ -100,7 +100,8 @@ class EmailNotRegisteredRule:
 
     async def check(self, email: str) -> None:
         if await self._users.exists_by_email(email):
-            raise EmailAlreadyRegisteredError()          # no email param: it would reach `detail` and the logs
+            # no email param: it would reach `detail` and the logs
+            raise EmailAlreadyRegisteredError()
 ```
 
 A "this email is taken" answer tells anyone probing the endpoint which addresses have accounts

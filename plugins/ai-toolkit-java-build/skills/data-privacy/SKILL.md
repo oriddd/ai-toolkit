@@ -89,6 +89,7 @@ The converter must use authenticated encryption — never `Cipher.getInstance("A
 - **Keys:** fetched from a KMS / Vault (envelope encryption: a data key wrapped by a master key), never from
   `application.yaml` or the image.
 - **Prefer a vetted library** (e.g. Google Tink `Aead`, or your KMS client's encryption SDK) over hand-written `Cipher` code.
+  The verified hand-written `EncryptionConverter` and its `FieldKeyProvider` port are in [`references/field-encryption.md`](./references/field-encryption.md).
 
 ```java
 @Entity

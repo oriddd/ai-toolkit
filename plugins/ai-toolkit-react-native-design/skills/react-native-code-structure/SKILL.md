@@ -217,7 +217,7 @@ context, so tests substitute a fake and the implementation is swappable. The con
 // shared/services/storage/KeyValueStorage.ts
 export interface KeyValueStorage { get(key: string): Promise<string | null>; set(key: string, v: string): Promise<void>; }
 // shared/services/ServicesContext.tsx: infrastructure only, no feature types
-export interface Services { http: HttpClient; storage: KeyValueStorage; logger: Logger; errorReporter: ErrorReporter; analytics: Analytics; }
+export interface Services { http: HttpClient; storage: KeyValueStorage; secure: SecureStore; consent: ConsentStore; logger: Logger; errorReporter: ErrorReporter; analytics: Analytics; }
 const ServicesContext = createContext<Services | null>(null);
 export const ServicesProvider = ServicesContext.Provider;
 export const useServices = (): Services => { const s = useContext(ServicesContext); if (!s) throw new Error('ServicesProvider missing'); return s; };

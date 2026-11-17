@@ -114,13 +114,17 @@ cloned with CRLF). Without bash the hooks fail non-blocking and the commit guard
   `gh repo create|delete|edit|rename|archive|sync|fork`, `gh workflow run|enable|disable`, issue/secret/variable writes,
   and `gh api` calls that write;
 - **publishing:** `npm|yarn|pnpm|bun publish|version` (also with `--prefix`/`-r`), `yarn npm publish`, `mvn`/`mvnw(.cmd)`
-  `release:*|deploy`, Gradle `publish*` tasks (not `publishToMavenLocal`), `twine upload`, `poetry|cargo|uv|hatch|flit publish`.
+  `release:*|deploy`, Gradle `publish*` tasks (not `publishToMavenLocal`), `twine upload` (also `python -m twine upload`, `uv run|uvx|pipx run|poetry run twine upload`), `poetry|cargo|uv|hatch|flit publish`;
+- **launchers:** the command after `find|fd -exec|-execdir|-ok|-x` is checked like a top-level command (`find . -exec git commit …`).
 
 A flag such as `--abort`, `--continue`, `-h` or `--dry-run` makes a command safe only when it really is that flag (not an option
 value like `git commit -m "--abort"`). The parser handles multi-line commands, quoted paths, comments, heredocs, `bash -c`,
 `| sh`, wrappers like `sudo`/`env`/`watch`, and git aliases. It is a **best-effort safety net, not a security boundary**: it
 cannot see variable indirection, scripts that commit internally, other tools, or anything outside Claude's Bash tool, and it
-needs `python3` 3.7+ — otherwise a smaller pure-bash parser applies (no heredoc, alias or `$(…)` handling). The real controls
+needs `python3` 3.7+ — otherwise a smaller pure-bash parser applies (no heredoc, alias or `$(…)` handling). Known residual gaps:
+shell variable indirection (`x=commit; git $x`, `git ${CMD:-commit}`), `$(which git) commit` when `python3` is missing, and
+scripts or Makefile targets that commit or publish internally are not caught. Two over-asks are accepted on purpose:
+`git tag -d` asks (it rewrites tags) and `npm publish --dry-run` asks (only `--help` is exempt). The real controls
 are branch protection, server-side rules and a pre-push/commit-msg git hook. It never blocks on its own failure: a bug in the
 hook exits 0.
 

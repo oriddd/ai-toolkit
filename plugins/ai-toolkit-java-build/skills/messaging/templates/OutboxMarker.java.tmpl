@@ -1,0 +1,20 @@
+package {{basePackage}}.messaging;
+import java.time.Clock;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+/** A separate bean so the relay's call goes through the proxy: the mark runs in its own short transaction. */
+@Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class OutboxMarker {
+    private final OutboxRepository outboxRepo;
+    private final Clock clock;
+    @Transactional(rollbackFor = Exception.class)
+    public void markPublished(UUID id) {
+        outboxRepo.findById(id).ifPresent(row -> row.markPublished(clock.instant()));
+    }
+}

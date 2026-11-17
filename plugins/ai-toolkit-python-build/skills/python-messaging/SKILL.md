@@ -36,10 +36,20 @@ src/my_service/
     ├── outbox_relay.py              # OutboxRelay.publish_batch + run_relay loop
     ├── idempotent_consumer.py       # claim-then-handle in one transaction
     └── consumer_loop.py             # poll, retry, dead-letter, commit offsets
+worker.py                            # worker process: relay + consumer loop (`python-graceful-shutdown` §5)
+jobs.py                              # `my-service-job <name>`: scheduled jobs and retention (§7)
 ```
 
 `messaging/` is an adapter layer like `repositories/` and `clients/`: it may import repositories and models,
 never `api/` or `services/`.
+
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §5, §6 | Full consumer loop, example handler, worker process, `apache/kafka` test container, end-to-end worker tests | Writing the consumer or worker, or testing against a real broker | [references/kafka-worker.md](./references/kafka-worker.md) |
+| §7 | Advisory-lock single-run helper, batched retention, job registry, APScheduler variant, tests | Adding a scheduled job or a purge | [references/scheduled-jobs.md](./references/scheduled-jobs.md) |
 
 ## Dependencies
 ```toml
@@ -103,16 +113,16 @@ in-memory unit of work and assert the exact event (`python-unit-tests` §3).
 
 ## 3. The relay: one active relay, lock, publish, mark
 ```python
-RELAY_LOCK_KEY = 7_315_420_001                         # any constant bigint, the same in every replica
+RELAY_LOCK_KEY = 7_315_420_001     # any constant bigint, the same in every replica
 
 async def publish_batch(self) -> int:
     async with self._factory() as session, session.begin():
         if not await session.scalar(select(func.pg_try_advisory_xact_lock(RELAY_LOCK_KEY))):
-            return 0                                   # another replica is the active relay this round
+            return 0                       # another replica is the active relay this round
         rows = (await session.scalars(
             select(OutboxRow).where(OutboxRow.published_at.is_(None))
             .order_by(OutboxRow.created_at, OutboxRow.id).limit(self._batch_size)
-            .with_for_update(skip_locked=True)         # rows held by a replay or cleanup job are skipped
+            .with_for_update(skip_locked=True)   # rows held by a replay or cleanup job are skipped
         )).all()
         for row in rows:
             await self._publisher.publish(row.topic, row.key, json.dumps(row.payload).encode(),
@@ -155,7 +165,7 @@ async def run_relay(
 - The producer is idempotent and waits for all replicas:
   `AIOKafkaProducer(bootstrap_servers=..., enable_idempotence=True, acks="all")`, started and stopped in the
   lifespan; publish with `send_and_wait` so the relay marks only what the broker acknowledged.
-- Delete published rows on a schedule (`published_at < now() - interval '7 days'`); the table is not an archive.
+- Delete published rows on a schedule (`published_at < now() - interval '7 days'`; §7); the table is not an archive.
 
 ## 4. Consumer: idempotent by event id
 ```python
@@ -180,13 +190,14 @@ external API cannot be rolled back, so that API must be idempotent itself (pass 
 ## 5. Consumer loop: bounded retries, dead letter, then commit
 ```python
 async def run(self, stop: asyncio.Event) -> None:
-    while not stop.is_set():                                # SIGTERM: stop between records (`python-graceful-shutdown`)
-        self._heartbeat.beat()                              # worker liveness (`python-graceful-shutdown` §5)
-        batch = await self._source.getmany(timeout_ms=1000, max_records=1)  # AIOKafkaConsumer(enable_auto_commit=False)
+    while not stop.is_set():          # SIGTERM: stop between records (`python-graceful-shutdown`)
+        self._heartbeat.beat()        # worker liveness (`python-graceful-shutdown` §5)
+        # the source is an AIOKafkaConsumer(enable_auto_commit=False)
+        batch = await self._source.getmany(timeout_ms=1000, max_records=1)
         for records in batch.values():
             for record in records:
-                await self._process(record)                 # retries max_attempts, then dead-letters
-                await self._source.commit()                 # commit the offset only after the outcome is durable
+                await self._process(record)   # retries max_attempts, then dead-letters
+                await self._source.commit()   # the offset is committed once the outcome is durable
 ```
 - Poll with a timeout, never `async for record in consumer`: an idle `async for` never returns to check `stop`, so
   every shutdown waits out the whole drain budget and the loop cannot report that it is alive. `max_records=1`
@@ -207,8 +218,36 @@ async def run(self, stop: asyncio.Event) -> None:
   disappears with a rollback; `publish_batch` publishes once and marks the row; a failing publisher leaves it
   unpublished; a second relay publishes nothing while the first holds the lock, and events of one aggregate leave
   in `created_at` order with two relays polling; a duplicate message is handled
-  once; a failing handler leaves the message claimable again. The broker itself is tested with the Kafka
-  testcontainers module or left to a contract test; the relay never needs it.
+  once; a failing handler leaves the message claimable again. The relay never needs a broker.
+- Integration (real broker, `apache/kafka:3.9.1`): start the worker as a subprocess, commit an order and its outbox
+  row, wait for the consumer's side effect, send `SIGTERM` and assert exit code 0 with both heartbeat files; poison
+  messages (no `event_id`, undecodable payload) arrive on `<topic>.dlt` with `dlt_reason`
+  (`references/kafka-worker.md`).
+
+## 7. Scheduled jobs and retention
+Periodic work (purging published outbox rows and old `processed_message` rows, PII retention) is a one-shot
+command, `my-service-job <name>`, run by a Kubernetes `CronJob` with `concurrencyPolicy: Forbid` (`python-cd` §7).
+The job also takes a PostgreSQL session advisory lock, because `Forbid` does not stop a manual run, a second release
+or a scheduler started in every replica:
+
+```python
+async def run_exclusive(
+    engine: AsyncEngine, lock_key: int, job: Callable[[], Awaitable[object]]
+) -> bool:
+    async with engine.connect() as conn:
+        if not await conn.scalar(select(func.pg_try_advisory_lock(lock_key))):
+            return False                    # another instance is running it: exit 0, not an error
+        try:
+            await job()
+        finally:
+            await conn.scalar(select(func.pg_advisory_unlock(lock_key)))
+    return True
+```
+- Deletes run in short batches with `FOR UPDATE SKIP LOCKED`; a job killed at its deadline is simply repeated.
+- One lock key per job, different from `RELAY_LOCK_KEY`. The lock needs a direct connection (not PgBouncer
+  transaction pooling).
+- In-process APScheduler is the fallback, never the default; the same lock keeps replicas from overlapping
+  (`references/scheduled-jobs.md`).
 
 ## Do / Don't
 - ✅ Outbox row in the same unit of work as the state change; the relay publishes later.
@@ -221,6 +260,7 @@ async def run(self, stop: asyncio.Event) -> None:
 - ❌ `async for record in consumer` in a worker: it cannot notice `stop` or beat its liveness heartbeat while idle.
 - ❌ ORM rows, `datetime.now()` or personal data in event payloads.
 - ❌ Several relays publishing concurrently with only `SKIP LOCKED`: one aggregate's events leave out of order.
+- ❌ `time.sleep` loops or a scheduler in every api replica for periodic work without the advisory lock.
 
 ## Cross-references
 - [`python-persistence`](../python-persistence/SKILL.md) — the unit of work the outbox joins; migrations for both tables.

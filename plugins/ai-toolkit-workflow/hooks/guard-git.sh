@@ -178,7 +178,7 @@ check_statement() { # $1 depth, words in global array "words"
   if in_list "$prog" sudo command env nohup exec builtin xargs nice ionice timeout stdbuf doas watch; then
     for ((j = i + 1; j < ${#ws[@]} && j < i + 9; j++)); do
       w="$(base "${ws[j]}")"
-      if in_list "$w" git gh npm yarn pnpm bun mvn mvnw mvn.cmd mvnw.cmd gradle gradlew gradlew.bat twine poetry cargo uv sh bash zsh dash ksh; then i=$j; prog="$w"; break; fi
+      if in_list "$w" git gh npm yarn pnpm bun mvn mvnw mvn.cmd mvnw.cmd gradle gradlew gradlew.bat twine poetry cargo uv find python python3 sh bash zsh dash ksh; then i=$j; prog="$w"; break; fi
       case "${ws[j]}" in *' '*) fb_risky "${ws[j]}" $((depth + 1)) && return 0 ;; esac
     done
   fi
@@ -216,7 +216,17 @@ check_statement() { # $1 depth, words in global array "words"
         esac
       done ;;
     twine) [ "${args[0]:-}" = upload ] && return 0 ;;
-    poetry|cargo|uv|hatch|flit|pdm) [ "${args[0]:-}" = publish ] && return 0 ;;
+    find|fd|fdfind|gfind)
+      for ((j = 0; j < ${#args[@]}; j++)); do
+        case "${args[j]}" in -exec|-execdir|-ok|-okdir|-x|--exec|-X|--exec-batch) fb_risky "$(printf "%q " "${args[@]:j+1}")" $((depth + 1)) && return 0 ;; esac
+      done ;;
+    python|python[0-9]*|py|pypy|pypy[0-9]*|uvx|pipx|pipenv|rye)
+      for ((j = 0; j + 1 < ${#args[@]}; j++)); do
+        case "${args[j]} ${args[j+1]}" in "twine upload"|"poetry publish"|"uv publish"|"flit publish"|"hatch publish"|"pdm publish") return 0 ;; esac
+      done ;;
+    poetry|cargo|uv|hatch|flit|pdm)
+      [ "${args[0]:-}" = publish ] && return 0
+      for ((j = 0; j + 1 < ${#args[@]}; j++)); do [ "${args[j]} ${args[j+1]}" = "twine upload" ] && return 0; done ;;
     sh|bash|zsh|dash|ksh|fish)
       local seen=0 plain=0
       for w in "${args[@]}"; do

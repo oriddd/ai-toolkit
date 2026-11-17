@@ -181,7 +181,9 @@ job in `react-native-ci` §1, after `npm ci`:
 ```
 
 Both `npx expo-doctor` and `npx expo install --check` exit 1 on a version mismatch (checked on SDK 58). Fix with
-`npx expo install --fix`, never by editing versions by hand. A deliberate exception goes in
+`npx expo install --fix`, never by editing versions by hand. Two of its checks (config schema, React Native Directory) call Expo's servers: behind a TLS-intercepting proxy they fail with
+"unable to get local issuer certificate" while the 18 local checks pass; fix the CA trust of the runner, do not skip the command.
+A deliberate exception goes in
 `package.json` `expo.install.exclude` with a comment in the PR.
 
 ## 5. Feature flags
@@ -192,6 +194,24 @@ in `shared/services`, implemented by your flag provider and injected like the ot
 (`react-native-code-structure` §6); fake it in tests. Read flags in hooks, not components; remove a flag (and its
 dead branch) once it is fully rolled out. Use a build variant only for things that differ per installation
 (endpoints, bundle id), never per user.
+
+## 6. Privacy manifest and verified links
+
+`app.config.ts` also owns two store-facing declarations, each proved by prebuilding the production variant
+(`APP_VARIANT=production npx expo prebuild --no-install`) and reading the generated native files:
+
+- `ios.privacyManifests` becomes `ios/<App>/PrivacyInfo.xcprivacy`.
+- `ios.associatedDomains` and `android.intentFilters` (production only; development and preview keep their scheme) become the
+  entitlement and the `autoVerify` intent filter. The server files and verification commands are in
+  `react-native-security` (`references/deep-link-server-setup.md`).
+
+`android.allowBackup: false` (`react-native-security` section 6) is set here too and lands as `android:allowBackup="false"`.
+
+## References
+
+| Topic | Load when | File |
+| --- | --- | --- |
+| Required-reason API entries, collected data types, scanning dependencies, what prebuild proves | adding an SDK that collects data or touches device APIs, or an App Store privacy rejection | [ios-privacy-manifest.md](./references/ios-privacy-manifest.md) |
 
 ## Do / Don't
 
@@ -208,5 +228,5 @@ dead branch) once it is fully rolled out. Use a build variant only for things th
 
 - `react-native-ci`: build profiles, release workflow, OTA scope (§5), versioning (§4).
 - `react-native-observability`: source maps and release per update.
-- `react-native-security`: what may live in `EXPO_PUBLIC_*`; deep-link schemes per variant.
+- `react-native-security`: what may live in `EXPO_PUBLIC_*`; deep-link schemes per variant; universal / app link server files.
 - `react-native-permissions-and-push`: push credentials are per bundle id, so per variant.

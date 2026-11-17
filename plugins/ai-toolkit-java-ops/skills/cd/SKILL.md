@@ -57,7 +57,9 @@ sed -e 's/{{chartName}}/my-service/g' -e 's/{{appPort}}/8080/g' … deployment.y
 
 Do **not** render a `.tmpl` with Helm or Go templates directly (the placeholders are not valid actions), and do not
 unescape before substituting. Check the result with `helm lint --strict helm-chart` and `helm template helm-chart --set jwt.issuerUri=<issuer-url> --set database.url=<jdbc-url> --set database.username=<user>`
-(without `jwt.*` for a service with no authentication and without `database.*` for one with no database; `helm lint` does not evaluate `required`, `helm template` does).
+(without `jwt.*` for a service with no authentication and without `database.*` for one with no database; `helm lint --strict` passes but logs a `missing required values` warning for each unset `required` value, `helm template` fails on it).
+
+Verified on a throwaway `kind` cluster (Kubernetes 1.37): the chart rendered with an empty `contextPath` and the `jwt` / `database` blocks pruned installs with `appArmor.enabled=false`, both pods reach Ready under the read-only root filesystem, and the HPA scales 2 → 4 under CPU load once metrics-server runs (on kind it needs `--kubelet-insecure-tls`; without metrics-server the HPA shows `<unknown>` and never scales). The chart ships no NetworkPolicy, so none is enforced.
 
 ## Inputs (ask if missing)
 

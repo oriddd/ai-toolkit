@@ -23,10 +23,12 @@ public class CacheClientConfig {
                             HttpCacheProperties props) {
         // RestClient has no timeouts by default — without these a hung dependency hangs the caller.
         // Boot's builder and settings keep the detected HTTP client (pooling) and spring.http.client.*;
-        // only the timeouts are per dependency.
+        // only the timeouts are per dependency. Redirects are not followed: Boot follows them by default, which would turn a
+        // 3xx into a silent success (or a call to another host) instead of the DependencyException CacheClient maps it to.
         ClientHttpRequestFactorySettings settings = requestFactorySettings
                 .withConnectTimeout(props.connectTimeout())
-                .withReadTimeout(props.readTimeout());
+                .withReadTimeout(props.readTimeout())
+                .withRedirects(ClientHttpRequestFactorySettings.Redirects.DONT_FOLLOW);
         // Boot's auto-configured builder keeps Micrometer observation (metrics + W3C trace propagation)
         RestClient restClient = restClientBuilder.clone()
                 .baseUrl(props.baseUrl())

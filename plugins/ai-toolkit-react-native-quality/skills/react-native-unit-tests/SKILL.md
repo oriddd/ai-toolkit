@@ -144,9 +144,7 @@ export const fakeServices = (): Services => ({
 });
 
 export const testProviders = (services: Services = fakeServices()) => {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { gcTime: Infinity } },
-  });
+  const client = tracked(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return ({ children }: PropsWithChildren) => (
     <ServicesProvider value={services}>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -155,10 +153,57 @@ export const testProviders = (services: Services = fakeServices()) => {
 };
 ```
 
-Each call builds a new `QueryClient`, so tests share no cache; `gcTime: Infinity` on queries **and** mutations stops cache
-timers from keeping Jest alive (with the mutation default of 5 minutes, `npx jest <file>` of any test that runs a
-mutation hangs, and the full run prints "A worker process has failed to exit gracefully"). Never render the app's real
-`QueryProvider` in a test for the same reason: test its policy through `createQueryClient` (`react-native-state-and-data` §7).
+Each call builds a new `QueryClient`, so tests share no cache. Every client a test creates goes through `tracked`, which
+sets `gcTime: Infinity` on queries **and** mutations and clears the client after each test. Without it a 5-minute
+garbage-collection timer per query or mutation keeps the worker alive: `npx jest src/bootstrap` never returns and the full
+run prints "A worker process has failed to exit gracefully" (reproduced with `createQueryClient` tests, whose client has
+the default `gcTime`):
+
+```ts
+// test/queryClients.ts
+const created: QueryClient[] = [];
+export const tracked = (client: QueryClient): QueryClient => {
+  const { queries, mutations } = client.getDefaultOptions();
+  client.setDefaultOptions({ queries: { ...queries, gcTime: Infinity }, mutations: { ...mutations, gcTime: Infinity } });
+  created.push(client);
+  return client;
+};
+export const clearTrackedClients = () => { for (const client of created.splice(0)) client.clear(); };
+// jest.setup.ts: afterEach(() => { server.resetHandlers(); clearTrackedClients(); });
+```
+
+Use `tracked(createQueryClient(...))` in tests of the app's own client factory too (`react-native-state-and-data` §7), and never render the
+real `QueryProvider` in a test (it owns a client you cannot clear): test its policy through `createQueryClient` and
+`createAppQueryClient`. Checked: `jest --ci src/bootstrap` exits by itself, and the full run ends without the warning.
+
+## 3a. A 401 ends the session
+
+The session-expiry chain of `react-native-security` §1b and `react-native-state-and-data` §7 is proved end to end with the
+real api-client, the real `createAuthSession`, a fake `SecureStore` and MSW. It lives in `src/test/integration/`
+because it crosses the `routes`, `bootstrap` and feature layers that `eslint-plugin-boundaries` keeps apart:
+
+```tsx
+it('signs out, clears the cache and redirects to sign-in when a 401 survives the refresh', async () => {
+  server.use(http.get('*/orders', () => new HttpResponse(null, { status: 401 })),
+    http.post('*/auth/refresh', () => { refreshCalls += 1; return new HttpResponse(null, { status: 401 }); }));
+  const services = await signedInServices();             // FakeSecureStore with token + refreshToken, real session + http
+  const client = tracked(createAppQueryClient(services));
+  client.setQueryData(['orders', 'previous-user'], ['secret']);
+  useSessionStore.getState().signIn('u-1');
+  await renderRouter({ _layout: () => <ServicesProvider value={services}><QueryClientProvider client={client}><RootNavigator /></QueryClientProvider></ServicesProvider>,
+    'orders/index': OrdersListScreen, 'orders/[id]': () => null, 'sign-in': SignIn }, { initialUrl: '/orders' });
+
+  await waitFor(() => { expect(screen).toHavePathname('/sign-in'); });
+  expect(refreshCalls).toBe(1);
+  expect(await services.secure.get('token')).toBeNull();
+  expect(client.getQueryData(['orders', 'previous-user'])).toBeUndefined();
+  expect(useSessionStore.getState().userId).toBeNull();
+});
+```
+
+Its twin has the refresh succeed (`{ accessToken: 'fresh', refreshToken: 'rotated' }`) and asserts the user stays on
+`/orders` with the rotated token stored. `createQueryClient` is also tested directly: a 401 from a query and from a mutation
+calls `onUnauthorized(client)` and is never reported.
 
 ## 3b. Screens behind Expo Router routes
 
@@ -208,7 +253,9 @@ A test of the real adapter (`KeychainSecureStore`, `SentryErrorReporter`) runs a
 | `mapHttpError` | 404 -> `NotFoundError`; known problem `code` wins over status | 418 -> `UNKNOWN` | 500 and 503 are retryable; non-JSON body |
 | api-client / `createAuthSession` | 401 -> one refresh, retried with the new token | rejected refresh -> `UnauthorizedError` | two concurrent 401s share one refresh; timeout -> `NetworkError` |
 | `OrdersListScreen` | renders items | shows `ErrorState` on failure | empty list shows empty state |
-| `createQueryClient` | retries a 5xx twice, reports it once | 404 not retried, not reported | offline not reported |
+| `createQueryClient` | retries a 5xx twice, reports it once; a 401 calls `onUnauthorized(client)` | 404 not retried, not reported | offline not reported; 401 from a mutation too |
+| Session expiry (3a) | refresh succeeds: stays signed in | refresh rejected: signed out, cache cleared, redirected | the retry carries the rotated token |
+| Consent and deletion | granted consent forwards events | withdrawn consent drops them; failed deletion keeps the session | corrupt stored consent falls back to none |
 | `scrubEvent` / `scrubBreadcrumb` | keeps `user.id`, url path | drops email, token, query string | user without id |
 | `parseEnv` | valid build config | `http://` api url throws | missing value throws |
 | Navigation | `renderRouter`: pressing a card opens `/orders/[id]` | invalid route param shows not-found | (React Navigation: `AppProviders` + root navigator render the first screen) |

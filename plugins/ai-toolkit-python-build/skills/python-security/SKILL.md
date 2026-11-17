@@ -47,17 +47,34 @@ dependencies = ["pyjwt[crypto]>=2.10"]
 dev = ["pip-audit>=2.7"]
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §7 | `mask_pii` structlog processor, AES-GCM column type with blind index, batched retention, erasure/anonymisation, tests | A service stores or logs personal data | [references/data-privacy.md](./references/data-privacy.md) |
+
 ## 1. Authentication: verify the token in one dependency
 ```python
 ALLOWED_ALGORITHMS = ["RS256", "ES256"]           # never derived from the token header
 
-class JwtTokenVerifier:                           # security/token_verifier.py
+class SigningKeySource(Protocol):                 # security/token_verifier.py
+    def key_for(self, token: str) -> jwt.PyJWK: ...
+
+class JwksKeySource:                              # production adapter; tests pass a fake key source
+    def __init__(self, jwks_url: str) -> None:
+        self._client = jwt.PyJWKClient(jwks_url, cache_keys=True, timeout=5)
+
+    def key_for(self, token: str) -> jwt.PyJWK:   # blocking HTTP on a cache miss
+        return self._client.get_signing_key_from_jwt(token)
+
+class JwtTokenVerifier:
     def __init__(self, keys: SigningKeySource, issuer: str, audience: str) -> None:
         self._keys, self._issuer, self._audience = keys, issuer, audience
 
     def verify(self, token: str) -> Principal:
         try:
-            key = self._keys.key_for(token)       # PyJWKClient(jwks_url, cache_keys=True, timeout=5)
+            key = self._keys.key_for(token)
             claims = jwt.decode(
                 token, key=key, algorithms=ALLOWED_ALGORITHMS,
                 audience=self._audience, issuer=self._issuer,
@@ -67,15 +84,17 @@ class JwtTokenVerifier:                           # security/token_verifier.py
             raise DependencyUnavailableError(dependency="identity-provider") from exc
         except jwt.PyJWTError as exc:
             raise NotAuthenticatedError() from exc
-        return Principal(subject=str(claims["sub"]), scopes=frozenset(str(claims.get("scope", "")).split()))
+        scopes = frozenset(str(claims.get("scope", "")).split())
+        return Principal(subject=str(claims["sub"]), scopes=scopes)
 ```
 
 ```python
 bearer = HTTPBearer(auto_error=False)             # api/security.py
 
-def get_principal(                                # sync def on purpose: PyJWKClient does blocking I/O,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],   # FastAPI runs it in
-    verifier: Annotated[TokenVerifier, Depends(get_token_verifier)],                 # the threadpool
+# sync def on purpose: PyJWKClient does blocking I/O, FastAPI runs it in the threadpool
+def get_principal(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    verifier: Annotated[TokenVerifier, Depends(get_token_verifier)],
 ) -> Principal:
     if credentials is None:
         raise NotAuthenticatedError()
@@ -96,7 +115,11 @@ OrdersWriter = Annotated[Principal, Depends(RequireScope("orders:write"))]
 
 - The verifier is built once in the lifespan and read from `app.state`; tests override `get_token_verifier`
   with a fake that maps fixed tokens to principals, and unit-test `JwtTokenVerifier` with a key generated in
-  the test (expired, wrong audience, wrong issuer, HS256 token, garbage, IdP down).
+  the test (expired, wrong audience, wrong issuer, HS256 token, garbage, IdP down). The key source returns a
+  `jwt.PyJWK`, which is what `jwt.decode(key=...)` accepts under `mypy --strict`; a fake builds one with
+  `jwt.PyJWK.from_dict(RSAAlgorithm.to_jwk(public_key, as_dict=True) | {"alg": "RS256"})`. Test `JwksKeySource`
+  itself against a stdlib `HTTPServer` on a free port that serves the JWKS (a token signed with that key
+  verifies) and against a closed port (`PyJWKClientConnectionError`, so a 503).
 - `auto_error=False` so a missing token goes through our handler: `NotAuthenticatedError` is a
   `DomainError` with status 401 and `headers = {"WWW-Authenticate": "Bearer"}` (`python-error-handling` §1).
 - Never `options={"verify_signature": False}`, never `algorithms=None`, never accept `alg: none` or HS256 with a
@@ -148,7 +171,8 @@ app = FastAPI(
 if settings.cors_origins:                                   # only for browser clients
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,                # explicit list from settings, never "*" with credentials
+        # explicit list from settings, never "*" with credentials
+        allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],    # only the verbs the API exposes
         allow_headers=["Authorization", "Content-Type", "If-Match", "X-Request-ID"],
         expose_headers=["Location", "ETag", "X-Request-ID"],
@@ -177,6 +201,19 @@ if settings.cors_origins:                                   # only for browser c
 Run `uv run pip-audit` in a scheduled CI job and on every lock-file change (`python-ci` §4, `audit.yml`); fix by upgrading,
 or ignore one advisory with `--ignore-vuln <ID>` plus a ticket. Renovate/Dependabot keeps `uv.lock` current.
 
+## 7. Personal data (PII, GDPR)
+Identify PII at design time (names, e-mail, phone, IP, device ids, location, financial and health data) and handle it
+at four points; the code and tests are in `references/data-privacy.md`:
+- **Logs:** a `mask_pii` structlog processor in the shared chain masks PII keys and any e-mail inside a message, for
+  structlog and stdlib loggers alike (uvicorn's access log prints query strings). PII request fields use
+  `Field(repr=False)`. Never log raw bodies.
+- **At rest:** sensitive columns use authenticated encryption (AES-256-GCM, fresh nonce, key version prefix) through a
+  SQLAlchemy `TypeDecorator`; look records up by a separate HMAC blind index. Keys come from a KMS, not settings.
+- **Retention:** a scheduled job (`python-messaging` §7, `python-cd` §7) purges expired rows in batches.
+- **Erasure:** one transaction anonymises rows that must stay (random tombstone id) and deletes the rest, including
+  the subject's outbox events; events carry ids only, and caches and topics are covered (never PII in cache keys,
+  URLs or topic payloads).
+
 ## Do / Don't
 - ✅ One `get_principal` dependency; a scope alias on every non-public route.
 - ✅ Object-level checks in the use case; 404 for resources the caller may not see.
@@ -186,6 +223,7 @@ or ignore one advisory with `--ignore-vuln <ID>` plus a ticket. Renovate/Dependa
 - ❌ Caller identity from the body, query or a custom header.
 - ❌ `allow_origins=["*"]` with `allow_credentials=True`; CORS on a service-to-service API.
 - ❌ Secrets in code, logs, error messages, `.env` in git or Docker build args.
+- ❌ PII in logs, cache keys, URLs, event payloads or `repr`; a delete endpoint that leaves the subject in outbox rows.
 - ❌ `HTTPException(401)` from services; raise `NotAuthenticatedError` / `AccessDeniedError`.
 
 ## Cross-references

@@ -37,6 +37,13 @@ src/my_service/
 `BillingSettings` (base URL, credentials as `SecretStr`, timeouts, attempts) lives in `config/` like every
 settings class (`python-code-structure` §5).
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §4 | Circuit breaker class, its wiring around the retried call, fake-clock tests | A dependency can stay down for minutes | [references/circuit-breaker.md](./references/circuit-breaker.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["httpx>=0.28", "tenacity>=9.0"]
@@ -62,7 +69,9 @@ domain model inside the adapter. They never leave the package.
 def build_billing_http_client(settings: BillingSettings) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=str(settings.base_url),
-        timeout=httpx.Timeout(settings.read_timeout_seconds, connect=settings.connect_timeout_seconds),
+        timeout=httpx.Timeout(
+            settings.read_timeout_seconds, connect=settings.connect_timeout_seconds
+        ),
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=10),
         headers={"Authorization": f"Bearer {settings.api_key.get_secret_value()}"},
         follow_redirects=False,
@@ -125,8 +134,16 @@ class RetryPolicy:
   another 4xx: the answer will not change.
 - Bound both attempts and total time, so retries fit inside the caller's own timeout.
 - `wait` is injectable: tests pass `wait_none()` and run without sleeping.
-- Retries multiply load on a struggling dependency; keep attempts small (3) and add a circuit breaker only
-  when measurements show the need.
+- Retries multiply load on a struggling dependency; keep attempts small (3) and add a circuit breaker when a
+  dependency can be down for minutes (below).
+
+### Circuit breaker
+A breaker wraps the whole retried call: after N consecutive failed calls it opens and rejects calls immediately (no
+network, same `DependencyUnavailableError`), after a recovery period it lets exactly one trial through (half-open),
+and that trial closes or reopens it. Only dependency failures count (transport errors, exhausted retries, 5xx); a 404
+or 422 is a healthy answer. Use a small asyncio-safe class with an injectable clock (`pybreaker` supports only Tornado
+for async); the class, the wiring in `HttpBillingClient` and the tests (open, half-open, reopen, cancelled trial)
+are in `references/circuit-breaker.md`.
 
 ## 5. Map every outcome to the domain
 ```python
@@ -184,7 +201,10 @@ async def test_getCredit_503ThenOk_retriesAndSucceeds(
     respx_mock: respx.MockRouter, billing: HttpBillingClient
 ) -> None:
     route = respx_mock.get(CREDIT_PATH).mock(
-        side_effect=[httpx.Response(503), httpx.Response(200, json={"customerId": "c-1", "availableCents": 1})]
+        side_effect=[
+            httpx.Response(503),
+            httpx.Response(200, json={"customerId": "c-1", "availableCents": 1}),
+        ]
     )
     await billing.get_credit("c-1")
     assert route.call_count == 2

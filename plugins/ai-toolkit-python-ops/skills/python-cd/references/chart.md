@@ -33,6 +33,7 @@ existingSecret: my-service-credentials
 env:
   DB_URL: postgresql+asyncpg://app@postgres:5432/orders
   DB_POOL_SIZE: "10"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 forwardedAllowIps: ""
 otel:
   endpoint: ""
@@ -68,6 +69,12 @@ migrations:
   enabled: true
   activeDeadlineSeconds: 300
   backoffLimit: 1
+
+jobs:
+  purge-outbox:
+    schedule: "0 3 * * *"
+  purge-processed:
+    schedule: "30 3 * * *"
 
 metrics:
   serviceMonitor:
@@ -334,6 +341,65 @@ spec:
       volumes:
         - name: tmp
           emptyDir: { sizeLimit: 64Mi }
+{{- end }}
+```
+
+## `templates/cronjob.yaml`
+
+```yaml
+{{- range $name, $job := .Values.jobs }}
+{{- $ctx := dict "root" $ "component" (printf "job-%s" $name) }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: job
+spec:
+  schedule: {{ $job.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  suspend: {{ $job.suspend | default false }}
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $job.activeDeadlineSeconds | default 600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "app.labels" $ | nindent 12 }}
+            app.kubernetes.io/component: job
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {{- include "app.podSecurityContext" $ | nindent 12 }}
+          containers:
+            - name: job
+              image: {{ include "app.image" $ }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              command: ["my-service-job", {{ $name | quote }}]
+              securityContext: {{- include "app.containerSecurityContext" $ | nindent 16 }}
+              env:
+                {{- include "app.env" $ctx | nindent 16 }}
+              envFrom:
+                - secretRef:
+                    name: {{ $.Values.existingSecret }}
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 256Mi }
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: { sizeLimit: 64Mi }
 {{- end }}
 ```
 

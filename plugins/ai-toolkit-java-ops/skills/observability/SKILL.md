@@ -153,6 +153,11 @@ Conventions:
 - W3C TraceContext headers (`traceparent`/`tracestate`) propagate
   automatically across `RestClient`/`WebClient` calls. **Never** invent
   your own correlation header.
+- Test it with `@AutoConfigureObservability`: `@SpringBootTest` disables tracing by default, so without it the
+  propagator is a no-op and no `traceparent` header is sent. Verified with it on Boot 3.5: `traceId` / `spanId` in MDC and
+  in the `logging.structured.format.console: logstash` JSON line, the `traceparent` header on a `RestClient` call made from the
+  request, the trace id on a `ContextPropagatingTaskDecorator` worker thread, and `callerId` on that thread only after the
+  `Slf4jThreadLocalAccessor("callerId")` registration of §2.
 - Custom spans only at meaningful boundaries (a use-case operation, an
   external call, an async hand-off). Span name = `<verb>_<noun>`
   (`export_invoice`), not the class+method name.

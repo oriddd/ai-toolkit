@@ -118,7 +118,7 @@ Checks 5–7 are independent reads of the same diff: when subagents are availabl
 (`parallel-delegation`) — the code-review agent is read-only. The build and test runs stay in the main thread
 (one build per working tree), and check 8 (Sonar) runs **after** 5–7 because it builds the project itself.
 
-**Run the gate once.** When you are a subagent (for example a builder agent), run the gate yourself and return the
+**Run the gate once.** When you are a builder agent that owns the whole task, run the gate yourself (test-writers and other partial-scope agents do not build; the main thread runs the gate for their work, `parallel-delegation` §3) and return the
 §4 evidence table with your result. The calling session relays that table verbatim and does not re-run the gate
 unless the code changed after the table was produced — then it re-runs from the build. If the Agent tool is not
 available to you, apply the check 5 standards inline and say so in the table.

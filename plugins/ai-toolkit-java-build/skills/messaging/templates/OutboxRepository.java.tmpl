@@ -1,0 +1,9 @@
+package {{basePackage}}.messaging;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.domain.Limit;
+import org.springframework.data.jpa.repository.JpaRepository;
+public interface OutboxRepository extends JpaRepository<OutboxEntity, UUID> {
+    /** Oldest first: the relay stops at the first failure, which keeps per-aggregate order. Limit: Spring Data 3.2+. */
+    List<OutboxEntity> findByPublishedAtIsNullOrderByCreatedAtAsc(Limit limit);
+}

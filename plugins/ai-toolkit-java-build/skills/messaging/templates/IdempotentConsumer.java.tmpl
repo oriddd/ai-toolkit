@@ -1,8 +1,12 @@
 package {{basePackage}}.messaging;
 import {{basePackage}}.exception.BaseDomainException;
 import java.nio.charset.StandardCharsets;
+import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -17,10 +21,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  * The event id is the `event-id` record header the outbox relay sends (SKILL.md §3), never a payload field.
  */
 @Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class IdempotentConsumer {
     static final String EVENT_ID_HEADER = "event-id";
     private final TransactionTemplate tx;
-    public IdempotentConsumer(TransactionTemplate tx) { this.tx = tx; }
+    private final JdbcClient jdbc;
     @KafkaListener(topics = "${kafka.topics.example.name}",
                    groupId = "${kafka.topics.example.group-id}")
     public void onMessage(ConsumerRecord<String, String> rec, Acknowledgment ack) throws BaseDomainException {
@@ -51,9 +57,12 @@ public class IdempotentConsumer {
         }
         return new String(header.value(), StandardCharsets.UTF_8);
     }
-    /** INSERT ... ON CONFLICT DO NOTHING into the processed-events table; true if the row was inserted. */
-    @SuppressWarnings("UnusedVariable")
-    private boolean tryRecord(String eventId) { /* TODO */ return true; }
-    @SuppressWarnings("UnusedVariable")
-    private void processEvent(String payload) throws BaseDomainException { /* TODO */ }
+    /** INSERT ... ON CONFLICT DO NOTHING into processed_events (outbox-migration.sql.tmpl); true if the row was inserted. */
+    private boolean tryRecord(String eventId) {
+        return jdbc.sql("INSERT INTO processed_events (event_id) VALUES (:id) ON CONFLICT (event_id) DO NOTHING")
+                .param("id", eventId)
+                .update() == 1;
+    }
+    /** The business effect: replace with the project's handler; runs inside the dedupe transaction. */
+    void processEvent(String payload) throws BaseDomainException { /* TODO */ }
 }

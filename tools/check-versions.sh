@@ -11,7 +11,7 @@ if [ -z "$base" ]; then
 fi
 [ -n "$base" ] || { echo "check-versions: no base ref found"; [ -n "${CI:-}" ] && exit 1; echo "(skipped — set CI=1 to make this an error)"; exit 0; }
 mb="$(git merge-base "$base" HEAD 2>/dev/null || echo "$base")"
-fail=0
+fail=0; bumped=0
 for dir in plugins/*/; do
   p="$(basename "$dir")"
   changed="$({ git diff --name-only "$mb" -- "$dir" ':(exclude)'"$dir"'.claude-plugin/plugin.json'; git ls-files --others --exclude-standard -- "$dir"; } | grep -v '\.claude-plugin/plugin\.json$' | head -1)"
@@ -34,9 +34,24 @@ o, n = v(sys.argv[1]), v(sys.argv[2])
 print('same' if o is None or n is None or o == n else ('down' if n < o else 'up'))" "$old" "$new")"
   if [ "$order" = "same" ]; then
     echo "FAIL: $p changed (e.g. $changed) but version is still $new — bump it in $dir.claude-plugin/plugin.json"; fail=1
-  elif [ "$order" = "down" ]; then
+  elif [ "$order" = "up" ]; then
+    bumped=$((bumped + 1))
+  fi
+  if [ "$order" = "down" ]; then
     echo "FAIL: $p version went down ($old -> $new) — installed users would never receive it"; fail=1
   fi
 done
+if [ "$bumped" -gt 0 ]; then
+  python3 - <<'PYEOF'
+import json, re
+log = open("docs/CHANGELOG.md", encoding="utf-8").read()
+unreleased = re.search(r"## \[Unreleased\]\n(.*?)(?=\n## \[)", log, re.S)
+released = re.search(r"^## \[(\d+\.\d+\.\d+)\]", log, re.M)
+meta = json.load(open(".claude-plugin/marketplace.json")).get("metadata", {}).get("version")
+if unreleased and unreleased.group(1).strip() and released and meta == released.group(1):
+    print(f"NOTE: plugin versions changed and [Unreleased] has entries, but marketplace metadata.version is still {meta} (the last release). "
+          "Before tagging: bump metadata.version, rename [Unreleased] to the new version heading and add a fresh [Unreleased] (docs/CONTRIBUTING.md, Releasing).")
+PYEOF
+fi
 [ $fail -eq 0 ] && echo "versions OK (against $base)"
 exit $fail

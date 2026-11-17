@@ -1,0 +1,61 @@
+package {{basePackage}}.health.indicator;
+
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.web.client.RestClient;
+
+@Slf4j
+public abstract class AbstractReadinessIndicator implements HealthIndicator {
+
+    private record CachedHealth(Health health, long probedAtNanos) {}
+
+    private final RestClient restClient;
+    private final Duration cacheTtl;
+    private final AtomicReference<@Nullable CachedHealth> lastProbe = new AtomicReference<>();
+
+    protected AbstractReadinessIndicator(final RestClient restClient, final Duration cacheTtl) {
+        this.restClient = restClient;
+        this.cacheTtl = cacheTtl;
+    }
+
+    protected abstract String getServiceName();
+
+    protected abstract int getSuccessStatusCode();
+
+    protected abstract String getReadinessURI();
+
+    @Override
+    public Health health() {
+        final long now = System.nanoTime();
+        final CachedHealth cached = lastProbe.get();
+        if (cached != null && now - cached.probedAtNanos() < cacheTtl.toNanos()) {
+            return cached.health();
+        }
+        final Health fresh = probe();
+        lastProbe.set(new CachedHealth(fresh, now));
+        return fresh;
+    }
+
+    private Health probe() {
+        try {
+            final Integer status =
+                    restClient.get().uri(getReadinessURI()).exchange((request, response) -> response.getStatusCode().value());
+            log.debug("Readiness probe of {} answered {}", getServiceName(), status);
+            if (status != null && status == getSuccessStatusCode()) {
+                return Health.up().withDetail("service", getServiceName()).build();
+            }
+            return down(String.valueOf(status));
+        } catch (Exception e) {
+            log.error("Readiness probe of {} failed", getServiceName(), e);
+            return down(e.getClass().getSimpleName());
+        }
+    }
+
+    private Health down(final String reason) {
+        return Health.down().withDetail("service", getServiceName()).withDetail("reason", reason).build();
+    }
+}

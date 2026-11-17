@@ -65,9 +65,8 @@ before generating files.
 ## Phase 2 – Files to generate / modify
 
 ### a) `health/indicator/AbstractReadinessIndicator.java`
-Create it **only if it does not already exist**. Place it under
-`src/main/java/{{basePackagePath}}/health/indicator/AbstractReadinessIndicator.java`.
-It must:
+Create it **only if it does not already exist**, from [`templates/AbstractReadinessIndicator.java.tmpl`](./templates/AbstractReadinessIndicator.java.tmpl),
+under `src/main/java/{{basePackagePath}}/health/indicator/`. It:
 - Implement `HealthIndicator` (`org.springframework.boot.actuate.health.HealthIndicator`; Boot 4 moves it to
   `org.springframework.boot.health.contributor`).
 - Accept a `RestClient` and the cache TTL (`Duration`) via constructor. `RestClient` is part of `spring-web`, so a
@@ -84,7 +83,7 @@ It must:
 - Log at `debug` on every refresh; `error` on failure.
 
 ### b) `health/config/ReadinessClientConfig.java`
-Create if missing. Single `@Bean RestClient readinessRestClient(...)` built from Boot's
+Create if missing, from [`templates/ReadinessClientConfig.java.tmpl`](./templates/ReadinessClientConfig.java.tmpl). Single `@Bean RestClient readinessRestClient(...)` built from Boot's
 injected `RestClient.Builder` (keeps observation/tracing), with short timeouts set through Boot's
 `ClientHttpRequestFactoryBuilder` and `ClientHttpRequestFactorySettings` beans — they keep the detected HTTP client
 (pooling) and `spring.http.client.*`; a `new SimpleClientHttpRequestFactory()` would drop both:
@@ -108,6 +107,7 @@ If `authMode != none`, add the appropriate default header / interceptor
 (e.g. `defaultHeader(HttpHeaders.AUTHORIZATION, ...)`).
 
 ### b2) `health/config/<Dep>ReadinessProperties.java`
+From [`templates/ReadinessProperties.java.tmpl`](./templates/ReadinessProperties.java.tmpl):
 
 ```java
 @Validated
@@ -130,7 +130,7 @@ public class {{Dep}}HealthIndicator extends AbstractReadinessIndicator {
     private static final String SERVICE_NAME = "{{dependencyDisplayName}}";
     private final {{Dep}}ReadinessProperties properties;
 
-    public {{Dep}}HealthIndicator(final RestClient readinessRestClient,
+    public {{Dep}}HealthIndicator(@Qualifier("readinessRestClient") final RestClient readinessRestClient,
                                   final {{Dep}}ReadinessProperties properties) {
         super(readinessRestClient, properties.cacheTtl());
         this.properties = properties;
@@ -200,8 +200,8 @@ Append env vars under `env:`:
 Ask the developer for `{{k8sServiceName}}` and `{{k8sServicePort}}` if not
 provided in Phase 1.
 
-### g) Unit test – `<Dep>HealthIndicatorTest`
-Generate alongside, using the `unit-tests` skill, asserting:
+### g) Tests
+[`templates/HealthIndicatorTest.java.tmpl`](./templates/HealthIndicatorTest.java.tmpl) (`<Dep>HealthIndicatorTest`) asserts:
 - `health()` returns `UP` when the `RestClient` returns the expected status (stub it with `MockRestServiceServer`
   bound to a `RestClient.Builder`).
 - Returns `DOWN` on non-matching status, `RestClientException`, or arbitrary
@@ -209,12 +209,18 @@ Generate alongside, using the `unit-tests` skill, asserting:
 - A second `health()` call inside `cacheTtl` does not call the dependency again.
 - `getReadinessURI()` concatenates `baseUrl + readinessEndpoint`.
 
+[`templates/ReadinessGroupComponentTest.java.tmpl`](./templates/ReadinessGroupComponentTest.java.tmpl) boots the service with a stub dependency
+(JDK `HttpServer`) and proves the group: `/actuator/health/readiness` is `200` with the indicator `UP`, turns `503` when the
+dependency answers another status, and `/actuator/health/liveness` stays `200`. It sets
+`management.endpoint.health.show-components=always` for the assertion; by default the endpoint reports only the group
+status, so the `curl` check below shows the entries only when `show-components` / `show-details` allow it.
+
 ## Phase 3 – Validate
 
 1. `mvn -q test` – unit tests pass.
 2. `curl -s http://localhost:{{appPort}}{{contextPath}}/actuator/health/readiness`
-   on a running instance prints both `readinessState` and
-   `{{indicatorBeanName}}` entries.
+   on a running instance answers `{"status":"UP"}` (with `show-components` also the `readinessState` and
+   `{{indicatorBeanName}}` entries).
 3. `helm template helm-chart | grep -A1 {{baseUrlEnvHost}}` – env var present.
 
 ## Phase 4 – Hand-off summary
@@ -240,4 +246,9 @@ must not restart your pod, only de-register it from the Service.
 
 ## Templates
 
+- [`AbstractReadinessIndicator.java.tmpl`](./templates/AbstractReadinessIndicator.java.tmpl) — Reusable base (HTTP call, timeout, result cache).
+- [`ReadinessClientConfig.java.tmpl`](./templates/ReadinessClientConfig.java.tmpl) — Shared `RestClient` with short timeouts.
+- [`ReadinessProperties.java.tmpl`](./templates/ReadinessProperties.java.tmpl) — Typed `@ConfigurationProperties` record.
 - [`HealthIndicator.java.tmpl`](./templates/HealthIndicator.java.tmpl) — Concrete health indicator skeleton.
+- [`HealthIndicatorTest.java.tmpl`](./templates/HealthIndicatorTest.java.tmpl) — Unit test of the concrete indicator.
+- [`ReadinessGroupComponentTest.java.tmpl`](./templates/ReadinessGroupComponentTest.java.tmpl) — Readiness / liveness group behaviour.

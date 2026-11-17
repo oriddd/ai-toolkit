@@ -142,7 +142,7 @@ TEST_SETTINGS = AppSettings(
 )
 
 @pytest.fixture
-def fake_orders() -> InMemoryOrderRepository:      # tests/fakes/: one fresh, inspectable store per test
+def fake_orders() -> InMemoryOrderRepository:   # tests/fakes/: a fresh, inspectable store per test
     return InMemoryOrderRepository()
 
 @pytest.fixture

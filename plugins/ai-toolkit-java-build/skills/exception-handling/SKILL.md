@@ -117,25 +117,12 @@ Details: [`references/checked-exceptions.md`](./references/checked-exceptions.md
 ### 2. `ExceptionMessages`
 
 ```java
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public final class ExceptionMessages {
-    // error codes
-    public static final String ERR_BAD_REQUEST         = "ERR-BAD-REQUEST";
-    public static final String ERR_NOT_FOUND           = "ERR-NOT-FOUND";
-    public static final String ERR_FORBIDDEN           = "ERR-FORBIDDEN";
-    public static final String ERR_UNAVAILABLE         = "ERR-UNAVAILABLE";
-    // message templates
-    public static final String UNRECOGNIZED_INPUT      = "Unrecognized input: {0}";
-    public static final String RESOURCE_NOT_FOUND      = "Resource {0} not found";
-    public static final String FORBIDDEN_FOR_RESOURCE  = "Caller has no access to resource {0}";
-    public static final String DEPENDENCY_UNAVAILABLE  = "Downstream dependency {0} is unavailable";
+public final class ExceptionMessages {                      // final, private constructor
+    public static final String ERR_NOT_FOUND = "ERR-NOT-FOUND";               // error codes
+    public static final String RESOURCE_NOT_FOUND = "{0} with id ''{1}'' was not found.";   // MessageFormat templates
 
-    // factory methods — the preferred way to build an exception
-    public static NotFoundException resourceNotFound(String type, String id) {
-        return new NotFoundException(ERR_NOT_FOUND, MessageFormat.format(RESOURCE_NOT_FOUND, type + " " + id));
-    }
-    public static UnavailableException dependencyUnavailable(String dependency, @Nullable Throwable cause) {
-        return new UnavailableException(ERR_UNAVAILABLE, MessageFormat.format(DEPENDENCY_UNAVAILABLE, dependency), cause);
+    public static NotFoundException resourceNotFound(String type, String id) {   // factory: the preferred way to build one
+        return new NotFoundException(ERR_NOT_FOUND, MessageFormat.format(RESOURCE_NOT_FOUND, type, id));
     }
 }
 ```
@@ -179,6 +166,9 @@ sed -e '/\[security:begin\]/,/\[security:end\]/d' -e '/\[security\]/d' GlobalExc
 ```
 
 Keep the tagged lines when the dependency is present. A tagged import of an absent package does not compile.
+
+The three test templates below use the same tags: run the same `sed` on `GlobalExceptionHandlerTest.java`. They ship with the
+classes because the per-class JaCoCo gate (85 % line / 75 % branch) and the PIT gate apply to every class, shipped ones included.
 
 Rules:
 - **Extend `ResponseEntityExceptionHandler`** so Spring's built-in handlers
@@ -270,3 +260,4 @@ controller and the advice.
 - [`DependencyException.java.tmpl`](./templates/DependencyException.java.tmpl) — Maps to 500 (generic detail).
 - [`ExceptionMessages.java.tmpl`](./templates/ExceptionMessages.java.tmpl) — Message catalogue.
 - [`GlobalExceptionHandler.java.tmpl`](./templates/GlobalExceptionHandler.java.tmpl) — The `@RestControllerAdvice`.
+- [`ExceptionHierarchyTest.java.tmpl`](./templates/ExceptionHierarchyTest.java.tmpl), [`ExceptionMessagesTest.java.tmpl`](./templates/ExceptionMessagesTest.java.tmpl), [`GlobalExceptionHandlerTest.java.tmpl`](./templates/GlobalExceptionHandlerTest.java.tmpl) — Tests of the shipped classes (same package as the class under test); a fresh skeleton passes `mvn verify` with them.
