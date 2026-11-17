@@ -190,6 +190,11 @@ Build the Redis client once in the lifespan (`Redis.from_url(settings.redis_url,
 socket_connect_timeout=0.2)`) and `await client.aclose()` on shutdown; short timeouts are what make "fail open" fast.
 
 ## Tests
+The fakes import as `tests.fakes.cache` and the in-memory repositories as `tests.fakes.in_memory` (`python-unit-tests`
+`references/test-support.md`), so `tests/`, `tests/fakes/`, `tests/unit/` and `tests/integration/` each carry an empty
+`__init__.py` (`python-unit-tests` Layout); without them pytest fails with `No module named 'tests'` and mypy reports
+`Source file found twice`.
+
 Unit (`InMemoryCache` fake with a `down` switch):
 ### `tests/fakes/cache.py`
 

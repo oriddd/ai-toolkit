@@ -196,6 +196,106 @@ def build_scheduler(engine: AsyncEngine, interval_seconds: dict[str, int]) -> As
 Start it in the lifespan (`scheduler.start()`), stop it before the engine is disposed (`scheduler.shutdown(wait=True)`,
 `python-graceful-shutdown` §4). Prefer the CronJob: it survives replica churn and keeps jobs out of request pods.
 
+## Unit tests (fake engine)
+
+`FakeEngine` (`tests/fakes/engine.py`, in `python-unit-tests`' `test-support.md`) answers the advisory-lock queries, so the lock, the registry and the scheduler are covered without a database.
+
+### `tests/unit/test_jobs.py`
+
+```python
+from collections.abc import Awaitable, Callable
+
+import pytest
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from my_service.jobs import JOBS, run_job
+from my_service.messaging.outbox_relay import RELAY_LOCK_KEY
+from my_service.repositories.exclusive import run_exclusive
+from my_service.scheduler import build_scheduler
+from tests.fakes.engine import FakeEngine
+
+
+async def test_runExclusive_lockFree_runsTheJobAndUnlocks() -> None:
+    engine = FakeEngine(lock_free=True)
+    ran: list[int] = []
+
+    async def job() -> None:
+        ran.append(1)
+
+    assert await run_exclusive(engine.as_engine(), 42, job) is True
+    assert ran == [1]
+    assert engine.statements == ["pg_try_advisory_lock", "pg_advisory_unlock"]
+
+
+async def test_runExclusive_lockHeldElsewhere_skipsTheJob() -> None:
+    engine = FakeEngine(lock_free=False)
+    ran: list[int] = []
+
+    async def job() -> None:
+        ran.append(1)
+
+    assert await run_exclusive(engine.as_engine(), 42, job) is False
+    assert ran == []
+    assert engine.statements == ["pg_try_advisory_lock"]
+
+
+async def test_runExclusive_failingJob_stillUnlocksAndPropagates() -> None:
+    engine = FakeEngine(lock_free=True)
+
+    async def failing() -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        await run_exclusive(engine.as_engine(), 42, failing)
+    assert engine.statements[-1] == "pg_advisory_unlock"
+
+
+async def test_runJob_registeredJob_runsItUnderItsLock(monkeypatch: pytest.MonkeyPatch) -> None:
+    purged: list[str] = []
+
+    async def purge() -> None:
+        purged.append("done")
+
+    def factory(_: AsyncEngine) -> Callable[[], Awaitable[object]]:
+        return purge
+
+    monkeypatch.setitem(JOBS, "fake", (7_315_499_100, factory))
+    engine = FakeEngine()
+    assert await run_job("fake", engine.as_engine()) is True
+    assert purged == ["done"]
+    assert engine.statements == ["pg_try_advisory_lock", "pg_advisory_unlock"]
+
+
+def test_registry_realJobs_buildTheirCallableFromTheEngine() -> None:
+    engine = FakeEngine().as_engine()
+    for _, factory in JOBS.values():
+        assert callable(factory(engine))
+
+
+def test_registry_everyJobHasItsOwnLockDistinctFromTheRelay() -> None:
+    keys = [key for key, _ in JOBS.values()]
+    assert len(set(keys)) == len(keys)
+    assert RELAY_LOCK_KEY not in keys
+
+
+async def test_buildScheduler_registeredJobs_areIntervalJobsThatNeverOverlap() -> None:
+    scheduler = build_scheduler(
+        FakeEngine().as_engine(), {"purge-outbox": 60, "purge-processed": 120}
+    )
+    assert isinstance(scheduler, AsyncIOScheduler)
+    scheduler.start(paused=True)
+    registered = {job.id: job for job in scheduler.get_jobs()}
+    scheduler.shutdown(wait=False)
+    assert set(registered) == {"purge-outbox", "purge-processed"}
+    assert all(job.max_instances == 1 and job.coalesce for job in registered.values())
+
+
+def test_buildScheduler_unknownJob_raisesKeyError() -> None:
+    with pytest.raises(KeyError):
+        build_scheduler(FakeEngine().as_engine(), {"does-not-exist": 5})
+```
+
 ## Tests
 ### `tests/integration/test_jobs.py`
 

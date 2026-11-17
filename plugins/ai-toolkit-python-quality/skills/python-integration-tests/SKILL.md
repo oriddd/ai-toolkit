@@ -24,12 +24,22 @@ locking, a broker round-trip, or a full request through the real app wiring.
 
 ```
 tests/
+├── __init__.py                 # every directory under tests/ has an empty __init__.py (`python-unit-tests` Layout)
+├── conftest.py                 # the marker hook (§1)
 ├── unit/                       # no I/O; default run
 └── integration/
-    ├── conftest.py             # session-scoped containers, migrated engine
+    ├── __init__.py
+    ├── conftest.py             # session-scoped containers, migrated engine, clean_tables, bootstrap_servers
     ├── test_sql_order_repository.py
     └── test_orders_api.py
 ```
+
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1 to §3 | The complete `tests/conftest.py` and `tests/integration/conftest.py` (`postgres_url`, `engine`, `session`, `clean_tables`, `bootstrap_servers`), migration, repository and API tests | Creating the integration suite | [references/integration-suite.md](./references/integration-suite.md) |
 
 Integration tests run against PostgreSQL via testcontainers, the engine used in production; never
 substitute SQLite, whose locking, types and constraint behaviour differ.

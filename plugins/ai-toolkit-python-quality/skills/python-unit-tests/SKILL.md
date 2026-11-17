@@ -23,12 +23,30 @@ Whenever you add a module, fix a bug (write the failing test first) or change be
 
 ```
 tests/
+├── __init__.py                 # every directory under tests/ is a package: an empty __init__.py in each
 ├── conftest.py                 # shared fixtures: fake clock, app factory
 ├── fakes/                      # in-memory implementations of Protocols
-│   └── in_memory_order_repository.py
+│   ├── __init__.py
+│   └── in_memory.py            # InMemoryOrderRepository, InMemoryUnitOfWork (with its outbox fake)
 └── unit/
-    └── services/test_checkout_service.py    # mirrors src/my_service/services/checkout_service.py
+    ├── __init__.py
+    └── services/
+        ├── __init__.py
+        └── test_checkout_service.py    # mirrors src/my_service/services/checkout_service.py
 ```
+
+Without the `__init__.py` files the layout breaks twice. pytest (the default `prepend` import mode) puts the first
+directory without an `__init__.py` on `sys.path`, so `from tests.fakes.in_memory import ...` fails with
+`No module named 'tests'`. And mypy, with `files = ["src", "tests"]` and `mypy_path = "src"`, reports
+`Source file found twice under different module names: "cache" and "tests.fakes.cache"`. Packages fix both, with
+no `pythonpath` setting. The same rule holds for `tests/integration/` (`python-integration-tests`).
+
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §3, §4, §6 | `InMemoryOrderRepository`, `InMemoryUnitOfWork` with an `outbox` fake, billing/token/clock fakes, messaging and engine fakes, the operation and HTTP-layer tests | Writing fakes, or a test that needs `tests.fakes.*` | [references/test-support.md](./references/test-support.md) |
 
 ## Dependencies
 ```toml
@@ -163,6 +181,11 @@ Assert status, `application/problem+json` and `code` for errors.
 build, but only on runs that measure coverage: the CI unit job runs
 `uv run pytest -m "not integration" --cov` (see `python-ci`); local single-test runs stay plain. Exclude
 only true boilerplate (`if TYPE_CHECKING:`, `...` in Protocols) via `exclude_also`.
+
+The gate counts the unit run alone, so every loop and process has a fake-based unit test: the worker's drain
+(`python-graceful-shutdown` §6), the outbox relay loop and consumer loop (`python-messaging` §6) and the scheduler
+and job registry. A service whose worker, relay and scheduler are exercised only by integration tests sits near 65%
+and fails `fail_under = 85`.
 
 ## Do / Don't
 - ✅ Arrange / act / assert, one behaviour per test, deterministic (no sleeps, real clock, network, randomness).

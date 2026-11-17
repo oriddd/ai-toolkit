@@ -32,6 +32,13 @@ src/my_service/
         └── health.py
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1, §2, §7 | The complete `create_app` + lifespan, the `Depends` providers, the orders and health routers | Wiring the app or adding a provider or router | [references/app-wiring.md](./references/app-wiring.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.8", "pydantic-settings>=2.4"]

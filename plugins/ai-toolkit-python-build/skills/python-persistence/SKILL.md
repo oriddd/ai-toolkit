@@ -46,6 +46,7 @@ Load only the file you need.
 | Section | Topic | Load when | File |
 | --- | --- | --- | --- |
 | §7 | Cache-aside behind a `Cache` port: Redis adapter, TTL with jitter, invalidation, fail-open, Redis container tests | Caching reads | [references/caching.md](./references/caching.md) |
+| §1 to §5 | Complete `orm.py` (orders, outbox, processed messages), SQL repository, unit of work, Alembic `env.py` and `post_write_hooks` | Creating the persistence package | [references/sql-adapter.md](./references/sql-adapter.md) |
 
 ## Dependencies
 ```toml

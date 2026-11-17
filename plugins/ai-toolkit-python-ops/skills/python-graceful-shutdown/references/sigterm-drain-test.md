@@ -6,8 +6,10 @@ before the signal fails, that the process exits, and that new connections are re
 (testcontainers). The negative control (`SIGKILL` instead of `SIGTERM`) fails the same assertions.
 
 Findings from running it:
-- uvicorn finishes in-flight requests and then **re-raises the signal**, so the process ends with status `-15`
-  (shell `143`), not `0`. That is a clean drain; do not assert `0` or treat `143` as a failed container in smoke scripts.
+- uvicorn finishes in-flight requests and then **re-raises the signal**. A subprocess of the test is not PID 1, so
+  it ends with status `-15` (shell `143`), which is what the test asserts. As PID 1 in a container the same drain
+  exits `0` (the kernel ignores a signal PID 1 has no handler for): do not assert `0` for a subprocess or `-15` for
+  a container, and do not treat either as a failed container in smoke scripts.
 - A request sent in the same instant as the signal may hit the closing listener. In a cluster the `preStop` sleep
   (§3) covers that window; the test therefore only judges requests sent `UNAMBIGUOUS_MARGIN` before the signal.
 
@@ -145,7 +147,7 @@ async def _load(base_url: str, stop_sending: asyncio.Event, outcomes: list[Outco
                 outcomes.append(Outcome(started, response.status_code, None))
 
 
-async def test_sigterm_underLoad_inFlightRequestsCompleteAndProcessExitsZero(
+async def test_sigterm_underLoad_inFlightRequestsCompleteAndProcessEndsBySigterm(
     server: Server,
 ) -> None:
     await _wait_ready(server.base_url)

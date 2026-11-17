@@ -36,6 +36,13 @@ src/my_service/
 and services import it, it imports repository Protocols and the leaf packages. Add it to the import-linter `layers`
 contract (`python-static-analysis` §3) when you create it.
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §2 to §4 | Validated types, request models, a rule object with a collaborator, table-driven tests | Adding a model or a rule | [references/validation-modules.md](./references/validation-modules.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["pydantic>=2.8", "email-validator>=2.2"]

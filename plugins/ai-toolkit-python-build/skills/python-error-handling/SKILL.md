@@ -30,6 +30,13 @@ src/my_service/errors/
 src/my_service/api/errors.py   # the one handler registration
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1 to §4 | `codes.py`, `base.py`, `domain.py`, `problem.py` and `api/errors.py` as complete modules | Creating the error contract | [references/error-modules.md](./references/error-modules.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["fastapi>=0.115", "pydantic>=2.8"]

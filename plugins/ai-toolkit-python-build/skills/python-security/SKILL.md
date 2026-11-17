@@ -53,6 +53,7 @@ Load only the file you need.
 | Section | Topic | Load when | File |
 | --- | --- | --- | --- |
 | §7 | `mask_pii` structlog processor, AES-GCM column type with blind index, batched retention, erasure/anonymisation, tests | A service stores or logs personal data | [references/data-privacy.md](./references/data-privacy.md) |
+| §1, §2 | `Principal`, `JwtTokenVerifier`, `get_principal` and the scope aliases, token and PII unit tests | Adding authentication | [references/auth-modules.md](./references/auth-modules.md) |
 
 ## 1. Authentication: verify the token in one dependency
 ```python

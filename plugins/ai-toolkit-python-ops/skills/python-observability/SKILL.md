@@ -29,6 +29,13 @@ src/my_service/observability/
 └── metrics.py          # prometheus-client collectors + middleware
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1 to §4 | `logging.py`, `correlation.py`, `metrics.py`, `tracing.py` as complete modules and their unit tests | Creating the observability package | [references/observability-modules.md](./references/observability-modules.md) |
+
 ## Dependencies
 ```toml
 dependencies = [

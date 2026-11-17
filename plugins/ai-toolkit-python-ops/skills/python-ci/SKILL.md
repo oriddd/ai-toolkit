@@ -121,6 +121,8 @@ only for libraries; services test the one version they ship. Push the image only
 separate step with registry credentials scoped to that job.
 
 ## 3. Dockerfile: multi-stage, non-root
+### `Dockerfile`
+
 ```dockerfile
 FROM python:3.14-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
@@ -178,7 +180,17 @@ reads it when the project is installed (drop it from the `COPY` if you do not de
 Dependencies are copied before source so the expensive layer is cached. The runtime stage has no
 compiler, no uv, no dev dependencies and no source tree (only the non-editable `.venv`), and runs as an
 unprivileged user that cannot write to the installed code. `.dockerignore` excludes
-`.git`, `.venv`, `tests`, `__pycache__`, `.env*`.
+`.git`, `.venv`, `tests`, `__pycache__`, `.env*`:
+
+### `.dockerignore`
+
+```
+.git
+.venv
+tests
+__pycache__
+.env*
+```
 
 Migrations run from the same image, once per deploy and before the new version takes traffic (a Kubernetes
 Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic upgrade head` with the runtime

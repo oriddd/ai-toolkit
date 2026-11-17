@@ -43,6 +43,7 @@ Load only the file you need.
 | Section | Topic | Load when | File |
 | --- | --- | --- | --- |
 | §4 | Circuit breaker class, its wiring around the retried call, fake-clock tests | A dependency can stay down for minutes | [references/circuit-breaker.md](./references/circuit-breaker.md) |
+| §1 to §6 | Port, wire model, retry policy, transport factory, `respx` tests of the billing client | Creating a client package | [references/billing-client.md](./references/billing-client.md) |
 
 ## Dependencies
 ```toml

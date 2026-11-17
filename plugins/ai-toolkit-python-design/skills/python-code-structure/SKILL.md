@@ -39,8 +39,11 @@ my-service/
 │   ├── models/                  # pydantic request/response models + domain value objects
 │   ├── errors/                  # exception hierarchy + message catalogue (see `python-error-handling`)
 │   └── config/                  # pydantic-settings classes
-└── tests/                       # mirrors src/ one-to-one (see `python-unit-tests`)
+└── tests/                       # mirrors src/ one-to-one; a package, with an __init__.py in every directory
 ```
+
+Every directory under `src/my_service/` and `tests/` is a package (an empty `__init__.py`); `python-unit-tests` explains
+what breaks without them under pytest and mypy.
 
 Create only the packages you need; never scaffold empty ones. A growing service may group by feature
 (`orders/api`, `orders/services`, ...) with the same layer names inside each feature.
@@ -72,6 +75,13 @@ file and delete the entry (ruff's T20 would flag it, and uvicorn starts the serv
 ("Expected a Python module at: src/orders_api/__init__.py"). Rename the package, or set
 `[tool.uv.build-backend] module-name = "my_service"`. Non-Python files inside the package (Alembic's
 `script.py.mako` and `versions/`) are included in the wheel without extra configuration.
+
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1b, §4, §5 | The complete `pyproject.toml` (every skill's dependencies and tool tables), settings classes, `Order` and `OrderResponse`, `Clock` and `IdGenerator` | Creating the project | [references/service-skeleton.md](./references/service-skeleton.md) |
 
 ## 2. Dependency direction
 
@@ -126,7 +136,8 @@ class CheckoutService:
 ```
 
 `Order` is the frozen domain model from `models/order.py` (`id`, `customer_id`, `total_cents`, `status`,
-`version`; see `python-persistence`).
+`version`; see `python-persistence`). `version` defaults to `1`, so a new order is built with four arguments and the
+repository hands back the stored version.
 
 Time, randomness, UUIDs and the environment are collaborators too (`Clock`, `IdGenerator`), never
 `datetime.now()` buried in logic. Wiring happens only in the composition root (`main.py`) and FastAPI

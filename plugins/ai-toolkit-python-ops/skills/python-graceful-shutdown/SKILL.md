@@ -37,6 +37,7 @@ Load only the file you need.
 | Section | Topic | Load when | File |
 | --- | --- | --- | --- |
 | §6 | SIGTERM drain test: real uvicorn subprocess under load, zero failed requests, negative control | Proving a service shuts down without dropping requests | [references/sigterm-drain-test.md](./references/sigterm-drain-test.md) |
+| §5, §6 | `liveness.py` and the worker drain unit tests (fake loops, real `SIGTERM`) | Writing or testing the worker | [references/worker-units.md](./references/worker-units.md) |
 
 ## 1. What uvicorn does on SIGTERM
 1. It closes the listening socket at once: a new connection is **refused**, not queued.
@@ -47,9 +48,13 @@ Load only the file you need.
 4. Only then does the lifespan's shutdown half (the code after `yield`) run, and the process exits.
 
 Step 1 is why the pod needs a `preStop` sleep (§3); step 2 is why the timeout must fit the grace period.
-After a clean drain uvicorn re-raises the signal, so the process exits with status `-15` (shell `143`), not `0`:
-that is success, so a smoke script or a CI check must not require exit code 0 from the api container. (The worker,
-§5, exits `0`.)
+After a clean drain uvicorn restores the default handler and re-raises the signal. What that looks like depends on
+who the process is: run as an ordinary process (a CI subprocess, systemd, a shell) it ends by `SIGTERM`, status `-15`
+in Python's `Popen.returncode` and `143` in a shell; run as PID 1 in a container the kernel discards a signal for
+which PID 1 has no handler, so it exits normally and `docker stop` reports `0` (measured on the `python-ci` image: `docker stop`
+returned exit code 0). Both are a clean drain, so a smoke script must accept either
+and judge the drain by the requests, not by the exit code. (The worker, §5, installs its own handlers and exits `0`
+everywhere.)
 
 ## 2. Run uvicorn so it receives the signal
 - Exec-form `CMD ["uvicorn", ..., "--timeout-graceful-shutdown", "20"]` (`python-ci` §3). In shell form,
@@ -133,6 +138,13 @@ async def run_worker(settings: AppSettings) -> None:
         loop.add_signal_handler(sig, stop.set)       # PID 1: without a handler SIGTERM is ignored
     # prometheus_client: /metrics for the PodMonitor (`python-cd` §5)
     start_http_server(settings.metrics_port)
+    try:
+        await _run_loops(settings, stop)
+    finally:
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.remove_signal_handler(sig)           # a test must not leave its handler on the shared loop
+
+async def _run_loops(settings: AppSettings, stop: asyncio.Event) -> None:
     # engine, producer, consumer; closed on exit
     async with worker_resources(settings) as resources:
         relay = asyncio.create_task(
@@ -206,7 +218,7 @@ if __name__ == "__main__":
   loop has stopped; `liveness.main` exits non-zero for a stale heartbeat file.
 - Under load, once per service (`references/sigterm-drain-test.md`): start uvicorn with the production flags in a
   subprocess, keep 20 clients sending 1-second requests, send `SIGTERM`; every request sent before the signal
-  completes with `200`, the process exits with `-15`, and a new connection is refused. The same test with `SIGKILL`
+  completes with `200`, the process exits with `-15` (it is not PID 1 there), and a new connection is refused. The same test with `SIGKILL`
   fails, so the assertions are not vacuous.
 - Worker, with a real broker (`python-messaging` `references/kafka-worker.md`): start `my-service-worker` as a
   subprocess, process one record, send `SIGTERM`; it exits `0` within seconds and both heartbeat files exist.

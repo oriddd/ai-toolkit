@@ -48,7 +48,7 @@ Load only the file you need.
 
 | Section | Topic | Load when | File |
 | --- | --- | --- | --- |
-| §5, §6 | Full consumer loop, example handler, worker process, `apache/kafka` test container, end-to-end worker tests | Writing the consumer or worker, or testing against a real broker | [references/kafka-worker.md](./references/kafka-worker.md) |
+| §1 to §6 | Events, `outbox.py`, relay, publisher, `create_order`, consumer loop, worker, `apache/kafka` container, unit and integration tests | Writing the outbox relay, consumer or worker, or testing them | [references/kafka-worker.md](./references/kafka-worker.md) |
 | §7 | Advisory-lock single-run helper, batched retention, job registry, APScheduler variant, tests | Adding a scheduled job or a purge | [references/scheduled-jobs.md](./references/scheduled-jobs.md) |
 
 ## Dependencies
