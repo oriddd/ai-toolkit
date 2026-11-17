@@ -123,32 +123,33 @@ public class PriorityCalculator {
 ```
 
 ### 1d. No hidden side effects
-Every method should do exactly what its name says, nothing more. A hidden
-side effect is a **state change** the caller cannot see from the name —
-mutating arguments or shared state, writing a cache, sending something.
-Logging and metrics are observability, not hidden side effects (see
-`observability`); keep them, at the right level.
+Every method should do exactly what its name says, nothing more. Logging,
+caching and metrics inside a method named like a query (`validate`, `find`,
+`get`, `is`) are hidden side effects: pull them out into an explicit method
+or a decorator. The one exemption is the observability pipeline itself — the
+`request-metrics` Filter and Recorder, whose whole job is to record — see
+`observability`.
 
 ```java
 // ✅ Good: Does what it says
-public ValidationResult validate(Invoice invoice) {
-    return validator.check(invoice);
+public ValidationResult validate(Document doc) {
+    return validator.check(doc);
 }
 
-// ❌ Bad: Hidden side effects (state mutation, caching)
-public ValidationResult validate(Invoice invoice) {
-    log.debug("Validating {}", invoice.getId());    // OK: observability, not a hidden side effect
-    metrics.increment("validation.count");       // OK: observability
-    ValidationResult result = validator.check(invoice);
-    cache.put(invoice.getId(), result);              // Side effect: later reads now depend on this call
-    invoice.markValidated();                         // Side effect: mutates the argument
+// ❌ Bad: Hidden side effects (logging, caching, metrics)
+public ValidationResult validate(Document doc) {
+    log.info("Validating {}", doc.getId());     // Side effect
+    metrics.increment("validation.count");       // Side effect
+    ValidationResult result = validator.check(doc);
+    cache.put(doc.getId(), result);              // Side effect
+    doc.markValidated();                         // Side effect: mutates the argument
     return result;
 }
 
 // ✅ Better: Explicit about side effects via separate methods
-public ValidationResult validate(Invoice invoice) {
-    ValidationResult result = validator.check(invoice);
-    recordValidation(invoice, result);  // Explicit side effect method
+public ValidationResult validate(Document doc) {
+    ValidationResult result = validator.check(doc);
+    recordValidation(doc, result);  // Explicit side effect method
     return result;
 }
 ```

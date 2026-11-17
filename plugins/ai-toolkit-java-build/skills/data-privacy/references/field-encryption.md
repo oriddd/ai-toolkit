@@ -69,5 +69,5 @@ under version 1 still read back; a modified ciphertext is rejected; `null` maps 
 ## Masking serializer
 
 The `@Mask` annotation on a record component, the `JacksonAnnotationIntrospector` override and `MaskingSerializer` from
-SKILL.md §2 were run on a record: the dedicated mapper writes `"email":"a***"`, a plain `ObjectMapper` still writes the
+SKILL.md §2 were run on a record: the dedicated mapper writes the e-mail with all but the last 4 characters replaced by `*` (e.g. `"email":"***.com"`), a plain `ObjectMapper` still writes the
 real value (so API responses are unaffected), and the record's `toString()` carries no PII.

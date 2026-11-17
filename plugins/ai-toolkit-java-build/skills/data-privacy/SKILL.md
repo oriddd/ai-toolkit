@@ -71,10 +71,14 @@ public class MaskingSerializer extends JsonSerializer<String> {
             gen.writeNull();
             return;
         }
-        gen.writeString(value.isEmpty() ? value : value.charAt(0) + "***");   // keep nothing that identifies the person (not the last 4 characters of an email)
+        gen.writeString(value.replaceAll(".(?=.{4})", "*"));
     }
 }
 ```
+
+The default shows the last 4 characters. For short or highly identifying values (a 4-character value is shown in full;
+an e-mail's last 4 characters are rarely sensitive but a short name is), mask first-character style instead:
+`value.isEmpty() ? value : value.charAt(0) + "***"`.
 
 ## 3. PII in Database (Encryption)
 

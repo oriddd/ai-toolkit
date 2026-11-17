@@ -31,6 +31,7 @@ Metric names and tag style follow `request-metrics` (guild #24), so every metric
   kept as constants (`MonitoringConstants`). Keep cardinality bounded: values come from a closed set, with `UNKNOWN` /
   `OTHER` sentinels. **Never** a free-form id, URL, or message. `clientId` is allowed because it is the OAuth client
   (`azp`) — a small, registered set of callers — never an end-user id.
+  camelCase matches the user-tested `request-metrics` constants (`requestMethod`, `responseStatus`, `clientId`); the original observability text used snake_case only in its example and so disagreed with it, and one style per service keeps dashboards and queries uniform.
 - **Types.** `Counter` for events; `Timer` for latencies (records count +
   histogram); `Gauge` for current values (queue depth, pool size).
 - **Use the Filter + Recorder Registry pattern** from `request-metrics` so

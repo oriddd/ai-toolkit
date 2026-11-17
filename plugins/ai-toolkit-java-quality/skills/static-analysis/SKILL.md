@@ -131,7 +131,7 @@ on objective violations.
         <configLocation>checkstyle.xml</configLocation>
         <consoleOutput>true</consoleOutput>
         <failOnViolation>true</failOnViolation>
-        <violationSeverity>error</violationSeverity>   <!-- warnings (F22, F24) are printed, errors (F23 ceiling) fail -->
+        <violationSeverity>error</violationSeverity>   <!-- warnings (F22, F24) are printed, errors (F23) fail -->
       </configuration>
       <executions><execution><phase>validate</phase><goals><goal>check</goal></goals></execution></executions>
     </plugin>
@@ -142,7 +142,7 @@ on objective violations.
 Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F22–F24
 thresholds (add team-specific modules below these). The severities match
 quality-review: F22 and F24 are **WARN** there, so Checkstyle reports them
-without failing the build; only the F23 **hard ceiling** (300 lines) is an
+without failing the build; only the F23 limit (300 lines) is an
 error. The plugin configuration above uses `<violationSeverity>error</violationSeverity>`,
 so warnings are printed but do not break the build:
 
@@ -152,7 +152,7 @@ so warnings are printed but do not break the build:
     "https://checkstyle.org/dtds/configuration_1_3.dtd">
 <module name="Checker">
   <property name="severity" value="warning"/>
-  <!-- F23 class length: hard ceiling 300 breaks the build (the 200 target is checked in quality-review) -->
+  <!-- F23 class length: 300 breaks the build -->
   <module name="FileLength">
     <property name="max" value="300"/>
     <property name="severity" value="error"/>
@@ -245,7 +245,7 @@ build fails with `IllegalAccessError`:
 | --- | --- |
 | Spotless | Any difference |
 | SpotBugs | Any HIGH; any MEDIUM not in the `spotbugs-exclude.xml` baseline (HIGH findings are never baselined) |
-| Checkstyle | Any `error`-severity violation (the F23 hard ceiling); F22 / F24 are printed as warnings, matching `quality-review` |
+| Checkstyle | Any `error`-severity violation (F23); F22 / F24 are printed as warnings, matching `quality-review` |
 | Error-Prone / NullAway | Any violation (at `ERROR` there is no baseline) |
 | Sonar | Quality Gate failure (default "Sonar way", on new code: reliability, security and maintainability rating A, all security hotspots reviewed, coverage ≥ 80 %, duplicated lines ≤ 3 %) |
 

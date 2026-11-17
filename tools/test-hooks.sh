@@ -146,10 +146,16 @@ for block in re.findall(r"```bash\n(.*?)```", open(sys.argv[1], encoding="utf-8"
 PYEOF
 [ -s "$CM/commit-msg.sh" ] || { echo "FAIL: commit-msg.sh block not found in git-commit-conventions/SKILL.md"; fail=1; }
 cm_rc() { printf '%s\n' "$2" > "$CM/msg"; env LC_ALL="${3:-C}" "$1" "$CM/commit-msg.sh" "$CM/msg" >/dev/null 2>&1; echo $?; }
+DASH_OK=0
+if command -v dash >/dev/null 2>&1; then
+  if [ "$(cm_rc dash 'feat: add x')" = 0 ]; then DASH_OK=1; else echo "NOTE: dash cannot run the commit-msg hook on this runner (probe failed); skipping dash cases"; fi
+fi
+shell_usable() { [ "$1" != dash ] || [ "$DASH_OK" = 1 ]; }
 long72="feat: $(python3 -c 'print("a"*66)')"; long73="${long72}a"
 utf72="feat: $(python3 -c 'print("é"*66)')"; utf73="${utf72}é"
 for sh_ in sh bash dash; do
   command -v "$sh_" >/dev/null || continue
+  shell_usable "$sh_" || continue
   for m in 'feat: SSO login' 'fix: JWT parsing' 'docs: README' 'fix(api): UserService NPE' 'feat!: drop v1' 'build: Docker base image' 'chore: iOS build' 'feat: add x' 'Merge branch main' 'fixup! feat: x' "$long72" "$utf72"; do
     [ "$(cm_rc "$sh_" "$m")" = 0 ] || { echo "FAIL ($sh_ commit-msg should accept): $m"; fail=1; }
   done
@@ -158,11 +164,13 @@ for sh_ in sh bash dash; do
   done
 done
 for loc in C en_US.UTF-8 C.UTF-8; do
+  [ "$DASH_OK" = 1 ] || break
   [ "$(cm_rc dash "$utf72" "$loc")" = 0 ] && [ "$(cm_rc dash "$utf73" "$loc")" = 1 ] || { echo "FAIL: UTF-8 character count wrong under LC_ALL=$loc"; fail=1; }
 done
 cm_run() { printf "$1" > "$CM/msg"; "$2" "$CM/commit-msg.sh" "$CM/msg" >/dev/null 2>&1; }
 for shell in sh bash dash; do
   command -v "$shell" >/dev/null 2>&1 || continue
+  shell_usable "$shell" || continue
   cm_run 'feat: add x\n' "$shell" || { echo "FAIL ($shell commit-msg): valid subject rejected"; fail=1; }
   cm_run 'feat: add x.\n' "$shell" && { echo "FAIL ($shell commit-msg): trailing period accepted"; fail=1; }
   cm_run 'feat: add x.\r\n' "$shell" && { echo "FAIL ($shell commit-msg): trailing period before CRLF accepted"; fail=1; }

@@ -39,7 +39,8 @@ Generate **meaningful** unit tests (not coverage-padding) for any class under
 - Test method names use the convention
   `methodName_condition_expectedResult()` (e.g.
   `processInvoice_nullInput_throwsIllegalArgumentException()`). Be
-  descriptive – no `test1`, `test2`.
+  descriptive – no `test1`, `test2`. Existing `when<Condition>_<Then>()` names
+  are accepted in review; new tests use the mandated form.
 - Arrange / Act / Assert comments (`// given`, `// when`, `// then`) when the
   test has more than a handful of lines.
 - For static method mocking use `try (MockedStatic<X> m = mockStatic(X.class))`
