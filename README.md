@@ -34,7 +34,7 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 
 | Language | Status | Prerequisites |
 | --- | --- | --- |
-| Java | **Supported** — the user-tested core of the catalogue; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
+| Java | **Supported** — the original skills were user-tested; the added and rewritten parts are covered by evals and executed proofs, not by production use; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
 | Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.14 (3.12+ supported), FastAPI, uv |
 | React Native | **Experimental** — required concerns only, not yet validated on production projects | React Native with TypeScript, Expo (EAS) or bare workflow (Fastlane), npm |
 

@@ -151,7 +151,7 @@ done
 ident="$(git config user.name) <$(git config user.email)>"
 ident_hit=0
 for term in ${BLOCK[@]+"${BLOCK[@]}"}; do
-  if printf '%s' "$ident" | grep -qiF -- "$term"; then fail "git identity for new commits contains blocklisted term '$term': $ident"; ident_hit=1; fi
+  if grep -qiF -- "$term" <<<"$ident"; then fail "git identity for new commits contains blocklisted term '$term': $ident"; ident_hit=1; fi
 done
 [ "$ident_hit" -eq 0 ] && pass "git identity for new commits is clean ($ident)"
 
@@ -185,23 +185,26 @@ else
   pass "no AI attribution in tracked content"
 fi
 rm -f /tmp/pfp_attr.$$
-if git log --all --format='%H %B' | grep -Eiq "$ATTR"; then fail "AI attribution trailer found in commit messages"; else pass "no AI attribution in commit messages"; fi
+n_attr="$(git log --all --format='%B' | grep -Eic "$ATTR" || true)"
+if [ "${n_attr:-0}" -gt 0 ]; then fail "AI attribution trailer found in $n_attr commit message line(s) across all refs"; else pass "no AI attribution in commit messages"; fi
 
-# 2g. Unreachable objects survive a history rewrite until the reflog is expired and gc runs.
+# 2g. Unreachable objects survive a history rewrite locally until the reflog is expired and gc runs.
+# They are not reachable from any branch, remote or tag, so they cannot be pushed: WARN, not FAIL.
+# Everything reachable from a ref is already covered by the history scan in 2d.
 unreach_hit=0
 if [ ${#BLOCK[@]} -gt 0 ]; then
   while IFS= read -r obj; do
     [ -n "$obj" ] || continue
     body="$(git cat-file -p "$obj" 2>/dev/null)"
     for term in ${BLOCK[@]+"${BLOCK[@]}"}; do
-      if printf '%s' "$body" | grep -qiF -- "$term"; then
-        fail "unreachable git object $obj still contains blocklisted term '$term' — run: git reflog expire --expire=now --all && git gc --prune=now"
+      if grep -qiF -- "$term" <<<"$body"; then
+        warn "unreachable local object $obj contains blocklisted term '$term' (cannot be pushed; remove it with: git reflog expire --expire=now --all && git gc --prune=now)"
         unreach_hit=1; break
       fi
     done
   done < <(git fsck --unreachable --no-reflogs --no-progress 2>/dev/null | awk '$1=="unreachable" && ($2=="blob"||$2=="commit"){print $3}')
 fi
-[ "$unreach_hit" -eq 0 ] && pass "no blocklisted terms in unreachable git objects"
+[ "$unreach_hit" -eq 0 ] && pass "no blocklisted terms in unreachable local git objects"
 
 # 2c. Obvious secrets.
 if git grep -nIE "(ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]+|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)" \

@@ -254,7 +254,7 @@ repos:
 #!/bin/sh
 # scripts/commit-msg.sh (chmod +x) — receives the message file as $1
 
-subject=$(head -n 1 "$1")   # check the subject line only, not the body
+subject=$(tr -d '\r' < "$1" | sed -e '/^#/d' -e '/^[[:space:]]*$/d' | head -n 1)   # first non-comment line (as git does), CRLF-safe; subject only, not the body
 # Merge commits, auto-generated reverts and the fixup!/squash!/amend! commits that `git rebase --autosquash` relies on are allowed through
 case "$subject" in
     "Merge "*|"Revert \""*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;

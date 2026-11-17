@@ -41,14 +41,16 @@ GIT_OPTS_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--e
 GIT_ALWAYS = {"commit", "push", "rebase", "cherry-pick", "merge", "am", "revert",
               "commit-tree", "update-ref", "filter-branch", "filter-repo", "send-email", "fast-import"}
 # Flags that turn a GIT_ALWAYS command into a no-op/inspection — only when they are the *only* argument.
-SOLE_SAFE_FLAGS = {"--abort", "--continue", "--skip", "--quit", "--show-current-patch", "-h", "--help"}
+SOLE_SAFE_FLAGS = {"--abort", "--skip", "--quit", "--show-current-patch", "-h", "--help"}  # --continue creates the commit/merge
 DRY_RUN_FLAGS = {"commit": {"--dry-run"}, "push": {"--dry-run", "-n"}}  # -n is --no-verify for commit
 NO_COMMIT_SUBS = {"merge", "cherry-pick", "revert"}
 # Options whose value is a separate token, so the value must never be read as a flag (`git commit -m --abort`).
 GIT_VALUE_OPTS = {"-m", "--message", "-F", "--file", "-C", "--reuse-message", "-c", "--reedit-message", "-t",
                   "--template", "--author", "--date", "--fixup", "--squash", "--cleanup", "--trailer",
-                  "--pathspec-from-file", "-o", "--push-option", "--repo", "--receive-pack", "--exec", "-s",
-                  "--strategy", "-X", "--strategy-option", "--onto", "--into-name", "-x", "--exec-cmd"}
+                  "--pathspec-from-file", "-o", "--push-option", "--repo", "--receive-pack", "--exec",
+                  "--strategy", "-X", "--strategy-option", "--onto", "--into-name", "--exec-cmd"}
+# Short options whose meaning depends on the subcommand: `-s` is --signoff/--sign elsewhere, `-x` is a flag for cherry-pick.
+SCOPED_VALUE_OPTS = {"-s": {"merge", "rebase", "pull"}, "-x": {"rebase"}, "-f": {"config"}}
 TAG_LIST_FLAGS = {"-l", "--list", "-n", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "-v", "--verify"}
 STASH_QUIET = {"list", "show", "create", "-h", "--help"}
 SUBTREE_WRITE = {"add", "merge", "pull", "push"}
@@ -217,7 +219,11 @@ def segments(tokens):
         yield seg
 
 
-def real_flags(rest):
+def takes_value(opt, sub):
+    return opt in GIT_VALUE_OPTS or sub in SCOPED_VALUE_OPTS.get(opt, ())
+
+
+def real_flags(rest, sub=""):
     """The argument tokens that are real options: not option values and not after `--`."""
     flags, skip = [], False
     for r in rest:
@@ -228,17 +234,17 @@ def real_flags(rest):
             break
         if r.startswith("-"):
             flags.append(r)
-            skip = r in GIT_VALUE_OPTS
+            skip = takes_value(r, sub)
     return flags
 
 
-def positionals(rest):
+def positionals(rest, sub=""):
     out, skip = [], False
     for r in rest:
         if skip:
             skip = False
         elif r.startswith("-"):
-            skip = r in GIT_VALUE_OPTS
+            skip = takes_value(r, sub)
         else:
             out.append(r)
     return out
@@ -271,7 +277,7 @@ def git_risky(args, depth):
             break
     sub = args[i] if i < len(args) else ""
     rest = args[i + 1:]
-    flags = real_flags(rest)
+    flags = real_flags(rest, sub)
     if sub in GIT_ALWAYS:
         if len(rest) == 1 and rest[0] in SOLE_SAFE_FLAGS:
             return False
@@ -281,12 +287,12 @@ def git_risky(args, depth):
             return False
         return True
     if sub == "tag":
-        return bool(positionals(rest)) and not any(f in TAG_LIST_FLAGS for f in flags)
+        return bool(positionals(rest, sub)) and not any(f in TAG_LIST_FLAGS for f in flags)
     if sub == "reset":
         if any(f in ("--hard", "--merge", "--keep", "--soft") for f in flags):
             return True
         before_dashdash = rest[:rest.index("--")] if "--" in rest else rest
-        pos = positionals(before_dashdash)
+        pos = positionals(before_dashdash, sub)
         if len(pos) > 1 or ("--" in rest and rest[rest.index("--") + 1:]):
             return False  # `git reset <commit> -- <paths>` only unstages those paths; HEAD does not move
         return any(re.search(r"[~^]|^@\{|^ORIG_HEAD$|^FETCH_HEAD$|^[0-9a-f]{7,40}$", p) for p in pos)
@@ -307,6 +313,16 @@ def git_risky(args, depth):
         return not any(f in ("-h", "--help", "--dry-run") or re.match(r"^-[A-Za-z]*n[A-Za-z]*$", f) for f in flags)
     if sub == "pull":
         return any(f in ("-r", "--rebase") or (f.startswith("--rebase=") and f != "--rebase=false") for f in flags)
+    if sub == "reflog":
+        return bool(rest) and rest[0] in ("expire", "delete")
+    if sub == "gc":
+        return any(f == "--prune" or f.startswith("--prune=") for f in flags)
+    if sub == "worktree":
+        return bool(rest) and rest[0] in ("remove", "prune")
+    if sub == "remote":
+        return bool(rest) and rest[0] in ("add", "remove", "rm", "rename", "set-url", "prune")
+    if sub == "config":
+        return config_writes(rest, flags)
     if sub == "svn":
         return bool(rest) and rest[0] in ("dcommit", "rebase", "commit-diff", "set-tree")
     if sub == "subtree":
@@ -320,6 +336,24 @@ def git_risky(args, depth):
             tail = " ".join(shlex.quote(r) for r in rest)
             return risky(alias[1:] + " " + tail if alias.startswith("!") else "git " + alias + " " + tail, depth + 1)
     return False
+
+
+CONFIG_READ_FLAGS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "-l", "--list", "--show-origin",
+                     "--show-scope", "--name-only", "-h", "--help", "--get-color", "--get-colorbool"}
+CONFIG_WRITE_FLAGS = {"--add", "--unset", "--unset-all", "--replace-all", "--rename-section", "--remove-section",
+                      "-e", "--edit", "--set"}
+
+
+def config_writes(rest, flags):
+    if any(f in CONFIG_WRITE_FLAGS for f in flags):
+        return True
+    if any(f in CONFIG_READ_FLAGS for f in flags):
+        return False
+    if rest and rest[0] in ("list", "get"):
+        return False
+    if rest and rest[0] in ("set", "unset", "edit", "rename-section", "remove-section"):
+        return True
+    return len(positionals(rest, "config")) >= 2
 
 
 def checkout_risky(rest, flags):

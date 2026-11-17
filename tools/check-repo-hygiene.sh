@@ -5,7 +5,7 @@
 #   3. .gitattributes pins LF for scripts
 # Usage: bash tools/check-repo-hygiene.sh
 set -uo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$ROOT" || exit 1
 fail=0
 # 1. git modes
 while IFS= read -r line; do

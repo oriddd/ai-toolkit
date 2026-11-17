@@ -4,7 +4,7 @@
 # are told "already at the latest version" and never receive them.
 #   bash tools/check-versions.sh [base-ref]     (default: origin/main, then main)
 set -uo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$ROOT" || exit 1
 base="${1:-}"
 if [ -z "$base" ]; then
   for c in origin/main origin/master main master; do git rev-parse --verify -q "$c" >/dev/null && { base="$c"; break; }; done
@@ -52,6 +52,10 @@ if unreleased and unreleased.group(1).strip() and released and meta == released.
     print(f"NOTE: plugin versions changed and [Unreleased] has entries, but marketplace metadata.version is still {meta} (the last release). "
           "Before tagging: bump metadata.version, rename [Unreleased] to the new version heading and add a fresh [Unreleased] (docs/CONTRIBUTING.md, Releasing).")
 PYEOF
+fi
+latest="$(sed -n 's/^## \[\([0-9][0-9.]*\)\].*/\1/p' docs/CHANGELOG.md 2>/dev/null | head -n 1)"
+if [ -n "$latest" ] && [ -z "$(git tag -l "v$latest")" ]; then
+  echo "NOTE: docs/CHANGELOG.md latest release $latest has no git tag v$latest — tag the release commit (docs/CONTRIBUTING.md, Releasing)"
 fi
 [ $fail -eq 0 ] && echo "versions OK (against $base)"
 exit $fail

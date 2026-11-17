@@ -18,5 +18,9 @@ entries under `## [Unreleased]` in `docs/CHANGELOG.md`; `tools/check-versions.sh
 `.claude-plugin/marketplace.json` still equals the last release. To cut a release, in one commit: choose the next SemVer, set
 `metadata.version` in `marketplace.json` to it, rename `[Unreleased]` to `## [X.Y.Z] - date` and add an empty `## [Unreleased]` above it
 (`tools/validate-skills.sh` fails when `metadata.version` and the latest released heading differ), run the CI gates above, then tag `vX.Y.Z`.
+A release is complete only when its git tag exists. For every `## [x.y.z]` heading you add to `docs/CHANGELOG.md`:
+1. Merge the release PR to `main` (all gates above green, plugin versions bumped, `[Unreleased]` renamed to `[x.y.z] - date`).
+2. Tag the merge commit and push the tag: `git tag -a vx.y.z -m "vx.y.z" <merge-commit> && git push origin vx.y.z`.
+3. Confirm with `git ls-remote --tags origin vx.y.z`. `bash tools/check-versions.sh` prints a NOTE when the latest CHANGELOG release has no matching tag.
 ## Code of Conduct
 Be professional and constructive.
