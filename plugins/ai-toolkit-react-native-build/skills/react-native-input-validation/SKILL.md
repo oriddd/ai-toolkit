@@ -31,13 +31,16 @@ handlers assume data is already valid.
 features/signup/
 ├── model/
 │   ├── signupSchema.ts       # zod schema + inferred form and request types
-│   ├── passwordRules.ts      # reusable field schemas
 │   └── signupSchema.test.ts
 ├── api/signupApi.ts          # the only caller of the http client (react-native-state-and-data)
-└── hooks/useSignup.ts        # mutation + server field errors -> form (section 7)
+├── hooks/useSignup.ts        # mutation + server field errors -> form (section 7)
+├── screens/SignupScreen.tsx  # section 4; route: src/app/sign-up.tsx
+└── index.ts                  # export { SignupScreen } from './screens/SignupScreen';
+features/auth/                # sign-in, section 8: model/signinSchema.ts  api/authApi.ts  hooks/useSignIn.ts  screens/SignInScreen.tsx
 shared/validation/
 ├── fieldSchemas.ts       # email, phone, money used across features
 └── messages.ts           # validation message catalogue
+shared/ui/FormTextField.tsx   # section 4
 ```
 
 ## Dependencies
@@ -101,22 +104,61 @@ export function useSignupForm() {
   });
 }
 
+// features/signup/screens/SignupScreen.tsx
 export function SignupScreen() {
-  const { control, handleSubmit, setError } = useSignupForm();
+  const router = useRouter();                                // expo-router
+  const { control, handleSubmit, setError, formState } = useSignupForm();
   const { mutate, isPending } = useSignup(setError);         // section 7 maps server field errors into the form
+  const submit = handleSubmit((v) => { mutate(v, { onSuccess: () => { router.replace('/sign-in'); } }); });
   return (
     <>
       <FormTextField control={control} name="email" label="Email" testID="signup-email" />
       <FormTextField control={control} name="password" label="Password" secureTextEntry testID="signup-password" />
       <FormTextField control={control} name="confirmPassword" label="Confirm password" secureTextEntry testID="signup-confirm-password" />
-      <Button title="Create account" testID="signup-submit" disabled={isPending} onPress={() => void handleSubmit((v) => mutate(v))()} />
+      {formState.errors.root?.server ? <Text accessibilityRole="alert">{formState.errors.root.server.message}</Text> : null}
+      <Button title="Create account" testID="signup-submit" disabled={isPending} onPress={() => void submit()} />
     </>
   );
 }
+// src/app/sign-up.tsx: export { SignupScreen as default } from '@features/signup';
 ```
 
-`FormTextField` is a small generic component of the app (`<T extends FieldValues>({ control, name, label, testID,
-secureTextEntry })`) that wraps `Controller` around a `TextInput` and renders `fieldState.error?.message`. The screen holds no rules.
+The screen holds no rules. `FormTextField` is the one generic field of the app: `Controller` around a `TextInput`, labelled for
+accessibility and for the Maestro flows, rendering the field's error message:
+
+```tsx
+// shared/ui/FormTextField.tsx
+import { Text, TextInput } from 'react-native';
+import { Controller, type Control, type FieldPath, type FieldValues } from 'react-hook-form';
+
+type Props<T extends FieldValues> = {
+  control: Control<T>; name: FieldPath<T>; label: string; testID: string; secureTextEntry?: boolean;
+};
+
+export function FormTextField<T extends FieldValues>({ control, name, label, testID, secureTextEntry = false }: Props<T>) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <>
+          <Text>{label}</Text>
+          <TextInput
+            accessibilityLabel={label}
+            testID={testID}
+            secureTextEntry={secureTextEntry}
+            autoCapitalize="none"
+            value={typeof field.value === 'string' ? field.value : ''}
+            onBlur={field.onBlur}
+            onChangeText={field.onChange}
+          />
+          {fieldState.error ? <Text accessibilityRole="alert">{fieldState.error.message}</Text> : null}
+        </>
+      )}
+    />
+  );
+}
+```
 
 ## 5. Share schemas with API types
 
@@ -195,8 +237,59 @@ export function useSignup(setError: UseFormSetError<SignupForm>) {
 }
 ```
 
-The screen renders `formState.errors.root?.server?.message` above the submit button. Messages come from
+The screen renders `formState.errors.root?.server?.message` above the submit button (section 4). Messages come from
 the catalogue, never from the server's text.
+
+## 8. Sign-in: the second form
+
+Sign-in is the form every protected app needs and the one the Maestro flows start from (`react-native-e2e-tests` §3).
+Same layers as sign-up; the success path stores the tokens in the `SecureStore` and signs the session store in, and the
+root navigator (`react-native-security` §1b) then shows the orders list:
+
+```ts
+// features/auth/model/signinSchema.ts
+export const signinSchema = z.object({ email: emailField, password: z.string().min(1, vm.required) });
+export type SigninForm = z.infer<typeof signinSchema>;
+export const loginResponseSchema = z.object({
+  accessToken: z.string().min(1), refreshToken: z.string().min(1), userId: z.string().min(1),
+});
+// features/auth/api/authApi.ts
+export const createAuthApi = (http: HttpClient) => ({
+  login: (body: SigninForm) => http.request({ path: '/auth/login', method: 'POST', body }, loginResponseSchema),
+});
+// features/auth/hooks/useSignIn.ts
+export function useSignIn() {
+  const { http, secure } = useServices();
+  const authApi = useMemo(() => createAuthApi(http), [http]);
+  return useMutation({
+    mutationFn: authApi.login,
+    onSuccess: async ({ accessToken, refreshToken, userId }) => {
+      await secure.set('token', accessToken);
+      await secure.set('refreshToken', refreshToken);
+      useSessionStore.getState().signIn(userId);
+    },
+  });
+}
+```
+
+```tsx
+// features/auth/screens/SignInScreen.tsx: route src/app/sign-in.tsx re-exports it as default
+export function SignInScreen() {
+  const { control, handleSubmit } = useForm<SigninForm>({
+    resolver: zodResolver(signinSchema), defaultValues: { email: '', password: '' }, mode: 'onBlur',
+  });
+  const { mutate, isPending, error } = useSignIn();
+  return (
+    <>
+      <FormTextField control={control} name="email" label="Email" testID="signin-email" />
+      <FormTextField control={control} name="password" label="Password" secureTextEntry testID="signin-password" />
+      {error ? <ErrorState error={error} /> : null}
+      <Button title="Sign in" testID="signin-submit" disabled={isPending} onPress={() => void handleSubmit((v) => { mutate(v); })()} />
+      <Link href="/sign-up" testID="signin-create-account">Create account</Link>
+    </>
+  );
+}
+```
 
 ## Do / Don't
 

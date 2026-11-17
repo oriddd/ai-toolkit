@@ -205,6 +205,10 @@ dead branch) once it is fully rolled out. Use a build variant only for things th
   entitlement and the `autoVerify` intent filter. The server files and verification commands are in
   `react-native-security` (`references/deep-link-server-setup.md`).
 
+`expo prebuild --platform` takes one value (checked on SDK 58): a repeated flag (`--platform ios --platform android`) keeps only the
+last and generated just `android/`, and a comma list (`ios,android`) generated nothing. Pass `--platform all` (the default) or call
+once per platform, as `tools/render-rn-proof.sh` does; delete `ios/` and `android/` between calls.
+
 `android.allowBackup: false` (`react-native-security` section 6) is set here too and lands as `android:allowBackup="false"`.
 
 ## References

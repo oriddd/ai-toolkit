@@ -26,8 +26,9 @@ links, calling remote APIs, or writing log statements. Assume the device and the
 ```
 shared/services/secure-storage/
 ├── SecureStore.ts            # interface: get/set/remove
-├── KeychainSecureStore.ts    # Keychain (iOS) / Keystore (Android) implementation
-└── FakeSecureStore.ts        # in-memory, for tests
+├── KeychainSecureStore.ts    # bare apps: Keychain (iOS) / Keystore (Android) via react-native-keychain
+├── ExpoSecureStore.ts        # Expo apps: the same interface over expo-secure-store
+test/fakes/FakeSecureStore.ts # in-memory, for tests (react-native-unit-tests, references/test-harness.md)
 shared/session/createAuthSession.ts   # AuthSession: access token + single-flight refresh
 shared/session/signOut.ts
 shared/services/logger/Logger.ts
@@ -37,12 +38,13 @@ features/links/model/linkSchemas.ts
 ## Dependencies
 
 ```json
-{ "dependencies": { "react-native-keychain": "^11.0.0", "react-native-url-polyfill": "^4.0.0" } }
+{ "dependencies": { "expo-secure-store": "<sdk-matched>", "react-native-url-polyfill": "^4.0.0" } }
 ```
 
-(Expo apps may use `expo-secure-store` behind the same interface, added with `npx expo install expo-secure-store` so it
-matches the SDK.) `react-native-keychain` 11 peers on
-React Native >= 0.82; an older app stays on the newest major that supports its React Native version.
+An Expo app (the default) adds `expo-secure-store` with `npx expo install expo-secure-store` so it matches the SDK, and lists
+`'expo-secure-store'` in the `plugins` of `app.config.ts`. A bare React Native app takes `react-native-keychain` `^11.0.0`
+instead (it peers on React Native >= 0.82; an older app stays on the newest major that supports its React Native version).
+Both sit behind the same `SecureStore` interface.
 
 ## 1. Secure storage behind an interface
 
@@ -53,6 +55,19 @@ export interface SecureStore {
   remove(key: string): Promise<void>;
 }
 
+// ExpoSecureStore.ts: Expo apps
+import * as ExpoSecureStore from 'expo-secure-store';
+
+export const createExpoSecureStore = (service: string): SecureStore => ({
+  get: (key) => ExpoSecureStore.getItemAsync(`${service}.${key}`),
+  set: (key, value) =>
+    ExpoSecureStore.setItemAsync(`${service}.${key}`, value, {
+      keychainAccessible: ExpoSecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    }),
+  remove: (key) => ExpoSecureStore.deleteItemAsync(`${service}.${key}`),
+});
+
+// KeychainSecureStore.ts: bare apps
 export const createKeychainStore = (service: string): SecureStore => ({
   async get(key) { const r = await Keychain.getGenericPassword({ service: `${service}.${key}` }); return r ? r.password : null; },
   async set(key, value) { await Keychain.setGenericPassword(key, value, { service: `${service}.${key}`,
@@ -123,9 +138,9 @@ export function createAuthSession(secure: SecureStore, anonymousHttp: HttpClient
 
 ```ts
 export const createServices = (env: AppEnv): Services => {
-  const secure = createKeychainStore('app');
-  const session = createAuthSession(secure, createHttpClient(env.apiUrl, anonymousSession));
-  return { http: createHttpClient(env.apiUrl, session), secure, /* storage, consent, logger, errorReporter, analytics */ };
+  const secure = createExpoSecureStore('app');         // bare apps: createKeychainStore('app')
+  const session = createAuthSession(secure, createHttpClient(env.apiBaseUrl, anonymousSession));
+  return { http: createHttpClient(env.apiBaseUrl, session), secure, /* storage, consent, logger, errorReporter, analytics */ };
 };
 ```
 
@@ -141,7 +156,7 @@ export const RootNavigator = () => {
   return (
     <Stack>
       <Stack.Protected guard={signedIn}><Stack.Screen name="orders/index" /><Stack.Screen name="orders/[id]" /></Stack.Protected>
-      <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" /></Stack.Protected>
+      <Stack.Protected guard={!signedIn}><Stack.Screen name="sign-in" /><Stack.Screen name="sign-up" /></Stack.Protected>
     </Stack>
   );
 };
@@ -209,7 +224,7 @@ React Navigation apps pass the initial URL from `Linking.getInitialURL()` and la
 its own route params (`react-native-code-structure` §4), because a link that maps to a route file is a route param. Test the mapping as a pure function (`react-native-unit-tests`)
 and the entry as one Maestro flow (`react-native-e2e-tests`).
 
-Prefer verified universal/app links over custom schemes: the server files, `app.config.ts` entries and the verification\ncommands are in [deep-link-server-setup.md](./references/deep-link-server-setup.md). Never navigate to a route or open a URL taken
+Prefer verified universal/app links over custom schemes: the server files, `app.config.ts` entries and the verification commands are in [deep-link-server-setup.md](./references/deep-link-server-setup.md). Never navigate to a route or open a URL taken
 from a link without the allow-list. Links never carry tokens or trigger a state-changing action without a confirm step.
 
 ## 4. Transport

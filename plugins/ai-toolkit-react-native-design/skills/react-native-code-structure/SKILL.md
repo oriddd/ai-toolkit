@@ -92,7 +92,9 @@ supports TypeScript below 6.1, which sets the upper bound, so never TypeScript 7
 ```
 
 `paths` resolve relative to the `tsconfig.json` without `baseUrl`, which TypeScript 6 deprecates (TS5101).
-Mirror the aliases in `babel.config.js` (`module-resolver`) so Metro resolves what `tsc` resolves.
+Mirror the aliases in `babel.config.js` (`module-resolver`) so Metro and Jest resolve what `tsc` resolves; the file, the steps
+that strip the template's demo code and its `@/*` alias, and the `jest.setup.ts` mocks are in
+[expo-template-setup.md](./references/expo-template-setup.md).
 Never use `../../../` across feature boundaries; use an alias. Routes are not imported by anything, so `src/app` has no
 alias. (A React Navigation app keeps its composition root in `src/app/` with an `@app/*` alias instead of `bootstrap`.)
 
@@ -179,8 +181,16 @@ function OrderDetailContent({ id }: { id: OrderId }) {   // same file, screens l
   const { order, error, refetch } = useOrder(id);        // react-native-state-and-data §4
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   if (!order) return <LoadingState />;
-  return <OrderDetail order={order} />;                  // components/OrderDetail.tsx: pure render, props only
+  return <OrderDetail order={order} />;
 }
+
+// features/orders/components/OrderDetail.tsx: pure render, props only; the testID is what the deep-link flow asserts
+export const OrderDetail = ({ order }: { order: Order }) => (
+  <View testID="order-detail">
+    <Text>{order.title}</Text>
+    <Text>{order.status}</Text>
+  </View>
+);
 ```
 
 Route params carry ids, not whole objects; the detail screen reads its data through its own hook and passes it down.
@@ -237,7 +247,7 @@ Features build their own api from `useServices().http` in a hook (`useOrdersApi`
 Smallest pattern that fits: a module-level singleton is fine for a pure function; use a provider
 only for things you need to fake or swap.
 
-## 7–8. Accessibility, lists and React Navigation (reference)
+## 7–8. Accessibility, lists, React Navigation and template setup (reference)
 
 Load only the file you need:
 
@@ -246,6 +256,7 @@ Load only the file you need:
 | 7 | Roles, labels, states, touch targets, font scaling | building any interactive component or form field | [accessibility-and-lists.md](./references/accessibility-and-lists.md) |
 | 8 | `FlatList` rules, stable keys, pagination, FlashList | rendering a list that can outgrow one screen | [accessibility-and-lists.md](./references/accessibility-and-lists.md) |
 | 4b | React Navigation param lists, global `RootParamList`, screen props | the app has no Expo Router | [react-navigation.md](./references/react-navigation.md) |
+| 1 | Strip the Expo template, `babel.config.js`, `jest.setup.ts` mocks | starting from `create-expo-app` or fixing "Unable to resolve module @shared/..." | [expo-template-setup.md](./references/expo-template-setup.md) |
 
 Minimum without loading it: every pressable has `accessibilityRole` and a name, inputs have `accessibilityLabel`, and
 growing lists are a virtualised `FlatList` keyed by the domain id, never `map` inside a `ScrollView`.

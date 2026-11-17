@@ -25,14 +25,13 @@ sign-in, purchase, onboarding, deep-link entry. Everything else is cheaper and m
 
 ```
 .maestro/
-├── config.yaml
 ├── flows/
 │   ├── sign-up.yaml
 │   ├── sign-in.yaml
-│   ├── place-order.yaml
 │   └── deep-link-order.yaml
 └── subflows/
-    └── launch-signed-out.yaml
+    ├── launch-signed-out.yaml
+    └── sign-in.yaml
 ```
 
 ## Dependencies
@@ -48,8 +47,8 @@ brew tap mobile-dev-inc/tap && brew install mobile-dev-inc/tap/maestro       # d
 ```
 
 Syntax needs no device: `maestro check-syntax .maestro/flows/sign-up.yaml` prints `OK` or the invalid command with its
-line (checked with Maestro 2.12.1: the flows below pass, a misspelled `tapOnn` fails). Run it on every flow in the PR gate.
-Record the pinned version in the repo (README or `.maestro/config.yaml` comment) and in the CI image, then run:
+line (checked with Maestro 2.12.1: the flows below pass, a misspelled `tapOnn` fails). Run it on every flow and subflow in the PR gate.
+Record the pinned version in the repo (README) and in the CI image, then run:
 
 ```sh
 maestro test .maestro/flows --format junit
@@ -77,33 +76,69 @@ Naming: `<feature>-<element>` in kebab-case; list items add the id (`order-card-
 `id:` (the `testID`); select by visible text only for text that is neither translated nor dynamic. Never
 select by index or coordinates. IDs do not change without updating flows.
 
-## 3. A flow
+## 3. Flows
 
-The sign-up journey, using the test IDs of the `SignupScreen` in `react-native-input-validation` and the
-orders list from `react-native-code-structure`:
+The app id is the one `app.config.ts` gives the build under test. E2E builds use the `e2e` EAS profile of `react-native-ci`
+§2, which sets `APP_VARIANT=production`: a simulator / emulator binary that is never uploaded, with bundle id and package
+`com.example.shop` and the only variant that carries the verified links of the deep-link flow. Every flow starts
+`appId: com.example.shop`.
+
+A signed-out launch lands on `/sign-in` (the `RootNavigator` guard, `react-native-security` §1b), so every flow starts at
+the sign-in screen, and a flow that needs a session signs in through the UI first. There is no session seed and no debug
+backdoor in the app. The test IDs below are the ones of `SignInScreen` and `SignupScreen` in `react-native-input-validation`
+(§4 and §8) and of the orders list and detail in `react-native-code-structure` (`orders-list`, `order-detail`):
 
 ```yaml
 # .maestro/subflows/launch-signed-out.yaml
-appId: com.example.app
+appId: com.example.shop
 ---
 - launchApp:
     clearState: true              # app data and caches
     clearKeychain: true           # iOS: tokens live in the Keychain, which clearState leaves in place
 - extendedWaitUntil:
     visible:
-      id: signup-email
+      id: signin-email            # what a signed-out launch shows
     timeout: 10000
 ```
 
 ```yaml
+# .maestro/subflows/sign-in.yaml: runs on the sign-in screen
+appId: com.example.shop
+---
+- tapOn:
+    id: signin-email
+- inputText: ${E2E_USER}
+- tapOn:
+    id: signin-password
+- inputText: ${MAESTRO_E2E_PASSWORD}
+- tapOn:
+    id: signin-submit
+- extendedWaitUntil:
+    visible:
+      id: orders-list
+    timeout: 10000
+```
+
+```yaml
+# .maestro/flows/sign-in.yaml
+appId: com.example.shop
+tags: [critical]
+---
+- runFlow: ../subflows/launch-signed-out.yaml
+- runFlow: ../subflows/sign-in.yaml
+```
+
+```yaml
 # .maestro/flows/sign-up.yaml
-appId: com.example.app
+appId: com.example.shop
 tags: [critical]
 ---
 - runFlow: ../subflows/launch-signed-out.yaml
 - tapOn:
+    id: signin-create-account
+- tapOn:
     id: signup-email
-- inputText: ${E2E_USER}
+- inputText: ${E2E_NEW_USER}
 - tapOn:
     id: signup-password
 - inputText: ${MAESTRO_E2E_PASSWORD}
@@ -112,30 +147,37 @@ tags: [critical]
 - inputText: ${MAESTRO_E2E_PASSWORD}
 - tapOn:
     id: signup-submit
-- assertVisible:
-    id: orders-list
+- extendedWaitUntil:
+    visible:
+      id: signin-email            # a created account returns to sign-in
+    timeout: 10000
+- runFlow: ../subflows/sign-in.yaml    # the new account signs in
 ```
 
 ```yaml
 # .maestro/flows/deep-link-order.yaml
-appId: com.example.app
+appId: com.example.shop
 tags: [critical]
 ---
 - runFlow: ../subflows/launch-signed-out.yaml
+- runFlow: ../subflows/sign-in.yaml
 - openLink: https://evil.example.net/orders?orderId=${E2E_ORDER_ID}
 - assertNotVisible:
     id: order-detail
+- assertVisible:
+    id: orders-list
 - openLink: https://app.example.com/orders?orderId=${E2E_ORDER_ID}
 - assertVisible:
     id: order-detail
 ```
 
-The first link must leave the app where it is (`resolveDeepLink` allow-list, `react-native-security` section 3). A signed-out launch lands on sign-in, so seed a signed-in subflow if the target
-route is protected. Verified-link setup, not the flow, decides whether the OS opens the app (`react-native-security`
-`references/deep-link-server-setup.md`).
+The first link must leave the app where it is (`resolveDeepLink` allow-list, `react-native-security` section 3); the
+second opens the detail of a seeded order. Verified-link setup, not the flow, decides whether the OS opens the app
+(`react-native-security` `references/deep-link-server-setup.md`).
 
-`E2E_USER` is an address the seeded test backend resets before each run (section 4), so the sign-up
-succeeds every time. Other journeys (sign-in, place order) follow the same shape with their own screens' IDs.
+`E2E_USER` and `E2E_NEW_USER` are addresses the seeded test backend resets before each run (section 4): `E2E_USER` is a
+seeded account, `E2E_NEW_USER` is free, so the sign-up succeeds every time. `E2E_ORDER_ID` is a seeded order of
+`E2E_USER`. Place-order and other journeys follow the same shape with their own screens' IDs.
 
 Credentials come from the environment or CI secrets, never from the repo, and only for a dedicated, low-privilege
 test account. A password passed with `-e E2E_PASSWORD=...` appears in the process list, shell history and CI logs,
@@ -157,7 +199,7 @@ pinned version, not verified here). Non-secret values such as `E2E_USER` may use
 
 ```sh
 # MAESTRO_E2E_PASSWORD is already exported from the secret store; it is not passed with -e
-maestro test .maestro/flows --include-tags critical -e E2E_USER="$E2E_USER"
+maestro test .maestro/flows --include-tags critical -e E2E_USER="$E2E_USER" -e E2E_NEW_USER="$E2E_NEW_USER" -e E2E_ORDER_ID="$E2E_ORDER_ID"
 ```
 
 E2E is not a required PR check: device builds are slow and flakier than the `verify` gate. Run the critical

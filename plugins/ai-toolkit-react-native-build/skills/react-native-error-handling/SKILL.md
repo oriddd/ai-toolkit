@@ -30,7 +30,8 @@ shared/errors/
 ├── errorMessages.ts     # code -> user-facing message (the catalogue)
 ├── mapHttpError.ts      # the ONLY place status codes become AppErrors
 ├── reportError.ts       # ErrorReporter interface + hook
-└── ErrorBoundary.tsx
+├── ErrorState.tsx       # inline error view (section 4)
+└── ErrorBoundary.tsx    # AppErrorBoundary + CrashScreen (section 5)
 ```
 
 ## Dependencies
@@ -152,6 +153,7 @@ screens, hooks or feature api modules.
 ## 4. Showing errors
 
 ```tsx
+// shared/errors/ErrorState.tsx
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const retryable = isAppError(error) && error.retryable;
   return (
@@ -170,6 +172,7 @@ Inline errors for queries; toast/banner for mutations; never `Alert.alert(error.
 Boundaries catch **render** errors only; async errors flow through query/mutation state.
 
 ```tsx
+// shared/errors/ErrorBoundary.tsx
 // CrashScreen is the app's own full-screen "something went wrong" view with a restart button.
 // hoisted: an inline arrow is a new component type every render and would remount the fallback
 const CrashFallback = ({ resetErrorBoundary }: FallbackProps) => <CrashScreen onRestart={resetErrorBoundary} />;

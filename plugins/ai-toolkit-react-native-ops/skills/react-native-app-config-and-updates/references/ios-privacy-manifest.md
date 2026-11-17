@@ -61,7 +61,7 @@ Keep the manifest, the App Store privacy label, the Play data-safety form and th
   entry, the three collected data types, `NSPrivacyTracking: false` and that no type is flagged as tracking.
 - `APP_VARIANT=production npx expo prebuild --no-install --platform ios` writes `ios/<App>/PrivacyInfo.xcprivacy` with exactly those
   `NSPrivacyAccessedAPITypes`, `NSPrivacyCollectedDataTypes`, `NSPrivacyTracking` false and an empty `NSPrivacyTrackingDomains`
-  (checked on SDK 58). Delete `ios/` and `android/` afterwards; they are build output.
+  (checked on SDK 58; one `--platform` per call, repeated flags keep only the last, see SKILL.md §6). Delete `ios/` and `android/` afterwards; they are build output.
 
 Device or Mac only, not verifiable here: the merged report of the final binary (Xcode, Product, Archive, then Generate Privacy
 Report, which aggregates the pods' manifests) and Apple's own validation at upload.

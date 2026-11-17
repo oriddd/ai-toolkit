@@ -46,15 +46,15 @@ shared/state/ useSessionStore.ts
   "@react-native-community/netinfo": "<sdk-matched>" } }
 ```
 
-Native modules (`netinfo`, and every other package with native code) must match the Expo SDK: add them with
-`npx expo install <package>` (SDK 58: `netinfo` 12.0.1), never a hand-written range; bare apps take the version the
-library documents for their React Native version. Current TanStack Query 5.x (5.107) deprecates `fetchQuery`, `prefetchQuery` and
+Packages with native code (`netinfo`) must match the Expo SDK: add them with `npx expo install <package>` (SDK 58:
+`netinfo` 12.0.1), never a hand-written range; bare apps take the version the library documents. TanStack Query 5.107 deprecates `fetchQuery`, `prefetchQuery` and
 `ensureQueryData` in favour of `queryClient.query(options)`; `no-deprecated` (`react-native-static-analysis`) fails the old names.
 
 ## 1. One api-client, one mapping point
 
 ```ts
 // shared/api-client/httpClient.ts
+import type { z } from 'zod';                             // type position only: `consistent-type-imports` rejects a value import
 export type HttpRequest = Omit<RequestInit, 'headers' | 'body'> & {
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
@@ -79,7 +79,7 @@ export const toQueryString = (query: HttpRequest['query']): string => {
 };
 
 // one signal for the caller's cancellation (TanStack's `signal`) and our timeout; React Native 0.85 and earlier
-// have no AbortSignal.timeout / AbortSignal.any (0.88 has both), so compose by hand
+// lack AbortSignal.timeout / .any (0.88 has both)
 const withTimeout = (outer: AbortSignal | null | undefined, ms: number) => {
   const controller = new AbortController();
   const abort = () => { controller.abort(); };
@@ -123,8 +123,8 @@ export const createHttpClient = (baseUrl: string, session: AuthSession): HttpCli
 });
 ```
 
-The token goes into the headers only here (`{}` when signed out). An endpoint that answers 204 is called with
-`z.undefined()` as its schema. Every failure the client throws is an `AppError` (network, timeout, HTTP status,
+The token goes into the headers only here. An endpoint that answers 204 is called with `z.undefined()` as its schema.
+Every failure the client throws is an `AppError` (network, timeout, HTTP status,
 contract), which is what makes the `AppError` narrowing in the hooks below true. A 401 still left after the one refresh
 reaches the caller as `UnauthorizedError`, and the `QueryCache` handler signs out (`react-native-security` §1).
 Pass TanStack's `signal` through (sections 2 and 4) so a query that unmounts or is cancelled aborts its request.
@@ -141,14 +141,16 @@ export type OrderFilter = { status?: Order['status']; customerId?: string };
 export const createOrdersApi = (http: HttpClient) => ({
   list: (filter: OrderFilter, signal?: AbortSignal): Promise<Order[]> =>
     http.request({ path: '/orders', method: 'GET', query: filter, signal: signal ?? null }, z.array(orderSchema)),
+  get: (id: OrderId, signal?: AbortSignal): Promise<Order> =>
+    http.request({ path: `/orders/${encodeURIComponent(id)}`, method: 'GET', signal: signal ?? null }, orderSchema),
   cancel: (id: OrderId): Promise<Order> =>
     http.request({ path: `/orders/${encodeURIComponent(id)}/cancel`, method: 'POST' }, orderSchema),
 });
 ```
 
-Plain functions, typed in and out, no React and no caching here. Reads take an optional `signal`
-(`signal ?? null`: `exactOptionalPropertyTypes` forbids passing `undefined` to `RequestInit.signal`). Every value interpolated into a path is
-`encodeURIComponent`-encoded; query values go through `query`, which `URLSearchParams` encodes.
+Plain functions, typed in and out, no React and no caching. Reads take an optional `signal` (`signal ?? null`:
+`exactOptionalPropertyTypes` forbids `undefined` for `RequestInit.signal`). Path values are `encodeURIComponent`-encoded;
+query values go through `query`, which `URLSearchParams` encodes.
 
 ## 3. Query keys: a factory per feature
 
@@ -162,7 +164,7 @@ export const orderKeys = {
 };
 ```
 
-Never inline key arrays in components or hooks. Invalidate by prefix: `invalidateQueries({ queryKey: orderKeys.all })`.
+Never inline key arrays. Invalidate by prefix: `invalidateQueries({ queryKey: orderKeys.all })`.
 `orderKeys.all` matches list **and** detail caches, which hold different shapes (`Order[]` vs `Order`), so cache
 reads and writes that assume one shape must target `lists()` or `detail(id)`, never `all`.
 
@@ -187,6 +189,14 @@ export function useOrders(filter: OrderFilter) {
     error: q.error,                                        // AppError | null, via the Register below
     refetch: q.refetch,
   };
+}
+```
+
+```ts
+export function useOrder(id: OrderId) {                  // detail: same shape, keyed by orderKeys.detail
+  const ordersApi = useOrdersApi();
+  const q = useQuery({ queryKey: orderKeys.detail(id), queryFn: ({ signal }) => ordersApi.get(id, signal) });
+  return { order: q.data, error: q.error, refetch: q.refetch };
 }
 ```
 
@@ -292,14 +302,12 @@ export const QueryProvider = ({ children }: PropsWithChildren) => {
 };
 ```
 
-`Services` carries `secure: SecureStore` (built in `createServices` next to the `AuthSession`, `react-native-security` §1b).
-The whole chain for an expired session: the api-client gets a 401, `session.refresh()` runs once for all concurrent
-requests and returns `null` (the server rejected the refresh token), the retry is skipped, `UnauthorizedError` reaches
-the cache's `onError`, `signOut` clears the tokens, the query and mutation caches and the session store, and the
-root navigator redirects because it reads that store (`RootNavigator`, `react-native-security` §1b).
-React Navigation apps render `{signedIn ? <AppStack /> : <AuthStack />}` from the same flag.
-`UnauthorizedError` is deliberately never reported: it is an expected outcome, not a bug. Both the 401-then-signed-out
-flow and the refresh-succeeds-so-stay-signed-in flow are tested in `react-native-unit-tests` §3a.
+`Services` carries `secure: SecureStore` (built in `createServices`, `react-native-security` §1b). The chain for an expired
+session: a 401 makes `session.refresh()` run once for all concurrent requests and return `null`, `UnauthorizedError` reaches
+the cache's `onError`, `signOut` clears the tokens, both caches and the session store, and the root navigator redirects
+because it reads that store (`RootNavigator`, `react-native-security` §1b; React Navigation apps render
+`{signedIn ? <AppStack /> : <AuthStack />}`). `UnauthorizedError` is never reported: it is an expected outcome. Both the
+401-then-signed-out flow and the refresh-succeeds flow are tested in `react-native-unit-tests` §3a.
 
 `isReportable` is the "report unexpected errors only" rule from `react-native-error-handling` §6. Render
 `QueryProvider` inside `ServicesProvider`. With `offlineFirst`, a query with no cached data pauses while

@@ -129,13 +129,15 @@ jobs:
 { "cli": { "appVersionSource": "remote" },
   "build": {
     "preview": { "distribution": "internal", "channel": "preview" },
-    "e2e": { "distribution": "internal", "ios": { "simulator": true }, "android": { "buildType": "apk" } },
+    "e2e": { "distribution": "internal", "ios": { "simulator": true }, "android": { "buildType": "apk" },
+             "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_APP_ENV": "staging", "EXPO_PUBLIC_API_BASE_URL": "https://api.test.example.com" } },
     "production": { "autoIncrement": true, "channel": "production" } },
   "submit": { "production": {} } }
 ```
 
 `e2e.yml` (nightly `schedule` plus `workflow_dispatch`, not a PR gate; the same policy as `react-native-e2e-tests` §5)
-builds a simulator/emulator binary with the `e2e` EAS profile above, installs it, and runs `maestro test .maestro/flows --include-tags critical --format junit` with Maestro
+builds a simulator/emulator binary with the `e2e` EAS profile above (production variant, so bundle id `com.example.shop` and the
+verified links, against a seeded test backend; never uploaded), installs it, and runs `maestro test .maestro/flows --include-tags critical --format junit` with Maestro
 installed from the pinned version baked into the runner image (a developer-run install, see `react-native-e2e-tests`),
 then uploads the JUnit report and screenshots. Secrets reach flows through the environment, never `-e` on the command line.
 This workflow is a pattern, not exercised here.
