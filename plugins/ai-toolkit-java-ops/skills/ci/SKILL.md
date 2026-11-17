@@ -136,7 +136,7 @@ EXPOSE {{appPort}}
 
 # MaxRAMPercentage sizes the heap from the container memory limit (the JVM default is only 25 %).
 # MinRAMPercentage only applies to very small containers (< ~250 MB); it is not a minimum heap.
-ENV JAVA_OPTS="-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -Dlog4j2.formatMsgNoLookups=true"
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
 ```
@@ -151,7 +151,7 @@ Rules:
   `-Djarmode=layertools` is deprecated and removed in Boot 4.1.
 - **One jar in `target/`** — `COPY ${JAR_FILE}` fails if the build also produces sources/javadoc jars; then pass
   `--build-arg JAR_FILE=target/<artifactId>-<version>.jar`.
-- **`JAVA_OPTS`** — `MaxRAMPercentage=75` sizes the heap from the container memory limit (the JVM default is 25 %).
+- **`JAVA_OPTS`** — `MaxRAMPercentage=75` sizes the heap from the container memory limit (the JVM default is 25 %). `-Dlog4j2.formatMsgNoLookups=true` disables Log4j2 message lookups if Log4j2 is ever on the classpath.
 - **Layered jar** — dependency changes don't invalidate the application
   layer, keeping image pushes small.
 - **`JarLauncher`** — the Spring Boot 3.2+ entry point. Do not use

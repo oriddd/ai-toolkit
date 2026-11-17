@@ -23,6 +23,7 @@ last_reviewed: 2026-11-15
 - Validation layer: assert invariants a single field cannot express (cross-field rules
   via a Spring `Validator`, existence checks via a constraint backed by a `rule/` bean) —
   never as ad-hoc `if/throw` guards in the service (`input-validation`).
+- Service/domain layer: re-asserts state-dependent invariants through domain exceptions (the controller cannot see them).
 - Persistence: schema constraints (`NOT NULL`, `CHECK`, length limits) — the
   database is the last line of defence.
 

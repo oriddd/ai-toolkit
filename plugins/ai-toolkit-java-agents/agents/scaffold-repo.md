@@ -165,5 +165,6 @@ against a base branch; do not run `git init` yourself (create-repo leaves it to 
       non-root `securityContext`.
 - [ ] Graceful shutdown enabled (`server.shutdown=graceful`).
 - [ ] All `context/` required sections populated (not placeholder text).
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG `[Unreleased]` entry created — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

@@ -133,6 +133,55 @@ public class CompositeSecretAdapter implements SecretPort {
 }
 ```
 
+A write port has no return value to merge, so every mode applies. The `safe(...)`
+helper is the failure-isolation seam:
+
+```java
+// adapter/audit/composite/CompositeAuditAdapter.java
+@Slf4j
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class CompositeAuditAdapter implements AuditPort {
+    private final List<AuditPort> delegates;           // ordered via @Order
+    private final CompositionMode mode;
+    private final Random random = new Random();
+
+    @Override
+    public void record(AuditEvent s) {
+        switch (mode) {
+            case BROADCAST -> delegates.forEach(d -> safe(d, () -> d.record(s)));
+            case FAILOVER  -> firstThatSucceeds(s);
+            case PRIORITY  -> delegates.get(0).record(s);
+            case WEIGHTED  -> weightedPick().record(s);
+            case SINGLE    -> throw new IllegalStateException("The composite is not wired in single mode");
+        }
+    }
+
+    private void safe(AuditPort delegate, Runnable call) {
+        try {
+            call.run();
+        } catch (RuntimeException e) {
+            log.warn("Audit provider {} failed, continuing with the others", delegate.providerId(), e);
+        }
+    }
+
+    private void firstThatSucceeds(AuditEvent s) {
+        for (AuditPort delegate : delegates) {
+            try {
+                delegate.record(s);
+                return;
+            } catch (RuntimeException e) {
+                log.warn("Audit provider {} failed, trying the next one", delegate.providerId());
+            }
+        }
+        throw new IllegalStateException("All audit providers failed");
+    }
+
+    private AuditPort weightedPick() {
+        return delegates.get(random.nextInt(delegates.size()));
+    }
+}
+```
+
 ```yaml
 platform:
   secret:

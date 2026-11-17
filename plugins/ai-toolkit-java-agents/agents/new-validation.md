@@ -85,6 +85,7 @@ the gate a second time.
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.
-- [ ] `@MockitoBean` for the validator / rule bean added to affected `@WebMvcTest` tests (`ai-toolkit-java-build:input-validation`, testing reference); full `@SpringBootTest` component tests keep the real rule and get any doubles from `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`).
+- [ ] `@MockitoBean` for rule beans and downstream services in affected `@WebMvcTest` tests; `@Import` a registered `Validator`, never mock it (its `supports()` would return false and the request would get a 500) (`ai-toolkit-java-build:input-validation`, testing reference); full `@SpringBootTest` component tests keep the real rule and get any doubles from `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`).
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

@@ -165,5 +165,6 @@ diff, including untracked files.
 - [ ] Unit tests cover every layer; WireMock integration test covers
       happy path + 5xx error path.
 - [ ] `context/dependencies.md` updated.
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

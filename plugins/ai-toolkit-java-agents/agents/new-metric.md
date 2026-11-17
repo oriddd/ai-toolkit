@@ -54,5 +54,6 @@ the gate a second time.
 - [ ] recordMetrics() uses MetricsTimerHelper.
 - [ ] New parser returns sentinel (never null/"") on failure.
 - [ ] Unit tests: canHandle, recordMetrics, parser.
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

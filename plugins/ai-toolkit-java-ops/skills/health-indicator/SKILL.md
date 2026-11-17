@@ -27,6 +27,10 @@ The skill follows the pattern proven in this repo:
 - `application.yaml` – `management.endpoint.health.group.readiness.include`
   registers the indicator name.
 
+Dependency: `AbstractReadinessIndicator` imports `org.jspecify.annotations.Nullable`, so the service needs
+`org.jspecify:jspecify` on the compile classpath. The `ci` skill's `pom.xml.tmpl` already declares it; add it yourself
+when the pom did not come from that template.
+
 ## Phase 1 – Interview the developer
 
 Ask **each** question, confirm before writing files. Use sensible defaults

@@ -144,7 +144,7 @@ Callers use a factory method, or format at the throw site:
 ```java
 throw ExceptionMessages.resourceNotFound("Invoice", invoiceId);
 throw new BadRequestException(ExceptionMessages.ERR_BAD_REQUEST,
-        MessageFormat.format(ExceptionMessages.UNRECOGNIZED_INPUT, value));
+        MessageFormat.format(ExceptionMessages.INVALID_FIELD, "quantity", "must be positive"));
 ```
 
 ### 3. `@RestControllerAdvice` (vanilla Spring Boot 3)

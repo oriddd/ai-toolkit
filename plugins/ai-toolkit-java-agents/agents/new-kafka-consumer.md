@@ -142,5 +142,6 @@ diff, including untracked files.
 - [ ] Broker dependency is behind a port (pluggable-architecture): Kafka types only in `messaging/`; the service is Kafka-free.
 - [ ] Unit test covers duplicate-message idempotency path.
 - [ ] Integration test uses Testcontainers Kafka (no mocked broker).
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

@@ -484,6 +484,18 @@ producing code must validate the diff against this list before returning.
     one `MonitoringConfig` entry. Parsers never return `null` or blank
     (`request-metrics`).
 
+## 4b. When the request conflicts with the catalogue
+
+If the user explicitly asks for something a skill forbids (for example "just use `@Value` for this one property", "skip the DLQ for this consumer"):
+
+1. **Surface the conflict.** Quote the skill section that prohibits it.
+2. **Offer the canonical alternative.**
+3. **Proceed only if the user confirms.** Then mark the code `// ARCHITECTURE-EXCEPTION: <skill> §<N> — <reason>` and write an ADR under `docs/adr/`; an exception without an ADR is rejected at PR review.
+
+A subagent cannot ask: it writes nothing for the conflicting part and returns `NEEDS INPUT:` with the quoted section and the alternative.
+
+**Every non-trivial decision cites skill + section** (for example "applied `spring-boot-conventions` §7b — property-driven interval") in the summary, so reviewers can grep for the citations.
+
 ## 5. Pre-flight checklist — first PR of a new service
 
 - [ ] `mvn -q spotless:apply` was run once on the rendered code, then `mvn -q verify` passes locally and in CI.

@@ -205,6 +205,6 @@ runner minutes (PRs only; never cancel a `main` build).
 ✅ Give every workflow an explicit least-privilege `permissions:` block and `persist-credentials: false` on checkout.
 ❌ Never put secrets in workflow files — use `secrets.*` and OIDC where
 possible.
-❌ Never run integration tests on every PR if they require external
-infrastructure — gate them by label or schedule.
+❌ Never run integration tests on every PR if they need infrastructure the runner cannot start — gate them by label or
+   schedule. GitHub-hosted runners have Docker, so Testcontainers ITs run on every PR through `mvn verify`.
 

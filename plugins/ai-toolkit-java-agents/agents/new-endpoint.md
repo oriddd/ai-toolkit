@@ -145,5 +145,6 @@ diff, including untracked files.
 - [ ] Unit tests cover happy path + every exception branch.
 - [ ] Component test covers the success status (2xx — 201 for create), 400, 403, 404; 401 is covered by the
       security slice test (`@WebMvcTest` with the production filter chain), not the component test.
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.
