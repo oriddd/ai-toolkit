@@ -1,0 +1,108 @@
+package {{basePackage}}.messaging;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.exception.BaseDomainException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.nio.charset.StandardCharsets;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
+
+class IdempotentConsumerTest {
+
+    private static final String EVENT_ID = "6f1c2b0e-0000-4000-8000-000000000001";
+
+    private final TransactionTemplate tx = mock(TransactionTemplate.class);
+    private final TransactionStatus status = mock(TransactionStatus.class);
+    private final JdbcClient jdbc = mock(JdbcClient.class, RETURNS_DEEP_STUBS);
+    private final Acknowledgment ack = mock(Acknowledgment.class);
+
+    private IdempotentConsumer consumer;
+
+    @BeforeEach
+    @SuppressWarnings("unchecked")
+    void setUp() {
+        when(tx.execute(any()))
+                .thenAnswer(invocation -> ((TransactionCallback<Object>) invocation.getArgument(0)).doInTransaction(status));
+        consumer = spy(new IdempotentConsumer(tx, jdbc));
+    }
+
+    private void dedupeInsertAffects(final int rows) {
+        when(jdbc.sql(anyString()).param(eq("id"), eq(EVENT_ID)).update()).thenReturn(rows);
+    }
+
+    private static ConsumerRecord<String, String> record(@Nullable final String eventId) {
+        final ConsumerRecord<String, String> record = new ConsumerRecord<>("invoices", 0, 7L, "inv-1", "{\"id\":\"inv-1\"}");
+        if (eventId != null) {
+            record.headers().add(IdempotentConsumer.EVENT_ID_HEADER, eventId.getBytes(StandardCharsets.UTF_8));
+        }
+        return record;
+    }
+
+    @Test
+    void onMessage_firstDelivery_processesPayloadThenAcknowledges() throws Exception {
+        dedupeInsertAffects(1);
+
+        consumer.onMessage(record(EVENT_ID), ack);
+
+        verify(consumer).processEvent("{\"id\":\"inv-1\"}");
+        verify(ack).acknowledge();
+        verify(status, never()).setRollbackOnly();
+    }
+
+    @Test
+    void onMessage_redelivery_skipsTheEffectButStillAcknowledges() throws Exception {
+        dedupeInsertAffects(0);
+
+        consumer.onMessage(record(EVENT_ID), ack);
+
+        verify(consumer, never()).processEvent(anyString());
+        verify(ack).acknowledge();
+    }
+
+    @Test
+    void onMessage_missingEventIdHeader_failsNonRetryableWithoutTransactionOrAck() {
+        assertThatThrownBy(() -> consumer.onMessage(record(null), ack))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("event-id")
+                .hasMessageContaining("7");
+
+        verifyNoInteractions(tx, ack);
+    }
+
+    @Test
+    void onMessage_domainExceptionInTheEffect_rollsBackRethrowsAndDoesNotAcknowledge() throws Exception {
+        dedupeInsertAffects(1);
+        final BaseDomainException failure = ExceptionMessages.invalidField("amount", "must be positive");
+        doThrow(failure).when(consumer).processEvent(anyString());
+
+        assertThatThrownBy(() -> consumer.onMessage(record(EVENT_ID), ack)).isSameAs(failure);
+
+        verify(status).setRollbackOnly();
+        verifyNoInteractions(ack);
+    }
+
+    @Test
+    void eventIdHeader_isTheNameTheOutboxRelaySends() {
+        assertThat(IdempotentConsumer.EVENT_ID_HEADER).isEqualTo("event-id");
+    }
+}

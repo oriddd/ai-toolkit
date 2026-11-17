@@ -4,7 +4,8 @@ Part of the [`permissions`](../SKILL.md) skill.
 
 ## Tests (use the `unit-tests` skill)
 
-Required cases for `PermissionsHandlerTest`:
+The handler, registry, scope strategy, resolver and both security-handler classes ship with their tests (SKILL.md §11); the lists below
+are what those tests cover and what a new strategy's test must cover. Required cases for `PermissionsHandlerTest`:
 
 1. Happy path – matching strategy → no exception.
 2. No matching strategy → `ForbiddenException`.

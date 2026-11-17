@@ -1,0 +1,20 @@
+package {{basePackage}}.spi.cache;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
+
+class CacheKeyTest {
+
+    @Test
+    void constructor_value_isKept() {
+        assertThat(new CacheKey("user-1").value()).isEqualTo("user-1");
+    }
+
+    @Test
+    @SuppressWarnings("NullAway") // null on purpose: the constructor must reject it
+    void constructor_nullValue_isRejected() {
+        assertThatThrownBy(() -> new CacheKey(null)).isInstanceOf(NullPointerException.class).hasMessage("value");
+    }
+}

@@ -1,0 +1,68 @@
+package {{basePackage}}.permission;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.exception.ForbiddenException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class PermissionsHandlerTest {
+
+    @Mock private CallerContextResolver callerContextResolver;
+    @Mock private PermissionsRegistry permissionsRegistry;
+    @Mock private PermissionsCheckStrategy strategy;
+    @InjectMocks private PermissionsHandler handler;
+
+    @Test
+    void handle_matchingStrategyAllows_delegatesTheResourceId() throws Exception {
+        when(callerContextResolver.resolve()).thenReturn(CallerContext.SERVICE_ACCOUNT);
+        when(permissionsRegistry.getStrategy(CallerContext.SERVICE_ACCOUNT)).thenReturn(Optional.of(strategy));
+
+        assertThatCode(() -> handler.handle("inv-1")).doesNotThrowAnyException();
+
+        verify(strategy).verifyPermissions("inv-1");
+    }
+
+    @Test
+    void handle_noCallerContext_throwsForbiddenWithoutConsultingTheRegistry() {
+        when(callerContextResolver.resolve()).thenReturn(null);
+
+        assertThatThrownBy(() -> handler.handle("inv-1"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessage(ExceptionMessages.CALLER_CONTEXT_NOT_FOUND);
+
+        verifyNoInteractions(permissionsRegistry, strategy);
+    }
+
+    @Test
+    void handle_noStrategyForTheContext_throwsForbiddenNamingTheContext() {
+        when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
+        when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> handler.handle("inv-1"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("Unrecognized caller context")
+                .hasMessageContaining("USER");
+    }
+
+    @Test
+    void handle_strategyDenies_propagatesTheStrategyException() throws Exception {
+        final ForbiddenException denied = ExceptionMessages.callerHasNoPermissions("inv-1");
+        when(callerContextResolver.resolve()).thenReturn(CallerContext.SERVICE_ACCOUNT);
+        when(permissionsRegistry.getStrategy(CallerContext.SERVICE_ACCOUNT)).thenReturn(Optional.of(strategy));
+        doThrow(denied).when(strategy).verifyPermissions("inv-1");
+
+        assertThatThrownBy(() -> handler.handle("inv-1")).isSameAs(denied);
+    }
+}

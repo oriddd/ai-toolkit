@@ -280,6 +280,10 @@ create-repo (HITL, main session)         ← generates skeleton, asks its Phase 
         └─► context-maintenance          ← every time architecture moves
 ```
 
+> **Rendered code goes through `mvn spotless:apply` before the first `mvn verify`.** Templates are not pre-formatted
+> (and `sortPom` reorders the generated `pom.xml`), so the Spotless check fails otherwise. Every template ships its own
+> unit tests: the per-class JaCoCo gate and PIT apply to shipped classes too; pure `*Config` wiring is the one explicit exclusion.
+
 ## 3. Task-driven agent recipes
 
 Each recipe lists **only** the skills that materially constrain the change.
@@ -482,7 +486,7 @@ producing code must validate the diff against this list before returning.
 
 ## 5. Pre-flight checklist — first PR of a new service
 
-- [ ] `mvn -q verify` passes locally and in CI.
+- [ ] `mvn -q spotless:apply` was run once on the rendered code, then `mvn -q verify` passes locally and in CI.
 - [ ] Mutation score ≥ 75 % on the touched packages.
 - [ ] Liveness + readiness probes return 200 against a real run.
 - [ ] Docker image runs as **non-root** and starts on a clean machine.

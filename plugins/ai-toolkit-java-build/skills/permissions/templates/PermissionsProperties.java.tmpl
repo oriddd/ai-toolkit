@@ -1,0 +1,11 @@
+package {{basePackage}}.permission;
+
+import jakarta.validation.constraints.NotEmpty;
+import java.util.Set;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+/** permissions.service-account.allowed-scopes (SKILL.md §7). */
+@Validated
+@ConfigurationProperties(prefix = "permissions.service-account")
+public record PermissionsProperties(@NotEmpty Set<String> allowedScopes) {}

@@ -1,0 +1,50 @@
+package {{basePackage}}.permission.strategy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.exception.ForbiddenException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.permission.CallerContext;
+import {{basePackage}}.permission.CallerContextResolver;
+import {{basePackage}}.permission.PermissionsProperties;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+
+class ScopeBasedPermissionsCheckTest {
+
+    private final CallerContextResolver resolver = mock(CallerContextResolver.class);
+    private final ScopeBasedPermissionsCheck check =
+            new ScopeBasedPermissionsCheck(resolver, new PermissionsProperties(Set.of("read", "invoices.read")));
+
+    @Test
+    void supportedContexts_isTheServiceAccountContext() {
+        assertThat(check.supportedContexts()).containsExactly(CallerContext.SERVICE_ACCOUNT);
+    }
+
+    @Test
+    void verifyPermissions_callerHoldsAnAllowedScope_passes() {
+        when(resolver.grantedScopes()).thenReturn(Set.of("openid", "invoices.read"));
+
+        assertThatCode(() -> check.verifyPermissions("inv-1")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void verifyPermissions_callerHoldsNoAllowedScope_throwsForbiddenNamingTheResource() {
+        when(resolver.grantedScopes()).thenReturn(Set.of("write"));
+
+        assertThatThrownBy(() -> check.verifyPermissions("inv-1"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessage(ExceptionMessages.callerHasNoPermissions("inv-1").getMessage());
+    }
+
+    @Test
+    void verifyPermissions_callerHoldsNoScopes_throwsForbidden() {
+        when(resolver.grantedScopes()).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> check.verifyPermissions("inv-1")).isInstanceOf(ForbiddenException.class);
+    }
+}

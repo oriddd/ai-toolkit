@@ -1,0 +1,42 @@
+package {{basePackage}}.entity;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+class BaseEntityTest {
+
+    private static final Instant CREATED = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant UPDATED = Instant.parse("2026-01-02T00:00:00Z");
+
+    private static class AnyEntity extends BaseEntity {}
+
+    @Test
+    void getters_newEntity_areAllNullUntilTheFirstPersist() {
+        final BaseEntity entity = new AnyEntity();
+
+        assertThat(entity.getVersion()).isNull();
+        assertThat(entity.getCreatedAt()).isNull();
+        assertThat(entity.getUpdatedAt()).isNull();
+        assertThat(entity.getCreatedBy()).isNull();
+        assertThat(entity.getUpdatedBy()).isNull();
+    }
+
+    @Test
+    void getters_populatedByPersistenceAndAuditing_returnTheStoredValues() {
+        final BaseEntity entity = new AnyEntity();
+        ReflectionTestUtils.setField(entity, "version", 3L);
+        ReflectionTestUtils.setField(entity, "createdAt", CREATED);
+        ReflectionTestUtils.setField(entity, "updatedAt", UPDATED);
+        ReflectionTestUtils.setField(entity, "createdBy", "alice");
+        ReflectionTestUtils.setField(entity, "updatedBy", "bob");
+
+        assertThat(entity.getVersion()).isEqualTo(3L);
+        assertThat(entity.getCreatedAt()).isEqualTo(CREATED);
+        assertThat(entity.getUpdatedAt()).isEqualTo(UPDATED);
+        assertThat(entity.getCreatedBy()).isEqualTo("alice");
+        assertThat(entity.getUpdatedBy()).isEqualTo("bob");
+    }
+}

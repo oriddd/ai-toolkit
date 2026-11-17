@@ -4,7 +4,7 @@ Part of the [`permissions`](../SKILL.md) skill.
 
 ## 6. Concrete strategies (generate only the ones the developer selected)
 
-- **`ScopeBasedPermissionsCheck`** – for `SERVICE_ACCOUNT`. Reads an
+- **`ScopeBasedPermissionsCheck`** ([template](../templates/ScopeBasedPermissionsCheck.java.tmpl), with its test) – for `SERVICE_ACCOUNT`. Reads an
   allow-list of OAuth2 scopes from configuration and checks the caller's
   scopes obtained from `CallerContextResolver.grantedScopes()` (the resolver
   strips the `SCOPE_` prefix that Spring Security adds) — it never reads

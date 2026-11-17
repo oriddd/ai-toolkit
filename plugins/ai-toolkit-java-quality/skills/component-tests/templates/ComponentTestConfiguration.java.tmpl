@@ -13,6 +13,7 @@ import org.springframework.transaction.PlatformTransactionManager;   // [persist
 import org.springframework.transaction.TransactionDefinition;   // [persistence]
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;   // [persistence]
 import org.springframework.transaction.support.DefaultTransactionStatus;   // [persistence]
+import org.springframework.transaction.support.TransactionSynchronizationManager;   // [persistence]
 
 import java.time.Duration;
 
@@ -38,13 +39,19 @@ public class ComponentTestConfiguration {
     // [persistence:begin]
     // The component-test profile excludes the DataSource and JPA auto-configuration, which also removes the only
     // PlatformTransactionManager: @Transactional beans and an injected TransactionTemplate (messaging consumers)
-    // fail at startup without one. The fakes hold the state, so there is nothing to begin, commit or roll back.
+    // fail at startup without one. The fakes hold the state, so there is nothing to begin, commit or roll back;
+    // isExistingTransaction keeps Propagation.MANDATORY (OutboxWriter) and REQUIRED joining the caller's transaction.
     @Bean
     public PlatformTransactionManager noOpTransactionManager() {
         return new AbstractPlatformTransactionManager() {
             @Override
             protected Object doGetTransaction() {
                 return new Object();
+            }
+
+            @Override
+            protected boolean isExistingTransaction(final Object transaction) {
+                return TransactionSynchronizationManager.isActualTransactionActive();
             }
 
             @Override

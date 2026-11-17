@@ -1,0 +1,66 @@
+package {{basePackage}}.permission;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+class SecurityAuditorAwareTest {
+
+    private final SecurityAuditorAware auditorAware = new SecurityAuditorAware();
+
+    @BeforeEach
+    @AfterEach
+    void clearContexts() {
+        SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    private static void insideHttpRequest() {
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    }
+
+    @Test
+    void getCurrentAuditor_authenticatedCaller_isTheSubject() {
+        SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated("sub-123", "n/a", List.of()));
+
+        assertThat(auditorAware.getCurrentAuditor()).contains("sub-123");
+    }
+
+    @Test
+    void getCurrentAuditor_unauthenticatedToken_fallsBackToSystemOutsideARequest() {
+        SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.unauthenticated("sub-123", "n/a"));
+
+        assertThat(auditorAware.getCurrentAuditor()).contains(SecurityAuditorAware.SYSTEM_AUDITOR);
+    }
+
+    @Test
+    void getCurrentAuditor_anonymousCaller_isEmptyInsideARequest() {
+        insideHttpRequest();
+        SecurityContextHolder.getContext()
+                .setAuthentication(new AnonymousAuthenticationToken("key", "anonymous", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
+
+        assertThat(auditorAware.getCurrentAuditor()).isEmpty();
+    }
+
+    @Test
+    void getCurrentAuditor_noAuthenticationInsideARequest_isEmptySoMissingAuthIsVisible() {
+        insideHttpRequest();
+
+        assertThat(auditorAware.getCurrentAuditor()).isEmpty();
+    }
+
+    @Test
+    void getCurrentAuditor_noAuthenticationOutsideARequest_isSystem() {
+        assertThat(auditorAware.getCurrentAuditor()).contains(SecurityAuditorAware.SYSTEM_AUDITOR);
+    }
+}

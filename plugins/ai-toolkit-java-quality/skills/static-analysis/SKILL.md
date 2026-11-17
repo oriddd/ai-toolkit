@@ -17,6 +17,11 @@ last_reviewed: 2026-11-15
 These tools complement the `quality-review` checklist by failing the build
 on objective violations.
 
+> **Run `mvn spotless:apply` once on every freshly rendered template set, before the first `mvn verify`.** The templates are
+> not pre-formatted and `sortPom` reorders the generated `pom.xml`, so `spotless:check` fails otherwise. Then
+> `mvn verify` runs every gate below plus the Jacoco per-class and PIT gates (`unit-tests`); `*Config` wiring classes are the
+> one named exclusion there.
+
 ## Stack
 
 | Tool | What it catches | Configured how |

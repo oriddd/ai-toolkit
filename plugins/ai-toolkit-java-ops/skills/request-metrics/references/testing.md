@@ -4,6 +4,9 @@ Part of the [`request-metrics`](../SKILL.md) skill. Section numbers and headings
 
 ## 12. Testing
 
+A `@SpringBootTest` that reads the metrics over HTTP (`/actuator/prometheus`) or from the `MeterRegistry` needs
+`@AutoConfigureObservability`: Boot disables the metrics exporters in tests, so the endpoint answers `404` without it.
+
 ### Testing a parser
 
 ```java

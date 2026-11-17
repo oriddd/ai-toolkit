@@ -41,6 +41,7 @@ public final class ExceptionMessages {
     public static final String ACCESS_DENIED = "Access denied to ''{0}''.";
     public static final String CALLER_CONTEXT_NOT_FOUND = "No caller context could be resolved.";
     public static final String UNRECOGNIZED_CALLER_CONTEXT = "Unrecognized caller context: {0}";
+    public static final String CALLER_HAS_NO_PERMISSIONS = "Caller has no permissions on ''{0}''.";
     public static final String RATE_LIMIT_EXCEEDED = "Rate limit exceeded; retry after {0} seconds.";
     public static final String DEPENDENCY_UNAVAILABLE = "Downstream dependency {0} is unavailable.";
     public static final String DEPENDENCY_CALL_FAILED = "Call to {0} failed with status {1}.";
@@ -63,6 +64,9 @@ public final class ExceptionMessages {
     }
     public static ForbiddenException unrecognizedCallerContext(Object context) {
         return new ForbiddenException(ERR_FORBIDDEN, MessageFormat.format(UNRECOGNIZED_CALLER_CONTEXT, context));
+    }
+    public static ForbiddenException callerHasNoPermissions(String resourceId) {
+        return new ForbiddenException(ERR_FORBIDDEN, MessageFormat.format(CALLER_HAS_NO_PERMISSIONS, resourceId));
     }
     public static TooManyRequestsException rateLimitExceeded(long retryAfterSeconds) {
         return new TooManyRequestsException(ERR_TOO_MANY_REQUESTS,

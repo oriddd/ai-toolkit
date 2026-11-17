@@ -48,6 +48,10 @@ create-repo (HITL, main session)         ← generates skeleton, asks its Phase 
         └─► context-maintenance          ← every time architecture moves
 ```
 
+> **Rendered code goes through `mvn spotless:apply` before the first `mvn verify`.** Templates are not pre-formatted
+> (and `sortPom` reorders the generated `pom.xml`), so the Spotless check fails otherwise. Every template ships its own
+> unit tests: the per-class JaCoCo gate and PIT apply to shipped classes too; pure `*Config` wiring is the one explicit exclusion.
+
 ## 4. Guild non-negotiables (24)
 
 These are the rules your maintainers enforce during PR review. Every agent

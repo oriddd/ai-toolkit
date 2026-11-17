@@ -1,0 +1,32 @@
+package {{basePackage}}.adapter.cache.http;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+
+class CacheEntryConverterTest {
+
+    private final CacheEntryConverter converter = new CacheEntryConverter();
+
+    @Test
+    void toRemote_keyValueAndTtl_base64EncodesTheValueAndUsesMilliseconds() {
+        final CacheEntryResponse remote = converter.toRemote("user-1", new byte[] {1, 2}, Duration.ofSeconds(90));
+
+        assertThat(remote).isEqualTo(new CacheEntryResponse("user-1", "AQI=", 90_000));
+    }
+
+    @Test
+    void toValue_remoteEntry_base64DecodesTheValue() {
+        assertThat(converter.toValue(new CacheEntryResponse("user-1", "AQI=", 1000))).containsExactly(1, 2);
+    }
+
+    @Test
+    void roundTrip_binaryValue_isUnchanged() {
+        final byte[] value = {0, -1, 127, -128, 42};
+
+        final byte[] roundTripped = converter.toValue(converter.toRemote("k", value, Duration.ofMinutes(1)));
+
+        assertThat(roundTripped).containsExactly(value);
+    }
+}

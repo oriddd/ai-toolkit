@@ -105,7 +105,7 @@ Rules:
 ## 2. The port contract (DIP + OCP)
 
 ```java
-// spi/x/CachePort.java  — vendor-free, this is what the domain depends on
+// spi/x/CachePort.java  — vendor-free, this is what the domain depends on (template: external-client `CachePort.java.tmpl`)
 public interface CachePort {
     Optional<byte[]> get(CacheKey key) throws BaseDomainException;     // checked: an adapter reports an outage as UnavailableException
     void put(CacheKey key, byte[] value, Duration ttl) throws BaseDomainException;

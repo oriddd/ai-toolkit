@@ -1,0 +1,153 @@
+package {{basePackage}}.messaging;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Limit;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+
+@ExtendWith(MockitoExtension.class)
+class OutboxRelayTest {
+
+    private static final Instant NOW = Instant.parse("2026-01-02T03:04:05Z");
+    private static final String TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+    @Mock private OutboxRepository outboxRepo;
+    @Mock private OutboxMarker outboxMarker;
+    @Mock private KafkaTemplate<String, String> kafkaTemplate;
+
+    private OutboxRelay relay;
+
+    @BeforeEach
+    void setUp() {
+        final OutboxProperties props = new OutboxProperties(25, Duration.ofMillis(200), Map.of("invoice", "invoices"));
+        relay = new OutboxRelay(outboxRepo, outboxMarker, kafkaTemplate, props);
+    }
+
+    private static OutboxEntity row(final String aggregateType, final String aggregateId, @Nullable final String traceparent) {
+        return new OutboxEntity(aggregateType, aggregateId, "SampleEvent", "{\"id\":\"" + aggregateId + "\"}", traceparent, NOW);
+    }
+
+    private void pending(final OutboxEntity... rows) {
+        when(outboxRepo.findByPublishedAtIsNullOrderByCreatedAtAsc(Limit.of(25))).thenReturn(List.of(rows));
+    }
+
+    @SuppressWarnings("unchecked")
+    private CompletableFuture<SendResult<String, String>> acknowledged() {
+        return CompletableFuture.completedFuture(mock(SendResult.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> sentRecord() {
+        final ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(captor.capture());
+        return captor.getValue();
+    }
+
+    private static @Nullable String header(final ProducerRecord<String, String> record, final String name) {
+        final var header = record.headers().lastHeader(name);
+        return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void publishPending_pendingRow_sendsRecordWithKeyAndHeadersThenMarksIt() {
+        final OutboxEntity row = row("invoice", "inv-1", TRACEPARENT);
+        pending(row);
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(acknowledged());
+
+        relay.publishPending();
+
+        final ProducerRecord<String, String> record = sentRecord();
+        assertThat(record.topic()).isEqualTo("invoices");
+        assertThat(record.key()).isEqualTo("inv-1");
+        assertThat(record.value()).isEqualTo(row.getPayload());
+        assertThat(header(record, "event-id")).isEqualTo(row.getId().toString());
+        assertThat(header(record, "traceparent")).isEqualTo(TRACEPARENT);
+        verify(outboxMarker).markPublished(row.getId());
+    }
+
+    @Test
+    void publishPending_rowWithoutTraceparent_sendsNoTraceparentHeader() {
+        pending(row("invoice", "inv-1", null));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(acknowledged());
+
+        relay.publishPending();
+
+        assertThat(header(sentRecord(), "traceparent")).isNull();
+    }
+
+    @Test
+    void publishPending_noPendingRows_sendsNothing() {
+        pending();
+
+        relay.publishPending();
+
+        verifyNoInteractions(kafkaTemplate, outboxMarker);
+    }
+
+    @Test
+    void publishPending_aggregateTypeWithoutTopic_sendsAndMarksNothing() {
+        pending(row("unmapped", "x-1", null));
+
+        relay.publishPending();
+
+        verifyNoInteractions(kafkaTemplate, outboxMarker);
+    }
+
+    @Test
+    void publishPending_sendFails_stopsAtTheFailedRowAndDoesNotMarkIt() {
+        pending(row("invoice", "inv-1", null), row("invoice", "inv-2", null));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker down")));
+
+        relay.publishPending();
+
+        verify(kafkaTemplate).send(any(ProducerRecord.class));
+        verify(outboxMarker, never()).markPublished(any());
+    }
+
+    @Test
+    void publishPending_brokerDoesNotAckInTime_doesNotMarkTheRow() {
+        pending(row("invoice", "inv-1", null));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(new CompletableFuture<>());
+
+        relay.publishPending();
+
+        verify(outboxMarker, never()).markPublished(any());
+    }
+
+    @Test
+    void publishPending_twoRows_publishesAndMarksInOrder() {
+        final OutboxEntity first = row("invoice", "inv-1", null);
+        final OutboxEntity second = row("invoice", "inv-2", null);
+        pending(first, second);
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(acknowledged());
+
+        relay.publishPending();
+
+        final InOrder order = inOrder(outboxMarker);
+        order.verify(outboxMarker).markPublished(first.getId());
+        order.verify(outboxMarker).markPublished(second.getId());
+    }
+}

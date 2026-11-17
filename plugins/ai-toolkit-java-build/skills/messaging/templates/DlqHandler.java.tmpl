@@ -6,6 +6,7 @@ import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.retry.annotation.Backoff;
+import lombok.extern.slf4j.Slf4j;
 /**
  * Annotation recipe, not a bean: copy `@RetryableTopic` onto the `@KafkaListener` method of your consumer
  * (e.g. IdempotentConsumer) and add the `@DltHandler` method to that same class. Spring then creates the
@@ -15,6 +16,7 @@ import org.springframework.retry.annotation.Backoff;
  * The record value is a String on both sides (StringDeserializer + StringSerializer), so the recoverer can
  * republish it to the retry and DLT topics.
  */
+@Slf4j
 public class DlqHandler {
     @RetryableTopic(
         attempts = "${kafka.retry.attempts:5}",
@@ -27,6 +29,7 @@ public class DlqHandler {
     public void onMessage(String payload) { /* delegate to IdempotentConsumer */ }
     @DltHandler
     public void onDlt(String payload, @Header(KafkaHeaders.ORIGINAL_TOPIC) String originalTopic) {
-        // Log + count (metric + alert). Never throw — DLT is the terminal queue.
+        log.error("event=DLT_RECEIVED originalTopic={} payloadLength={}", originalTopic, payload.length());
+        // Never throw: the DLT is the terminal queue. Add the metric + alert of SKILL.md §5 here.
     }
 }

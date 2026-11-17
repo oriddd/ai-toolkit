@@ -1,0 +1,42 @@
+package {{basePackage}}.permission;
+
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Component;
+
+/**
+ * Default bucketing (SKILL.md §3): a JWT whose subject equals its {@code azp} claim is a client-credentials
+ * service account, any other JWT is an end user, everything else has no context. Adjust to your identity provider.
+ */
+@Component
+public class SpringSecurityCallerContextResolver implements CallerContextResolver {
+    private static final String SCOPE_PREFIX = "SCOPE_";
+    private static final String AUTHORIZED_PARTY_CLAIM = "azp";
+
+    @Override
+    public @Nullable CallerContext resolve() {
+        if (!(SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt)) {
+            return null;
+        }
+        String authorizedParty = jwt.getToken().getClaimAsString(AUTHORIZED_PARTY_CLAIM);
+        return jwt.getName().equals(authorizedParty) ? CallerContext.SERVICE_ACCOUNT : CallerContext.USER;
+    }
+
+    @Override
+    public Set<String> grantedScopes() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Set.of();
+        }
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority.startsWith(SCOPE_PREFIX))
+                .map(authority -> authority.substring(SCOPE_PREFIX.length()))
+                .collect(Collectors.toSet());
+    }
+}

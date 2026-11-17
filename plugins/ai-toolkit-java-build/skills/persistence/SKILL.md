@@ -264,17 +264,14 @@ Rules:
 
 ## 5. Anti-patterns to flag
 
-❌ Bidirectional `@OneToMany` on an aggregate that has > 100 children
-   (loads the whole list on access).
+❌ Bidirectional `@OneToMany` on an aggregate with > 100 children.
 ❌ `cascade = ALL` across aggregate boundaries.
 ❌ `FetchType.EAGER` — always `LAZY`. Fetch what you need with a
    `Specification` or `EntityGraph`. `@ManyToOne` / `@OneToOne` default to
    EAGER, so write `fetch = FetchType.LAZY` on them explicitly.
-❌ `findAll()` returning `List<T>` in production code.
-❌ DTO ↔ Entity confusion — never serialize an entity as a JSON response,
-   always map to a record DTO first (use MapStruct).
-❌ N + 1 queries — caught by Hibernate's `org.hibernate.SQL` logger or a
-   [datasource-proxy](https://github.com/jdbc-observations/datasource-proxy) spy in integration tests.
+❌ Unpaged `findAll()` in production code.
+❌ Serializing an entity as a JSON response — map to a record DTO first (MapStruct).
+❌ N + 1 queries — spot them with the `org.hibernate.SQL` logger or a datasource-proxy spy.
 
 ## Reference map — load only the part you are working on
 
@@ -289,3 +286,4 @@ Rules:
 - [`SecurityAuditorAware.java.tmpl`](./templates/SecurityAuditorAware.java.tmpl) — The `AuditorAware` bean (in `permission/`).
 - [`SystemAuditorAware.java.tmpl`](./templates/SystemAuditorAware.java.tmpl) — Replaces `SecurityAuditorAware` when the service has no Spring Security (auth = no).
 - [`ExampleSpecifications.java.tmpl`](./templates/ExampleSpecifications.java.tmpl) — Reference implementation for Specification pattern.
+- Tests, copied with their class (`AuditConfig` is wiring-only): `BaseEntityTest`, `SecurityAuditorAwareTest`, `SystemAuditorAwareTest`, `ExampleSpecificationsTest` in `templates/`.

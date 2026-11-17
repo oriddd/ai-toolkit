@@ -22,5 +22,26 @@ A release is complete only when its git tag exists. For every `## [x.y.z]` headi
 1. Merge the release PR to `main` (all gates above green, plugin versions bumped, `[Unreleased]` renamed to `[x.y.z] - date`).
 2. Tag the merge commit and push the tag: `git tag -a vx.y.z -m "vx.y.z" <merge-commit> && git push origin vx.y.z`.
 3. Confirm with `git ls-remote --tags origin vx.y.z`. `bash tools/check-versions.sh` prints a NOTE when the latest CHANGELOG release has no matching tag.
+## Pre-release check of the Java templates
+Run `tools/render-java-proof.sh` before a release, and after any change under `plugins/ai-toolkit-java-*/**/templates/` or to the
+pom / static-analysis / persistence / messaging / permissions / external-client / component-tests skills. It is a maintainer tool, **not a CI step**: the
+integration part needs Docker.
+
+It renders every shipped Java template into one fresh Spring Boot 3.5.16 service (the `ci` pom with the `static-analysis` plugins and the
+dependencies of each skill merged in, exception handling, permissions with the resource server, persistence + Flyway + outbox, Kafka messaging with the
+idempotent consumer, the external-client cache adapter, a health indicator, component tests, `ArchitectureTest`) plus a tiny sample domain,
+runs `mvn spotless:apply` once (rendered code is not pre-formatted), then `mvn verify`: Spotless check, Error Prone + NullAway at ERROR, SpotBugs,
+Checkstyle, unit, component and ArchUnit tests, the Jacoco per-class gate (85 % line / 75 % branch) and the PIT gate (>= 75 %). It exits non-zero on the first red gate and prints
+test counts, Jacoco and PIT totals.
+
+```sh
+tools/render-java-proof.sh --target /tmp/java-proof            # unit + component tests, all static gates (about 2 minutes)
+tools/render-java-proof.sh --target /tmp/java-proof --with-it  # also the Testcontainers test (Postgres 16, apache/kafka:3.9.1)
+```
+
+Needs JDK 21 (`JAVA_HOME`, or an installed one is found), Maven, and for `--with-it` a running Docker or Colima. Maven runs offline when the
+Boot parent is in `~/.m2`; pass `--online` otherwise. A red run means a template or a skill instruction fails the toolkit's own gates when applied
+together with the others: fix the template, never the rendered project. Not covered: `request-metrics` and the OAuth2 client wiring (prose only,
+no templates).
 ## Code of Conduct
 Be professional and constructive.

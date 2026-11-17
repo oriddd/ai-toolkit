@@ -2,6 +2,7 @@ package {{basePackage}}.health;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import {{basePackage}}.testconfig.ComponentTestConfiguration;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -19,6 +22,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "management.endpoint.health.show-components=always")
+@Import(ComponentTestConfiguration.class)
 @ActiveProfiles("component-test")
 class ReadinessGroupComponentTest {
 
@@ -52,13 +56,18 @@ class ReadinessGroupComponentTest {
         DEPENDENCY.stop(0);
     }
 
-    @Autowired TestRestTemplate rest;
+    @LocalServerPort private int port;
+    @Autowired private TestRestTemplate rest;
+
+    private ResponseEntity<String> get(final String path) {
+        return rest.getForEntity("http://localhost:" + port + "{{contextPath}}" + path, String.class);
+    }
 
     @Test
     void readiness_dependencyAnswersExpectedStatus_isUpWithTheIndicator() {
         DEPENDENCY_STATUS.set({{successStatusCode}});
 
-        final ResponseEntity<String> response = rest.getForEntity("/actuator/health/readiness", String.class);
+        final ResponseEntity<String> response = get("/actuator/health/readiness");
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).contains("\"{{indicatorBeanName}}\"").contains("\"UP\"");
@@ -68,8 +77,8 @@ class ReadinessGroupComponentTest {
     void readiness_dependencyAnswersOtherStatus_isOutOfServiceAndLivenessStaysUp() {
         DEPENDENCY_STATUS.set({{successStatusCode}} == 503 ? 200 : 503);
 
-        final ResponseEntity<String> readiness = rest.getForEntity("/actuator/health/readiness", String.class);
-        final ResponseEntity<String> liveness = rest.getForEntity("/actuator/health/liveness", String.class);
+        final ResponseEntity<String> readiness = get("/actuator/health/readiness");
+        final ResponseEntity<String> liveness = get("/actuator/health/liveness");
 
         assertThat(readiness.getStatusCode().value()).isEqualTo(503);
         assertThat(readiness.getBody()).contains("\"{{indicatorBeanName}}\"");

@@ -1,0 +1,10 @@
+package {{basePackage}}.spi.cache;
+
+import java.util.Objects;
+
+/** Port DTO: a record of JDK types, never a vendor type (pluggable-architecture §2). */
+public record CacheKey(String value) {
+    public CacheKey {
+        Objects.requireNonNull(value, "value");
+    }
+}

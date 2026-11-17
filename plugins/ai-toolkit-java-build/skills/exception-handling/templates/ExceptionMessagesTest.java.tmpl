@@ -68,6 +68,14 @@ class ExceptionMessagesTest {
     }
 
     @Test
+    void callerHasNoPermissions_resourceId_buildsForbidden() {
+        assertCodeAndMessage(
+                ExceptionMessages.callerHasNoPermissions("inv-1"),
+                ExceptionMessages.ERR_FORBIDDEN,
+                "Caller has no permissions on 'inv-1'.");
+    }
+
+    @Test
     void rateLimitExceeded_seconds_buildsTooManyRequestsWithRetryAfter() {
         final TooManyRequestsException e = ExceptionMessages.rateLimitExceeded(1500);
 

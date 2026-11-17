@@ -1,0 +1,148 @@
+package {{basePackage}}.adapter.cache.http;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+
+class CacheClientTest {
+
+    private static final String ENTRY_URL = "http://cache.test/cache/user-1";
+    private static final String ENTRY_JSON = "{\"key\":\"user-1\",\"value\":\"AQI=\",\"ttlMillis\":1000}";
+
+    private final RestClient.Builder builder = RestClient.builder().baseUrl("http://cache.test");
+    private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+    private final CacheClient client =
+            new CacheClient(
+                    builder.build(),
+                    new HttpCacheProperties("http://cache.test", "/cache/{key}", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+
+    @Test
+    void fetch_hit_returnsTheDecodedEntry() throws Exception {
+        server.expect(requestTo(ENTRY_URL)).andExpect(method(HttpMethod.GET)).andRespond(withSuccess(ENTRY_JSON, MediaType.APPLICATION_JSON));
+
+        final Optional<CacheEntryResponse> entry = client.fetch("user-1");
+
+        assertThat(entry).contains(new CacheEntryResponse("user-1", "AQI=", 1000));
+        server.verify();
+    }
+
+    @Test
+    void fetch_notFound_isAMissNotAnError() throws Exception {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(client.fetch("user-1")).isEmpty();
+    }
+
+    @Test
+    void fetch_serverError_throwsUnavailable() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+
+        assertThatThrownBy(() -> client.fetch("user-1"))
+                .isInstanceOf(UnavailableException.class)
+                .hasMessage(ExceptionMessages.dependencyUnavailable(CacheClient.DEPENDENCY, null).getMessage());
+    }
+
+    @Test
+    void fetch_clientError_throwsDependencyExceptionWithTheStatus() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.fetch("user-1"))
+                .isInstanceOf(DependencyException.class)
+                .hasMessageContaining("403");
+    }
+
+    @Test
+    void fetch_redirect_isNotFollowedAndFailsAsDependencyException() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.FOUND));
+
+        assertThatThrownBy(() -> client.fetch("user-1"))
+                .isInstanceOf(DependencyException.class)
+                .hasMessageContaining("302");
+    }
+
+    @Test
+    void fetch_connectionFailure_throwsUnavailableWithTheCause() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(request -> {
+            throw new IOException("connection refused");
+        });
+
+        assertThatThrownBy(() -> client.fetch("user-1"))
+                .isInstanceOf(UnavailableException.class)
+                .hasRootCauseInstanceOf(IOException.class);
+    }
+
+    @Test
+    void store_success_putsTheEntryAsJson() throws Exception {
+        server.expect(requestTo(ENTRY_URL))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json(ENTRY_JSON))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        client.store(new CacheEntryResponse("user-1", "AQI=", 1000));
+
+        server.verify();
+    }
+
+    @Test
+    void store_serverError_throwsUnavailable() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> client.store(new CacheEntryResponse("user-1", "AQI=", 1000))).isInstanceOf(UnavailableException.class);
+    }
+
+    @Test
+    void store_clientError_throwsDependencyException() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST));
+
+        assertThatThrownBy(() -> client.store(new CacheEntryResponse("user-1", "AQI=", 1000))).isInstanceOf(DependencyException.class);
+    }
+
+    @Test
+    void evict_success_deletesTheEntry() throws Exception {
+        server.expect(requestTo(ENTRY_URL)).andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        client.evict("user-1");
+
+        server.verify();
+    }
+
+    @Test
+    void evict_notFound_isFine() throws Exception {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        client.evict("user-1");
+
+        server.verify();
+    }
+
+    @Test
+    void evict_serverError_throwsUnavailable() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThatThrownBy(() -> client.evict("user-1")).isInstanceOf(UnavailableException.class);
+    }
+
+    @Test
+    void evict_clientError_throwsDependencyException() {
+        server.expect(requestTo(ENTRY_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.evict("user-1")).isInstanceOf(DependencyException.class);
+    }
+}

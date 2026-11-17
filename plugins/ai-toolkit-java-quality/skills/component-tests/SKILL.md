@@ -49,6 +49,10 @@ src/test/resources/
 
 ### 1. `ComponentTestConfiguration`
 
+Target: `src/test/java/<basePackage>/testconfig/ComponentTestConfiguration.java`. Every `@SpringBootTest` of the
+`component-test` profile imports it with `@Import(ComponentTestConfiguration.class)`; without it, services with
+persistence or auth have no transaction manager and no permissive security chain.
+
 A `@TestConfiguration` annotated with `@Profile("component-test")` that:
 
 - Disables real security (only when the service uses Spring Security —
@@ -60,7 +64,9 @@ A `@TestConfiguration` annotated with `@Profile("component-test")` that:
   any-request chains make Spring Security 6 fail at startup, or let the
   production chain win.
 - Provides a `@Primary TestRestTemplate` with extended connect/read timeouts
-  when the operation under test is slow (file conversion, ML inference, …).
+  when the operation under test is slow (file conversion, ML inference, …). It has **no root URI**, so every
+  `*ComponentTest` (the readiness-group one included) calls absolute URLs: `http://localhost:` + `@LocalServerPort` +
+  context path + path. A relative `"/actuator/…"` fails with `URI is not absolute`.
 - Provides `@Primary` mocks for every collaborator that touches the network
   or filesystem (e.g. `PermissionsHandler`, HTTP clients, blob-store / file-store clients).
   A client class that carries Resilience4j annotations (`@CircuitBreaker(fallbackMethod = …)`) is proxied even as a
@@ -104,6 +110,9 @@ public class NoHeavyStartupTestConfig {
 Import it alongside `ComponentTestConfiguration` via `@Import({…, …})`.
 (`@MockitoBean` would also replace the bean definition so the real bean is
 never created, but it belongs in slice tests — see the decision matrix below.)
+
+A test that asserts metrics (`/actuator/prometheus`, a `MeterRegistry` meter) adds `@AutoConfigureObservability`:
+Boot turns the metrics exporters off in every `@SpringBootTest`, so the endpoint answers `404` without it.
 
 ### 2. Test class skeleton
 

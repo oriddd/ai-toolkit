@@ -214,6 +214,9 @@ provided in Phase 1.
 dependency answers another status, and `/actuator/health/liveness` stays `200`. It sets
 `management.endpoint.health.show-components=always` for the assertion; by default the endpoint reports only the group
 status, so the `curl` check below shows the entries only when `show-components` / `show-details` allow it.
+It imports `ComponentTestConfiguration` (`component-tests`: permissive security chain, no-op transaction manager) and calls
+absolute URLs (`http://localhost:` + `@LocalServerPort` + `{{contextPath}}`): that configuration's `@Primary TestRestTemplate`
+has no root URI.
 
 ## Phase 3 – Validate
 
@@ -231,6 +234,10 @@ Print:
 - That the readiness probe now **fails closed**: when the dependency is unreachable for longer than
   `failureThreshold * periodSeconds` (defaults from `cd`: 3 × 10 s = 30 s) the pod goes Unready and leaves the Service.
   A shared outage therefore takes every replica out at once — add only dependencies the service truly cannot work without.
+- That a readiness group that includes an indicator answers **503 (`DOWN`) whenever the dependency is unreachable**, also
+  on a brand-new pod: the pod is not Ready until the dependency exists and answers the expected status. An integration test of
+  the whole service therefore sees 503 on `/actuator/health/readiness` unless the dependency (or a stub) runs. Order a fresh
+  environment's rollout so the dependency comes up first.
 
 ## Do / Don't
 

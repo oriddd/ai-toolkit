@@ -67,9 +67,15 @@ If a class has no logic (pure DTO / record / `@Getter` Lombok holder) –
 **do not generate a test**. Add it to `jacoco-maven-plugin`'s `<excludes>`
 instead.
 
-Classes that ship from a template are not exempt: the exception hierarchy, `ExceptionMessages` and `GlobalExceptionHandler`
-come with their tests (`exception-handling` templates). Copy the test with the class, so the per-class Jacoco gate and PIT
-pass on a fresh skeleton; never exclude shipped classes from Jacoco.
+Classes that ship from a template are not exempt: every logic class ships with a `*Test.java.tmpl` next to it
+(`exception-handling`, `permissions`, `persistence`, `messaging`, `external-client`, `health-indicator`). Copy the test with
+the class, so the per-class Jacoco gate and PIT pass on a fresh skeleton; never exclude a shipped logic class.
+
+**Wiring-only classes.** A `@Configuration` class that only declares beans, conditions, timeouts or `@Enable*` switches
+(`KafkaConfig`, `AuditConfig`, `ShedLockConfig`, `CacheClientConfig`, `ReadinessClientConfig`, `ClockConfig`) has no logic
+to unit-test; the component and integration tests prove the wiring. The `ci` `pom.xml.tmpl` therefore excludes `**/*Config.class`
+from Jacoco and `<basePackage>.*Config` from PIT. This is the only exclusion by name, so a class that holds logic is never
+called `*Config`: put the logic in a collaborator and test that.
 
 ## Reference map — load only the part you are working on
 

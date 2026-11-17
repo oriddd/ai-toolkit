@@ -153,8 +153,8 @@ Conventions:
 - W3C TraceContext headers (`traceparent`/`tracestate`) propagate
   automatically across `RestClient`/`WebClient` calls. **Never** invent
   your own correlation header.
-- Test it with `@AutoConfigureObservability`: `@SpringBootTest` disables tracing by default, so without it the
-  propagator is a no-op and no `traceparent` header is sent. Verified with it on Boot 3.5: `traceId` / `spanId` in MDC and
+- Test it with `@AutoConfigureObservability`: `@SpringBootTest` disables tracing and the metrics exporters by default, so without it
+  the propagator is a no-op (no `traceparent` header is sent) and `/actuator/prometheus` answers `404`. Verified with it on Boot 3.5: `traceId` / `spanId` in MDC and
   in the `logging.structured.format.console: logstash` JSON line, the `traceparent` header on a `RestClient` call made from the
   request, the trace id on a `ContextPropagatingTaskDecorator` worker thread, and `callerId` on that thread only after the
   `Slf4jThreadLocalAccessor("callerId")` registration of §2.

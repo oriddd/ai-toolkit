@@ -1,0 +1,13 @@
+package {{basePackage}}.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+
+class SystemAuditorAwareTest {
+
+    @Test
+    void getCurrentAuditor_anyCall_isTheSystemUser() {
+        assertThat(new SystemAuditorAware().getCurrentAuditor()).contains("system");
+    }
+}

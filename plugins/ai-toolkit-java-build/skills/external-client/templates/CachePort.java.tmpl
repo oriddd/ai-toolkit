@@ -1,0 +1,16 @@
+package {{basePackage}}.spi.cache;
+
+import {{basePackage}}.exception.BaseDomainException;
+import java.time.Duration;
+import java.util.Optional;
+
+/** Vendor-free cache contract the domain depends on (pluggable-architecture §2). Adapters live in adapter/cache/<vendor>/. */
+public interface CachePort {
+    Optional<byte[]> get(CacheKey key) throws BaseDomainException;
+
+    void put(CacheKey key, byte[] value, Duration ttl) throws BaseDomainException;
+
+    void evict(CacheKey key) throws BaseDomainException;
+
+    String providerId();
+}

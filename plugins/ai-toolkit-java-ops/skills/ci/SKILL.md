@@ -92,7 +92,7 @@ Static-analysis plugins are added by
 `static-analysis` — keep them out of
 this skill so the two concerns evolve independently. The full
 [`templates/pom.xml.tmpl`](./templates/pom.xml.tmpl) also carries Lombok, Failsafe, the
-Jacoco excludes (bootstrap class, generated sources, JPA metamodel `*_`) and the PIT
+Jacoco excludes (bootstrap class, generated sources, JPA metamodel `*_`, wiring-only `*Config` classes; PIT skips the same) and the PIT
 mutation gate (≥ 75 %, guild #12; `unit-tests` explains it).
 
 Next to the pom, check in a `lombok.config` (the `create-repo` scaffold writes the same file):

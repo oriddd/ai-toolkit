@@ -1,0 +1,130 @@
+package {{basePackage}}.messaging;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.tracing.CurrentTraceContext;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+
+@ExtendWith(MockitoExtension.class)
+class OutboxWriterTest {
+
+    private static final Instant NOW = Instant.parse("2026-01-02T03:04:05Z");
+    private static final String TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+    record SampleEvent(String id) {}
+
+    @Mock private OutboxRepository outboxRepo;
+    @Mock private ObjectProvider<Tracer> tracerProvider;
+    @Mock private ObjectProvider<Propagator> propagatorProvider;
+    @Mock private Tracer tracer;
+    @Mock private Propagator propagator;
+    @Mock private CurrentTraceContext currentTraceContext;
+    @Mock private TraceContext traceContext;
+
+    private OutboxWriter writer;
+
+    @BeforeEach
+    void setUp() {
+        writer = new OutboxWriter(outboxRepo, new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC), tracerProvider, propagatorProvider);
+    }
+
+    private OutboxEntity appended() {
+        final ArgumentCaptor<OutboxEntity> captor = ArgumentCaptor.forClass(OutboxEntity.class);
+        verify(outboxRepo).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void append_event_savesRowWithJsonPayloadTypeAndClockTime() {
+        writer.append("invoice", "inv-1", new SampleEvent("inv-1"));
+
+        final OutboxEntity row = appended();
+        assertThat(row.getAggregateType()).isEqualTo("invoice");
+        assertThat(row.getAggregateId()).isEqualTo("inv-1");
+        assertThat(row.getEventType()).isEqualTo("SampleEvent");
+        assertThat(row.getPayload()).isEqualTo("{\"id\":\"inv-1\"}");
+        assertThat(row.getCreatedAt()).isEqualTo(NOW);
+        assertThat(row.getPublishedAt()).isNull();
+    }
+
+    @Test
+    void append_noTracerAvailable_storesNoTraceparent() {
+        writer.append("invoice", "inv-1", new SampleEvent("inv-1"));
+
+        assertThat(appended().getTraceparent()).isNull();
+        verifyNoInteractions(tracer, propagator);
+    }
+
+    @Test
+    void append_tracerWithoutCurrentContext_storesNoTraceparent() {
+        when(tracerProvider.getIfAvailable()).thenReturn(tracer);
+        when(propagatorProvider.getIfAvailable()).thenReturn(propagator);
+        when(tracer.currentTraceContext()).thenReturn(currentTraceContext);
+        when(currentTraceContext.context()).thenReturn(null);
+
+        writer.append("invoice", "inv-1", new SampleEvent("inv-1"));
+
+        assertThat(appended().getTraceparent()).isNull();
+        verifyNoInteractions(propagator);
+    }
+
+    @Test
+    void append_activeTrace_storesTheInjectedTraceparent() {
+        when(tracerProvider.getIfAvailable()).thenReturn(tracer);
+        when(propagatorProvider.getIfAvailable()).thenReturn(propagator);
+        when(tracer.currentTraceContext()).thenReturn(currentTraceContext);
+        when(currentTraceContext.context()).thenReturn(traceContext);
+        doAnswer(
+                        invocation -> {
+                            final Map<String, String> carrier = invocation.getArgument(1);
+                            carrier.put("traceparent", TRACEPARENT);
+                            return null;
+                        })
+                .when(propagator)
+                .inject(eq(traceContext), any(), any());
+
+        writer.append("invoice", "inv-1", new SampleEvent("inv-1"));
+
+        assertThat(appended().getTraceparent()).isEqualTo(TRACEPARENT);
+    }
+
+    @Test
+    void append_tracerWithoutPropagator_storesNoTraceparent() {
+        when(tracerProvider.getIfAvailable()).thenReturn(tracer);
+
+        writer.append("invoice", "inv-1", new SampleEvent("inv-1"));
+
+        assertThat(appended().getTraceparent()).isNull();
+        verifyNoInteractions(tracer);
+    }
+
+    @Test
+    void append_eventJacksonCannotSerialise_throwsIllegalState() {
+        assertThatThrownBy(() -> writer.append("invoice", "inv-1", new Object()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("java.lang.Object");
+
+        verifyNoInteractions(outboxRepo);
+    }
+}
