@@ -147,8 +147,8 @@ spring:
 management.tracing.sampling.probability: 1.0
 ```
 
-These property names are for Spring Boot 3.5. Boot 4 moved the OpenTelemetry/OTLP properties and starters — check
-its migration guide before upgrading.
+These property names are for Spring Boot 3.5. Boot 4 moved the OpenTelemetry/OTLP properties and starters (the tracing
+endpoint becomes `management.opentelemetry.tracing.export.otlp.endpoint`) — check its migration guide before upgrading.
 
 Conventions:
 - W3C TraceContext headers (`traceparent`/`tracestate`) propagate

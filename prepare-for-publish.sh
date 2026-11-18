@@ -178,8 +178,8 @@ git grep -nIE "https?://[A-Za-z0-9.-]+\.(local|internal|corp|lan)([^A-Za-z0-9.-]
   | while IFS= read -r line; do fail "internal-looking host: ${line:0:120}"; done
 
 # 2f. AI-tool attribution must not appear in tracked content or in any commit message.
-ATTR='Co-Authored-By:[[:space:]]*(Claude|Anthropic)|Generated with \[?Claude|noreply@anthropic\.com'
-if git grep -nIE "$ATTR" -- . ':(exclude)prepare-for-publish.sh' >/tmp/pfp_attr.$$ 2>/dev/null; then
+ATTR='Co-Authored-By:[[:space:]]*[^<]*(Claude|Anthropic|Copilot|ChatGPT|OpenAI|Gemini|Cursor)|Generated (with|by)[[:space:]]*\[?(Claude|Copilot|ChatGPT|Cursor|Gemini)|noreply@anthropic\.com'
+if git grep -nIiE "$ATTR" -- . ':(exclude)prepare-for-publish.sh' >/tmp/pfp_attr.$$ 2>/dev/null; then
   while IFS= read -r line; do fail "AI attribution in tracked content: ${line:0:120}"; done < /tmp/pfp_attr.$$
 else
   pass "no AI attribution in tracked content"

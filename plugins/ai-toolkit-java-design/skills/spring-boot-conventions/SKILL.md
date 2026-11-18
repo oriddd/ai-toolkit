@@ -153,8 +153,8 @@ public Page<FooResponse> list(@ParameterObject Pageable pageable) { … }
 ```
 
 - Default page size: 20, max: 100 (set via `spring.data.web.pageable.default-page-size` / `max-page-size`).
-- Response shape is standardised — do not let `PageImpl` be serialized as-is (Spring Data 3.3+ warns). Either:
-  - set `spring.data.web.pageable.serialization-mode: via-dto` (Boot 3.3+) and keep returning `Page<T>`: it is written as
+- Response shape is standardised — do not let `PageImpl` be serialized as-is (Spring Data warns since 3.1; 3.3 added `PagedModel` / `VIA_DTO`). Either:
+  - set `spring.data.web.pageable.serialization-mode: via-dto` (Boot 3.4+; on 3.3 use `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` or return `PagedModel`) and keep returning `Page<T>`: it is written as
     Spring Data's `PagedModel`, so clients rely on `content` plus a nested `page` object (`size`, `number`, `totalElements`, `totalPages`).
     Never use `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` for this: the annotation registers its
     own pageable resolver, Boot's `SpringDataWebAutoConfiguration` backs off, and every `spring.data.web.pageable.*`

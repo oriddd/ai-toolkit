@@ -172,6 +172,8 @@ management:
   readiness-endpoint: {{readinessEndpoint}}
 ```
 
+Substitute the `{{…}}` placeholders literally; `${{{baseUrlEnvHost}}:localhost}` must render as `${ORDERS_HOST:localhost}`.
+
 **Exposure.** Make sure `health` (and `prometheus`) are in the service's existing
 `management.endpoints.web.exposure.include`; add to the list, never replace it. `httpexchanges` (Boot 3's
 replacement for `httptrace`, needs an `HttpExchangeRepository` bean) exposes request headers — include it only when

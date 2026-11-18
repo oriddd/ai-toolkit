@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Draft plugin versions (2026-11-18)
+
+- Python and React Native plugins (phase and meta) are `1.1.0`. They were `0.x` after being `1.0.0` at the marketplace restructure, so installs made at `1.0.0` never saw an update; the experimental status stays in each plugin description.
+- Fact-check fixes: `spring-boot-conventions` dates the `PageImpl` warning (Spring Data 3.1) and the `serialization-mode` property (Boot 3.4+); `observability` names the Boot 4 OTLP endpoint key; `health-indicator` states how placeholders render; `docs/README.md` counts 48 quality-review items; `prepare-for-publish.sh` matches attribution case-insensitively and for more AI tools.
+
 ### Proportionality and review-round budget (2026-11-18)
 
 - `code-hygiene` (quality 1.6.0) gains a Proportionality section: state the requirements and the confirmed deployed topology, trace every new class, config key and chart value to a requirement, treat a diff far larger than the feature as a design smell to raise before adding more, keep broker/cache/cluster settings internal to the app or a chart helper, question an optional mechanism instead of patching its symptoms, and budget one review plus one fix pass per request. `completion-gate` check 1 (Scope) and the failure rules point to it.
