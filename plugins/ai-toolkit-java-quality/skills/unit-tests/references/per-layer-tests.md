@@ -17,7 +17,7 @@ Verify the **intended behavior** when inputs are valid and conditions are met:
 void handle_allowedCaller_delegatesToSelectedStrategy() throws Exception {
     // given
     when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
-    when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
+    when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(userStrategy);
 
     // when
     handler.handle("invoice-42");
@@ -59,7 +59,7 @@ built by `ExceptionMessages`):
 void handle_unrecognizedCallerContext_throwsForbiddenException() {
     // given
     when(callerContextResolver.resolve()).thenReturn(CallerContext.EXTERNAL_SYSTEM);
-    when(permissionsRegistry.getStrategy(CallerContext.EXTERNAL_SYSTEM)).thenReturn(Optional.empty());
+    when(permissionsRegistry.getStrategy(CallerContext.EXTERNAL_SYSTEM)).thenReturn(null);
 
     // when / then
     assertThatThrownBy(() -> handler.handle("invoice-42"))
@@ -121,7 +121,7 @@ class PermissionsHandlerTest {
     @Test
     void handle_allowedCaller_delegatesToSelectedStrategy() throws Exception {
         when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
-        when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
+        when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(userStrategy);
 
         handler.handle("invoice-42");
 
@@ -142,7 +142,7 @@ class PermissionsHandlerTest {
     @Test
     void handle_unrecognizedCallerContext_throwsForbiddenException() {
         when(callerContextResolver.resolve()).thenReturn(CallerContext.EXTERNAL_SYSTEM);
-        when(permissionsRegistry.getStrategy(CallerContext.EXTERNAL_SYSTEM)).thenReturn(Optional.empty());
+        when(permissionsRegistry.getStrategy(CallerContext.EXTERNAL_SYSTEM)).thenReturn(null);
 
         assertThatThrownBy(() -> handler.handle("invoice-42"))
             .isInstanceOf(ForbiddenException.class);
@@ -153,7 +153,7 @@ class PermissionsHandlerTest {
     @Test
     void handle_strategyDeniesAccess_propagatesForbiddenException() throws Exception {
         when(callerContextResolver.resolve()).thenReturn(CallerContext.USER);
-        when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(Optional.of(userStrategy));
+        when(permissionsRegistry.getStrategy(CallerContext.USER)).thenReturn(userStrategy);
         ForbiddenException denied = ExceptionMessages.accessDenied("invoice-42");
         doThrow(denied).when(userStrategy).verifyPermissions("invoice-42");
 

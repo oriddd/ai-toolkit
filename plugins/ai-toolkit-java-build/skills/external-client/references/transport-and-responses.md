@@ -241,7 +241,7 @@ Split response concerns into two distinct beans:
 | Class | Purpose | Returns |
 | --- | --- | --- |
 | `*ResponseVerifier` | **Boolean checks** on response state (has any hits? is healthy?) | `boolean` |
-| `*ResponseParser` | **Extract domain values** from response DTOs (product type, binary id, field from nested doc) | domain type, or `Optional` when the value may be absent |
+| `*ResponseParser` | **Extract domain values** from response DTOs (product type, binary id, field from nested doc) | domain type or `null` |
 
 ```java
 @Component
@@ -264,38 +264,40 @@ public class FooResponseVerifier {
 public class FooResponseParser {
     private final FooResponseVerifier verifier;
 
-    /** Returns the first product, or empty + log.error if none. */
-    public Optional<FooProductDto> getSingleProduct(final FooSearchResponseDto response) {
+    /** Returns the first product, or null + log.error if none. */
+    public @Nullable FooProductDto getSingleProduct(final FooSearchResponseDto response) {
         if (verifier.hasProducts(response)) {
-            return Optional.of(response.getProducts().getFirst());
+            return response.getProducts().getFirst();
         }
         log.error("No products in response (totalHits={})", response == null ? null : response.getTotalHits());
-        return Optional.empty();
+        return null;
     }
 
-    public Optional<String> parseProductType(final FooProductDto product) {
+    public @Nullable String parseProductType(final @Nullable FooProductDto product) {
         return parseFieldFromNested(product, FooConstants.FIELD_TYPE);
     }
 
-    /** Extracts a field value from nested products; empty if absent. */
-    public Optional<String> parseFieldFromNested(final FooProductDto doc, final String fieldName) {
+    /** Extracts a field value from nested products; returns null if absent. */
+    public @Nullable String parseFieldFromNested(final @Nullable FooProductDto doc, final @Nullable String fieldName) {
         if (doc == null || fieldName == null || fieldName.isBlank()) {
             log.warn("Cannot parse field '{}' from null product", fieldName);
-            return Optional.empty();
+            return null;
         }
         return Optional.ofNullable(doc.getNested())
                 .orElse(Collections.emptyList()).stream()
                 .filter(Objects::nonNull)
                 .map(nested -> nested.getFieldValueAsStr(fieldName))
                 .filter(value -> value != null && !value.isBlank())
-                .findFirst();
+                .findFirst()
+                .orElse(null);
     }
 }
 ```
 
-An absent value is `Optional.empty()`, never a bare `null`: a `null` from a non-`@Nullable` method fails the NullAway
-build (`static-analysis`), and the caller decides what "absent" means (404, `false`, a default from config). A
-missing value the caller cannot do without is a domain exception, not an empty result.
+A parser or `CoreService` method that can find nothing returns `null` and is declared `@Nullable`
+(`org.jspecify.annotations.Nullable`): NullAway (`static-analysis`) then forces every caller to handle the absence,
+and an un-annotated `return null` fails the build. The facade turns it into the caller's meaning (404, `false`, a
+default from config); a missing value the caller cannot do without is a domain exception, not a `null`.
 
 ## 8. Constants — `<Dep>Constants`
 

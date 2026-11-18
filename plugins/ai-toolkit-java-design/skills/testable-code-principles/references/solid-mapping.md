@@ -38,7 +38,7 @@ public class InvoiceProcessor {
 // ✅ Good: New format = new strategy + new test class
 public interface ExportRenderer {
     byte[] render(byte[] input);
-    String getSupportedFormat();   // the registry indexes renderers by it (strategy-registry-pattern)
+    String getSupportedFormat();   // the registry routes by canHandle, derived from it (strategy-registry-pattern)
 }
 
 @Component

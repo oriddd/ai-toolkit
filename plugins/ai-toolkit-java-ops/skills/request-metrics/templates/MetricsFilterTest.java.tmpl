@@ -19,7 +19,6 @@ import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import java.io.IOException;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockAsyncContext;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -38,8 +37,8 @@ class MetricsFilterTest {
     private final MetricsFilter filter = new MetricsFilter(resolver, registry);
 
     private void routeToRecorder() {
-        when(resolver.resolve(request)).thenReturn(Optional.of(METRIC));
-        when(registry.getRecorder(METRIC)).thenReturn(Optional.of(recorder));
+        when(resolver.resolve(request)).thenReturn(METRIC);
+        when(registry.getRecorder(METRIC)).thenReturn(recorder);
     }
 
     @Test
@@ -78,7 +77,7 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_noMetricForTheUri_neverAsksTheRegistry() throws Exception {
-        when(resolver.resolve(request)).thenReturn(Optional.empty());
+        when(resolver.resolve(request)).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
@@ -88,8 +87,8 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_nameWithoutRecorder_isSkippedWithoutFailingTheRequest() throws Exception {
-        when(resolver.resolve(request)).thenReturn(Optional.of(METRIC));
-        when(registry.getRecorder(METRIC)).thenReturn(Optional.empty());
+        when(resolver.resolve(request)).thenReturn(METRIC);
+        when(registry.getRecorder(METRIC)).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 

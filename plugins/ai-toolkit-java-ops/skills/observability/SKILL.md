@@ -172,12 +172,12 @@ Each service publishes (in `docs/SLO.md`) at least:
 | SLI | Target | Window |
 | --- | --- | --- |
 | Availability — `2xx / total` on public endpoints | 99.9 % | 28 days rolling |
-| Latency — share of primary-use-case requests faster than 500 ms (`le="0.5"` SLO bucket of the `request-metrics` Timer ÷ count) | ≥ 95 % | 28 days rolling |
+| Latency — p95 of `Timer{success}` on the primary use case | < 500 ms | 28 days rolling |
 | Freshness (if applicable) | service-specific | service-specific |
 
-The latency SLI is computed from the Timer's SLO buckets (`MetricsTimerHelper`), not from a p95: percentile
-histograms are off by default to bound cardinality. If a true p95 is needed, enable
-`management.metrics.distribution.percentiles-histogram.<metric>: true` for that metric only.
+The p95 needs the Timer's histogram buckets (the SLO buckets of `MetricsTimerHelper`, or
+`management.metrics.distribution.percentiles-histogram.<metric>: true` for that metric only: histograms are off by
+default to bound cardinality); compute it with `histogram_quantile` so it aggregates across pods.
 
 Error budget = `1 − SLO`. Alerts fire on **burn rate** (multi-window),
 never on raw error counts.

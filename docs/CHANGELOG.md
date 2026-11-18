@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Reverted risky changes from the change ledger (2026-11-18)
+
+- Layering: every controller endpoint calls exactly one `Operation` again (`code-structure`, golden-path #3, `PATTERN_SELECTION_GUIDE`); a use case with nothing to orchestrate gets a thin Operation over one Service.
+- Contracts: `strategy-registry-pattern` routes with `canHandle(discriminator)` again (strategies keep one discriminator method plus a default `canHandle`; the registries still fail at startup on a duplicate value); resolvers, registries, mappers, layouts and `external-client` parsers and facades return `@Nullable` `null` instead of `Optional`; mappers and layouts start with `if (entity == null) return null;`. `permissions`, `request-metrics`, `response-layout`, `response-mapper` and their tests follow.
+- Validators are `@Component`s again and the `validation-pattern` example captures `messageTemplate` in `initialize()`.
+- `release-versioning`: "Never edit `CHANGELOG.md` by hand — the bot owns it" is back as the rule; this catalogue's own hand-maintained changelog stays the documented exception.
+- `observability`: the latency SLI is the p95 of the primary-use-case Timer (< 500 ms) again, computed with `histogram_quantile`. `external-client`: `slowCallDurationThreshold` is 2s again.
+- `render-java-proof.sh` green: 323 tests, JaCoCo 99.8% line / 96.5% branch, PIT 99%.
+
 ### Draft plugin versions (2026-11-18)
 
 - Python and React Native plugins (phase and meta) are `1.1.0`. They were `0.x` after being `1.0.0` at the marketplace restructure, so installs made at `1.0.0` never saw an update; the experimental status stays in each plugin description.

@@ -2,8 +2,6 @@ package {{basePackage}}.permission;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -11,9 +9,16 @@ import org.junit.jupiter.api.Test;
 class PermissionsRegistryTest {
 
     private static PermissionsCheckStrategy strategyFor(final CallerContext... contexts) {
-        final PermissionsCheckStrategy strategy = mock(PermissionsCheckStrategy.class);
-        when(strategy.supportedContexts()).thenReturn(List.of(contexts));
-        return strategy;
+        return new PermissionsCheckStrategy() {
+            @Override
+            public void verifyPermissions(final String resourceId) {
+            }
+
+            @Override
+            public List<CallerContext> supportedContexts() {
+                return List.of(contexts);
+            }
+        };
     }
 
     @Test
@@ -23,8 +28,8 @@ class PermissionsRegistryTest {
 
         final PermissionsRegistry registry = new PermissionsRegistry(List.of(serviceAccount, user));
 
-        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).containsSame(serviceAccount);
-        assertThat(registry.getStrategy(CallerContext.USER)).containsSame(user);
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).isSameAs(serviceAccount);
+        assertThat(registry.getStrategy(CallerContext.USER)).isSameAs(user);
     }
 
     @Test
@@ -33,27 +38,27 @@ class PermissionsRegistryTest {
 
         final PermissionsRegistry registry = new PermissionsRegistry(List.of(both));
 
-        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).containsSame(both);
-        assertThat(registry.getStrategy(CallerContext.USER)).containsSame(both);
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).isSameAs(both);
+        assertThat(registry.getStrategy(CallerContext.USER)).isSameAs(both);
     }
 
     @Test
-    void getStrategy_unregisteredContext_isEmpty() {
+    void getStrategy_unregisteredContext_isNull() {
         final PermissionsRegistry registry = new PermissionsRegistry(List.of(strategyFor(CallerContext.USER)));
 
-        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).isEmpty();
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).isNull();
     }
 
     @Test
-    void getStrategy_noStrategiesAtAll_isEmpty() {
-        assertThat(new PermissionsRegistry(List.of()).getStrategy(CallerContext.USER)).isEmpty();
+    void getStrategy_noStrategiesAtAll_isNull() {
+        assertThat(new PermissionsRegistry(List.of()).getStrategy(CallerContext.USER)).isNull();
     }
 
     @Test
-    void getStrategy_nullContext_isEmpty() {
+    void getStrategy_nullContext_isNull() {
         final PermissionsRegistry registry = new PermissionsRegistry(List.of(strategyFor(CallerContext.USER)));
 
-        assertThat(registry.getStrategy(null)).isEmpty();
+        assertThat(registry.getStrategy(null)).isNull();
     }
 
     @Test

@@ -32,7 +32,8 @@ public class SecureFullLayoutStrategy implements LayoutStrategy<Product, Product
     }
 
     @Override
-    public ProductFullDTO map(final Product product) {
+    public @Nullable ProductFullDTO map(final @Nullable Product product) {
+        if (product == null) return null;
         final boolean mayReadSensitiveData = sensitiveDataPolicy.mayReadSensitiveData(product.getId());
         final ProductFullDetails details = productDetailsService.getFullDetails(product.getId());
         return new ProductFullDTO(

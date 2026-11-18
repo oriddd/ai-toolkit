@@ -43,15 +43,15 @@ Steps:
 Symptom: `if (ctx == USER) … else if (ctx == SERVICE_ACCOUNT) …`.
 
 Steps:
-1. Extract the interface `XxxStrategy` with the business method and **one**
-   discriminator method saying what it supports — `getSupported<X>()` (or
-   `supported<X>s()` for several values), the `strategy-registry-pattern` contract.
+1. Extract the interface `XxxStrategy` with the business method, a discriminator
+   method saying what it supports — `getSupported<X>()` (or `supported<X>s()` for
+   several values) — and a default `canHandle(discriminator)` derived from it, the
+   `strategy-registry-pattern` contract.
 2. Move each branch into a `@Component` strategy class.
-3. Create an `XxxRegistry` (`@Component`) that takes `List<XxxStrategy>`,
-   indexes it by the discriminator in its constructor and fails at startup when
-   two strategies claim the same value; and a `Handler` (`@Component`) that
-   resolves the discriminator, asks the registry and throws a domain exception
-   when nothing matches.
+3. Create an `XxxRegistry` (`@Component`) that takes `List<XxxStrategy>`, routes
+   by `canHandle(discriminator)` and fails at startup when two strategies declare
+   the same value; and a `Handler` (`@Component`) that resolves the discriminator,
+   asks the registry and throws a domain exception when nothing matches.
 4. Replace the original `if/else` with `handler.handle(input)`.
 5. Delete the dead `if` after green tests.
 

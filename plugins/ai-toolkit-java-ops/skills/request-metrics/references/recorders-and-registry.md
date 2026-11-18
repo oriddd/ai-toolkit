@@ -30,32 +30,35 @@ public interface MetricsRecorder {
 @Component
 public class MetricsRecorderRegistry {
 
-    private final Map<String, MetricsRecorder> recordersByMetricName;
+    private final List<MetricsRecorder> metricsRecorders;
 
-    // Spring injects ALL MetricsRecorder beans automatically; index them once and fail fast on duplicates
+    // Spring injects ALL MetricsRecorder beans automatically; fail fast when two declare the same metric name
     public MetricsRecorderRegistry(final List<MetricsRecorder> metricsRecorders) {
-        this.recordersByMetricName = metricsRecorders.stream()
-                .collect(Collectors.toUnmodifiableMap(
-                        MetricsRecorder::getSupportedMetricName,
-                        Function.identity(),
-                        (first, second) -> {
-                            throw new IllegalStateException("Two recorders for metric '"
-                                    + first.getSupportedMetricName() + "': "
-                                    + first.getClass().getName() + ", " + second.getClass().getName());
-                        }));
+        final Map<String, MetricsRecorder> declared = new HashMap<>();
+        for (final MetricsRecorder recorder : metricsRecorders) {
+            final MetricsRecorder first = declared.putIfAbsent(recorder.getSupportedMetricName(), recorder);
+            if (first != null) {
+                throw new IllegalStateException("Two recorders for metric '" + recorder.getSupportedMetricName() + "': "
+                        + first.getClass().getName() + ", " + recorder.getClass().getName());
+            }
+        }
+        this.metricsRecorders = List.copyOf(metricsRecorders);
     }
 
-    public Optional<MetricsRecorder> getRecorder(final String metricName) {
-        return Optional.ofNullable(metricName).map(recordersByMetricName::get);
+    public @Nullable MetricsRecorder getRecorder(final @Nullable String metricName) {
+        return metricsRecorders.stream()
+                .filter(recorder -> recorder.canHandle(metricName))
+                .findFirst()
+                .orElse(null);
     }
 }
 ```
 
 Spring auto-discovers every `@Component` that implements `MetricsRecorder` via
 the `List<MetricsRecorder>` constructor injection. Adding a new recorder is
-purely additive — zero changes to the registry or filter. Two recorders claiming the same metric name fail the
-application at startup (routing must never depend on bean order), and a missing recorder is `Optional.empty()`, never
-`null` (`strategy-registry-pattern`).
+purely additive — zero changes to the registry or filter. The registry routes by `canHandle(metricName)`; two
+recorders declaring the same metric name fail the application at startup (routing must never depend on bean order),
+and a missing recorder is a `null` from the `@Nullable` `getRecorder` (`strategy-registry-pattern`).
 
 ## 11. Adding a use-case recorder (the only change needed for a new metric)
 

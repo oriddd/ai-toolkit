@@ -19,23 +19,23 @@ class MetricNameResolverTest {
 
     @Test
     void resolve_collectionAndItemPaths_mapToTheInvoiceMetric() {
-        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
-        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices/42"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices"))).isEqualTo(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices/42"))).isEqualTo(MonitoringConstants.METRIC_INVOICE_REQUESTS);
     }
 
     @Test
     void resolve_contextPathIsStrippedBeforeMatching() {
-        assertThat(resolver.resolve(request("", "/api/v1/invoices"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+        assertThat(resolver.resolve(request("", "/api/v1/invoices"))).isEqualTo(MonitoringConstants.METRIC_INVOICE_REQUESTS);
     }
 
     @Test
     void resolve_otherPaths_haveNoDomainMetric() {
-        assertThat(resolver.resolve(request("", "/api/v1/invoices/42/lines"))).isEmpty();
-        assertThat(resolver.resolve(request("", "/api/v1/other"))).isEmpty();
+        assertThat(resolver.resolve(request("", "/api/v1/invoices/42/lines"))).isNull();
+        assertThat(resolver.resolve(request("", "/api/v1/other"))).isNull();
     }
 
     @Test
-    void resolve_nullRequest_isEmpty() {
-        assertThat(resolver.resolve(null)).isEmpty();
+    void resolve_nullRequest_isNull() {
+        assertThat(resolver.resolve(null)).isNull();
     }
 }

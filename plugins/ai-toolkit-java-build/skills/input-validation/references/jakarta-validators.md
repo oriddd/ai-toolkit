@@ -39,8 +39,7 @@ Rules:
 ### 2b. The validator class
 
 The validator implements `ConstraintValidator<AnnotationType, ValueType>`.
-It is **not** a `@Component` (validators are not component-scanned):
-Spring Boot's `LocalValidatorFactoryBean` uses a `SpringConstraintValidatorFactory`,
+It is a `@Component` (its dependencies are auto-wired). Spring Boot's `LocalValidatorFactoryBean` uses a `SpringConstraintValidatorFactory`,
 which creates each validator through the application context
 (`AutowireCapableBeanFactory.createBean`), so constructor injection of Spring
 beans works. Hibernate Validator then caches one instance per constraint and
@@ -48,6 +47,7 @@ shares it across threads.
 
 ```java
 // validator/ValidProductIdValidator.java
+@Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
 public class ValidProductIdValidator

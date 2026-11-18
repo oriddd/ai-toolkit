@@ -13,6 +13,25 @@ private final MapperHandler mapperHandler = new MapperHandler(
 private final User sampleUser = UserFixtures.sampleUser();   // test-data builder for the User entity
 
 @Test
+void map_nullEntity_returnsNull() {
+    assertThat(new V1UserMapperStrategy().map(null)).isNull();
+    assertThat(new V2UserMapperStrategy().map(null)).isNull();
+    assertThat(new V3UserMapperStrategy().map(null)).isNull();
+}
+
+@Test
+void canHandle_onlyTheDeclaredVersion() {
+    assertThat(new V2UserMapperStrategy().canHandle(ApiVersion.V2)).isTrue();
+    assertThat(new V2UserMapperStrategy().canHandle(ApiVersion.V1)).isFalse();
+    assertThat(new V2UserMapperStrategy().canHandle(null)).isFalse();
+}
+
+@Test
+void registry_noStrategyForTheEntity_returnsNull() {
+    assertThat(new MapperRegistry(List.of(new V1UserMapperStrategy())).find(Order.class, ApiVersion.V1)).isNull();
+}
+
+@Test
 void handle_v2Path_returnsV2Dto() throws Exception {
     final var request = new MockHttpServletRequest("GET", "/api/v2/users/u-1");
 

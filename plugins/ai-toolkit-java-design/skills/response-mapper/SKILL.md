@@ -180,7 +180,7 @@ public class MapperContextResolver {
 
 ```java
 public interface MapperStrategy<E, D> {
-    D map(E entity);
+    @Nullable D map(@Nullable E entity);
     ApiVersion getSupportedVersion();
     Class<E> getEntityType();   // the registry is shared by every entity — this keeps User and other entities apart
 
@@ -193,31 +193,38 @@ public interface MapperStrategy<E, D> {
 
 ### `MapperRegistry`
 
-One **non-generic** singleton for every entity. Spring injects every `MapperStrategy` (User, Order, …), so the
-registry indexes them by (entity type, version) and fails at startup when two strategies claim the same pair. The
-generic type is restored in one place, `find(...)`, where the key guarantees it.
+One **non-generic** singleton for every entity. Spring injects every `MapperStrategy` (User, Order, …) and `find`
+routes by the entity type and `canHandle(version)`. The constructor checks the declared (entity type, version) pairs
+and fails at startup when two strategies claim the same pair. The generic type is restored in one place, `find(...)`,
+where the entity-type match guarantees it.
 
 ```java
 @Component
 public class MapperRegistry {
     private record Key(Class<?> entityType, ApiVersion version) { }
 
-    private final Map<Key, MapperStrategy<?, ?>> strategies;
+    private final List<MapperStrategy<?, ?>> strategies;
 
     public MapperRegistry(final List<MapperStrategy<?, ?>> strategies) {
-        this.strategies = strategies.stream().collect(Collectors.toUnmodifiableMap(
-                s -> new Key(s.getEntityType(), s.getSupportedVersion()),
-                Function.identity(),
-                (first, second) -> {
-                    throw new IllegalStateException("Two mapper strategies for " + first.getEntityType().getSimpleName()
-                            + "/" + first.getSupportedVersion() + ": " + first.getClass().getName()
-                            + ", " + second.getClass().getName());
-                }));
+        final Map<Key, MapperStrategy<?, ?>> declared = new HashMap<>();
+        for (final MapperStrategy<?, ?> strategy : strategies) {
+            final MapperStrategy<?, ?> first =
+                    declared.putIfAbsent(new Key(strategy.getEntityType(), strategy.getSupportedVersion()), strategy);
+            if (first != null) {
+                throw new IllegalStateException("Two mapper strategies for " + strategy.getEntityType().getSimpleName()
+                        + "/" + strategy.getSupportedVersion() + ": " + first.getClass().getName()
+                        + ", " + strategy.getClass().getName());
+            }
+        }
+        this.strategies = List.copyOf(strategies);
     }
 
-    @SuppressWarnings("unchecked")   // safe: the key's entity type is the strategy's own getEntityType()
-    public <E> Optional<MapperStrategy<E, ?>> find(final Class<E> entityType, final ApiVersion version) {
-        return Optional.ofNullable((MapperStrategy<E, ?>) strategies.get(new Key(entityType, version)));
+    @SuppressWarnings("unchecked")   // safe: the strategy's own getEntityType() equals entityType
+    public <E> @Nullable MapperStrategy<E, ?> find(final Class<E> entityType, final ApiVersion version) {
+        return (MapperStrategy<E, ?>) strategies.stream()
+                .filter(s -> s.getEntityType().equals(entityType) && s.canHandle(version))
+                .findFirst()
+                .orElse(null);
     }
 }
 ```
@@ -236,13 +243,15 @@ public class MapperHandler {
 
     /**
      * @param entityType passed explicitly — entity.getClass() can be a JPA proxy subclass
-     * @param entity     never null: the service already threw NotFoundException (404) for a missing resource
+     * @param entity     not null in practice: the service already threw NotFoundException (404) for a missing resource
      */
-    public <E> Object handle(final Class<E> entityType, final E entity, final HttpServletRequest request)
+    public <E> @Nullable Object handle(final Class<E> entityType, final E entity, final HttpServletRequest request)
             throws BaseDomainException {
         final ApiVersion version = resolver.resolve(request);   // unknown version → 404 (URI) / 406 (Accept)
-        final MapperStrategy<E, ?> strategy = registry.find(entityType, version)
-                .orElseThrow(() -> resolver.versionNotServed(version.name().toLowerCase(Locale.ROOT)));   // never a silent fallback to latest()
+        final MapperStrategy<E, ?> strategy = registry.find(entityType, version);
+        if (strategy == null) {
+            throw resolver.versionNotServed(version.name().toLowerCase(Locale.ROOT));   // never a silent fallback to latest()
+        }
         return strategy.map(entity);
     }
 }
@@ -275,9 +284,10 @@ public class UserController {
 }
 ```
 
-DTOs are immutable records, e.g. `public record UserV1DTO(String id, String name) { }`. `map` never receives `null`
-(the service throws `NotFoundException` first), so it has no `null` guard and never returns `null` — a `return null`
-from a non-`@Nullable` method fails the NullAway gate (`static-analysis`).
+DTOs are immutable records, e.g. `public record UserV1DTO(String id, String name) { }`. Every strategy's `map` starts
+with `if (user == null) return null;` and is declared `@Nullable D map(@Nullable E entity)`, so the guard passes the
+NullAway gate (`static-analysis`); in practice the service throws `NotFoundException` first and the handler never
+passes `null`.
 
 **Rules:**
 - The response type is `Object` — the handler returns the version-specific DTO. Without the `oneOf` `@ApiResponse`
@@ -299,8 +309,8 @@ from a non-`@Nullable` method fails the NullAway gate (`static-analysis`).
 2. ✅ Create the new DTO class (e.g. `UserV4DTO`)
 3. ✅ Create `V4UserMapperStrategy implements MapperStrategy`
 4. ✅ Annotate it `@Component`
-5. ✅ Implement `getSupportedVersion()`, `getEntityType()` and `map(entity)`
-6. ✅ Write unit tests for the new strategy
+5. ✅ Implement `getSupportedVersion()`, `getEntityType()` and `map(entity)` (it inherits `canHandle`)
+6. ✅ Write unit tests for the new strategy, including the null-entity guard
 7. ✅ Update OpenAPI docs and the deprecation policy for the retired version
 
 **Zero changes needed:**

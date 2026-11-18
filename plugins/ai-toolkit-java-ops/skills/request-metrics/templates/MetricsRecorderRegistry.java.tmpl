@@ -1,26 +1,32 @@
 package {{basePackage}}.monitor.recorder;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MetricsRecorderRegistry {
 
-    private final Map<String, MetricsRecorder> recordersByMetricName;
+    private final List<MetricsRecorder> metricsRecorders;
 
     public MetricsRecorderRegistry(final List<MetricsRecorder> metricsRecorders) {
-        this.recordersByMetricName = metricsRecorders.stream()
-                .collect(Collectors.toUnmodifiableMap(MetricsRecorder::getSupportedMetricName, Function.identity(), (first, second) -> {
-                    throw new IllegalStateException("Two recorders for metric '" + first.getSupportedMetricName() + "': "
-                            + first.getClass().getName() + ", " + second.getClass().getName());
-                }));
+        final Map<String, MetricsRecorder> declared = new HashMap<>();
+        for (final MetricsRecorder recorder : metricsRecorders) {
+            final MetricsRecorder first = declared.putIfAbsent(recorder.getSupportedMetricName(), recorder);
+            if (first != null) {
+                throw new IllegalStateException("Two recorders for metric '" + recorder.getSupportedMetricName() + "': "
+                        + first.getClass().getName() + ", " + recorder.getClass().getName());
+            }
+        }
+        this.metricsRecorders = List.copyOf(metricsRecorders);
     }
 
-    public Optional<MetricsRecorder> getRecorder(final String metricName) {
-        return Optional.ofNullable(recordersByMetricName.get(metricName));
+    public @Nullable MetricsRecorder getRecorder(final @Nullable String metricName) {
+        return metricsRecorders.stream()
+                .filter(recorder -> recorder.canHandle(metricName))
+                .findFirst()
+                .orElse(null);
     }
 }

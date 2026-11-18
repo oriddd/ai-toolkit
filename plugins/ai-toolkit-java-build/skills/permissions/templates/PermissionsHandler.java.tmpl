@@ -26,8 +26,10 @@ public class PermissionsHandler {
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();
         }
-        permissionsRegistry.getStrategy(ctx)
-                .orElseThrow(() -> ExceptionMessages.unrecognizedCallerContext(ctx))   // ForbiddenException → 403
-                .verifyPermissions(resourceId);
+        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
+        if (strategy == null) {
+            throw ExceptionMessages.unrecognizedCallerContext(ctx);   // ForbiddenException → 403
+        }
+        strategy.verifyPermissions(resourceId);
     }
 }

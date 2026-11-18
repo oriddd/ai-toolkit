@@ -6,30 +6,32 @@ import org.springframework.stereotype.Component;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Component
 public class PermissionsRegistry {
 
-    private final Map<CallerContext, PermissionsCheckStrategy> strategiesByContext;
+    private final List<PermissionsCheckStrategy> strategies;
 
-    /** Spring injects ALL PermissionsCheckStrategy beans automatically; two strategies for one context fail startup. */
+    /** Spring injects ALL PermissionsCheckStrategy beans automatically; two strategies declaring one context fail startup. */
     public PermissionsRegistry(final List<PermissionsCheckStrategy> strategies) {
-        final Map<CallerContext, PermissionsCheckStrategy> byContext = new EnumMap<>(CallerContext.class);
+        final Map<CallerContext, PermissionsCheckStrategy> declared = new EnumMap<>(CallerContext.class);
         for (final PermissionsCheckStrategy strategy : strategies) {
             for (final CallerContext context : strategy.supportedContexts()) {
-                final PermissionsCheckStrategy previous = byContext.putIfAbsent(context, strategy);
+                final PermissionsCheckStrategy previous = declared.putIfAbsent(context, strategy);
                 if (previous != null) {
                     throw new IllegalStateException("Two permission strategies support " + context + ": "
                             + previous.getClass().getSimpleName() + " and " + strategy.getClass().getSimpleName());
                 }
             }
         }
-        this.strategiesByContext = Map.copyOf(byContext);
+        this.strategies = List.copyOf(strategies);
     }
 
-    /** Returns the strategy for this context, or empty if none supports it (the handler turns that into a 403). */
-    public Optional<PermissionsCheckStrategy> getStrategy(final @Nullable CallerContext callerContext) {
-        return Optional.ofNullable(callerContext).map(strategiesByContext::get);
+    /** Returns the first strategy that can handle this context, or null if none does (the handler turns that into a 403). */
+    public @Nullable PermissionsCheckStrategy getStrategy(final @Nullable CallerContext callerContext) {
+        return strategies.stream()
+                .filter(strategy -> strategy.canHandle(callerContext))
+                .findFirst()
+                .orElse(null);
     }
 }

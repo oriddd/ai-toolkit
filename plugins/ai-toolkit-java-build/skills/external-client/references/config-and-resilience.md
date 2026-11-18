@@ -53,7 +53,7 @@ Merge under the single top-level `resilience4j:` key of `application.yaml`:
 resilience4j:
   circuitbreaker.instances.foo-service:
     failureRateThreshold: 50
-    slowCallDurationThreshold: 1s           # below the 2s read timeout, so slowness opens the circuit before timeouts pile up
+    slowCallDurationThreshold: 2s           # equals the 2s read timeout: every timed-out call also counts as slow
     slidingWindowSize: 20
     ignoreExceptions:                       # a 4xx (DependencyException) is the caller's fault and must not open the circuit
       - com.example.foo.exception.DependencyException

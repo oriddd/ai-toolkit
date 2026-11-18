@@ -88,7 +88,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 **Checklist:**
 1. ✅ Create a new `<UseCase>Strategy implements Strategy` in `strategy/`
 2. ✅ Make it a `@Component`
-3. ✅ Implement `getSupported<X>()` (or `supported<X>s()` when it serves several values) — the one discriminator contract, see `components.md` §4
+3. ✅ Implement `getSupported<X>()` (or `supported<X>s()` when it serves several values) and inherit the default `canHandle(discriminator)` the Registry routes by, see `components.md` §4
 4. ✅ Implement the core behavior method
 5. ✅ If new tag/data extraction is needed, add a new `<Concept>Parser` in `parser/`
 6. ✅ If a new discriminator value is needed, update the Resolver or Config
@@ -110,20 +110,20 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 ### Test the Resolver
 - ✅ Valid input → returns expected discriminator
-- ✅ Invalid input → returns `Optional.empty()` — except a resolver that parses **client HTTP input** (`?layout=`, an
-  API version): there an unknown value is the client's error and the resolver throws the 4xx domain exception
-  (`response-layout`: 400; `response-mapper`: 404 / 406)
+- ✅ Invalid input → returns `null` (Handler/Filter logs a warning) — except a resolver that parses **client HTTP
+  input** (`?layout=`, an API version): there an unknown value is the client's error and the resolver throws the 4xx
+  domain exception (`response-layout`: 400; `response-mapper`: 404 / 406)
 - ✅ Overlapping rules (e.g. two URI patterns that both match) → the most specific one wins, every run
 - ✅ Edge cases (null request, missing headers, malformed URIs)
 
 ### Test the Registry
-- ✅ Matching strategy → returns the strategy
-- ✅ No matching strategy → returns `Optional.empty()`
+- ✅ Matching strategy → returned by `canHandle(discriminator)`
+- ✅ No matching strategy → returns `null`
 - ✅ Multiple strategies, correct one selected
-- ✅ Two strategies with the same discriminator → the constructor throws `IllegalStateException`
+- ✅ Two strategies declaring the same discriminator → the constructor throws `IllegalStateException`
 
 ### Test Each Strategy
-- ✅ `getSupported<X>()` returns its discriminator — the value the Registry indexes on
+- ✅ `getSupported<X>()` returns its discriminator — the value the constructor's duplicate check reads
 - ✅ `canHandle` returns `true` for its discriminator
 - ✅ `canHandle` returns `false` for other discriminators
 - ✅ Core behavior method executes correctly
@@ -140,7 +140,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - Add new behavior by adding a new `@Component` strategy — never modify Handler/Registry
 - Return non-blank sentinel values from Parsers — never `null` or `""`
 - Keep the Handler/Filter generic — no strategy-specific logic
-- Use `List<Strategy>` injection in Registry — Spring auto-discovers; index it by discriminator in the constructor and fail on duplicates
+- Use `List<Strategy>` injection in Registry — Spring auto-discovers; route with `canHandle(discriminator)` and fail the constructor when two strategies declare the same discriminator
 - Delegate tag/data extraction to Parsers — keep strategies DRY
 
 ❌ **Don't:**
@@ -148,8 +148,8 @@ Sections below keep their numbers but live in `references/` so this file stays s
 - Let strategies reference other strategies directly
 - Inline data extraction logic in strategies — use Parsers
 - Return `null` from Parsers — return sentinel values
-- Return `null` from Resolvers or Registries — return `Optional` (an HTTP-input resolver may throw a 4xx instead, see Testing)
-- Rely on `findFirst()` over beans or a `Map.of(...)` for routing — bean order and `Map.of` iteration order are unspecified
+- Return `null` from a Resolver or Registry without declaring the method `@Nullable` (`org.jspecify.annotations.Nullable`) — NullAway fails the build otherwise
+- Route with `findFirst()` over beans unless the constructor rejects overlapping strategies, or with a `Map.of(...)` — bean order and `Map.of` iteration order are unspecified
 - Skip unit tests for new strategies/parsers
 
 ## Related Skills

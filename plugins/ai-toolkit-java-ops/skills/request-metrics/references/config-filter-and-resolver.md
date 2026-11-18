@@ -32,7 +32,7 @@ Rules:
   regexes the first match wins, so list the most specific pattern first (same rule as `strategy-registry-pattern`).
 - Metric name strings must match exactly the string returned by the
   corresponding `MetricsRecorder.getSupportedMetricName()`.
-- URIs not matched by any pattern produce `Optional.empty()`; the filter
+- URIs not matched by any pattern produce `null` (`@Nullable`); the filter
   skips recording **silently** (most endpoints have no domain metric — a WARN per request would flood the logs).
   It logs a WARN only when a name resolves but no recorder handles it, which is a wiring bug.
 - All metric name strings live as constants in `MonitoringConstants`.
@@ -113,10 +113,16 @@ public class MetricsFilter extends OncePerRequestFilter {
     private void record(final HttpServletRequest request, final HttpServletResponse response, final long startNanos) {
         try {
             final long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-            metricNameResolver.resolve(request).ifPresent(metricName ->      // no metric for this URI → silently skip
-                    metricsRecorderRegistry.getRecorder(metricName).ifPresentOrElse(
-                            recorder -> recorder.recordMetrics(durationMs, request, response),
-                            () -> log.warn("No recorder found for metric '{}'", metricName)));   // wiring bug
+            final String metricName = metricNameResolver.resolve(request);
+            if (metricName == null) {
+                return;                                                  // no metric for this URI → silently skip
+            }
+            final MetricsRecorder recorder = metricsRecorderRegistry.getRecorder(metricName);
+            if (recorder == null) {
+                log.warn("No recorder found for metric '{}'", metricName);   // wiring bug
+                return;
+            }
+            recorder.recordMetrics(durationMs, request, response);
         } catch (final RuntimeException e) {
             // an exception thrown from `finally` would replace the handler's own result (or turn a 200 into a 500)
             log.error("Failed to record metrics for URI {}", request.getRequestURI(), e);
@@ -160,16 +166,17 @@ public class MetricNameResolver {
 
     private final MonitoringConfig monitoringConfig;
 
-    public Optional<String> resolve(final @Nullable HttpServletRequest request) {
+    public @Nullable String resolve(final @Nullable HttpServletRequest request) {
         if (request == null || request.getRequestURI() == null) {
-            return Optional.empty();
+            return null;
         }
         // getRequestURI() includes server.servlet.context-path; the patterns are written without it
         final String uri = request.getRequestURI().substring(request.getContextPath().length());
         return monitoringConfig.patternToMetricName().stream()      // ordered list: most specific pattern first
                 .filter(entry -> entry.getKey().matcher(uri).matches())
                 .map(Map.Entry::getValue)
-                .findFirst();    // empty → no domain metric for this URI; the filter skips it silently
+                .findFirst()
+                .orElse(null);   // null → no domain metric for this URI; the filter skips it silently
     }
 }
 ```

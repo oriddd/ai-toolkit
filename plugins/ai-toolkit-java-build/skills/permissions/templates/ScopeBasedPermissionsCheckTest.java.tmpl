@@ -26,6 +26,13 @@ class ScopeBasedPermissionsCheckTest {
     }
 
     @Test
+    void canHandle_onlyTheDeclaredContext() {
+        assertThat(check.canHandle(CallerContext.SERVICE_ACCOUNT)).isTrue();
+        assertThat(check.canHandle(CallerContext.USER)).isFalse();
+        assertThat(check.canHandle(null)).isFalse();
+    }
+
+    @Test
     void verifyPermissions_callerHoldsAnAllowedScope_passes() {
         when(resolver.grantedScopes()).thenReturn(Set.of("openid", "invoices.read"));
 

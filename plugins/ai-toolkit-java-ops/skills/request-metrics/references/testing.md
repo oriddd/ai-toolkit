@@ -79,9 +79,9 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_recorderFound_callsRecord() throws Exception {
-        when(resolver.resolve(request)).thenReturn(Optional.of(MonitoringConstants.METRIC_EXPORT_INVOICE));
+        when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
         when(registry.getRecorder(MonitoringConstants.METRIC_EXPORT_INVOICE))
-                .thenReturn(Optional.of(recorder));
+                .thenReturn(recorder);
 
         filter.doFilterInternal(request, response, chain);
 
@@ -91,8 +91,8 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_chainThrows_recorderStillCalledWithStatus500() throws Exception {
-        when(resolver.resolve(request)).thenReturn(Optional.of(MonitoringConstants.METRIC_EXPORT_INVOICE));
-        when(registry.getRecorder(any())).thenReturn(Optional.of(recorder));
+        when(resolver.resolve(request)).thenReturn(MonitoringConstants.METRIC_EXPORT_INVOICE);
+        when(registry.getRecorder(any())).thenReturn(recorder);
         doThrow(new ServletException("boom")).when(chain).doFilter(any(), any());
 
         assertThatThrownBy(() -> filter.doFilterInternal(request, response, chain))
@@ -103,7 +103,7 @@ class MetricsFilterTest {
 
     @Test
     void doFilter_noMetricForUri_skipsRegistry() throws Exception {
-        when(resolver.resolve(request)).thenReturn(Optional.empty());
+        when(resolver.resolve(request)).thenReturn(null);
 
         filter.doFilterInternal(request, response, chain);
 
