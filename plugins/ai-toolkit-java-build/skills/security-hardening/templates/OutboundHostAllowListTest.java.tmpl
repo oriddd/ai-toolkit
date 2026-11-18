@@ -1,0 +1,92 @@
+package {{basePackage}}.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.anything;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestClientCustomizer;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+
+class OutboundHostAllowListTest {
+
+    private static RestClient.Builder guarded(final OutboundHttpConfig.OutboundProperties props) {
+        final RestClient.Builder builder = RestClient.builder();
+        final RestClientCustomizer customizer = new OutboundHttpConfig().outboundHostAllowList(props);
+        customizer.customize(builder);
+        return builder;
+    }
+
+    @Test
+    void get_hostOnTheAllowList_isSent() {
+        final RestClient.Builder builder = guarded(new OutboundHttpConfig.OutboundProperties(Set.of("api.example.test")));
+        final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://api.example.test/v1/ping")).andRespond(withSuccess("pong", null));
+
+        assertThat(builder.build().get().uri("https://api.example.test/v1/ping").retrieve().body(String.class)).isEqualTo("pong");
+
+        server.verify();
+    }
+
+    @Test
+    void get_allowListIsCaseInsensitive() {
+        final RestClient.Builder builder = guarded(new OutboundHttpConfig.OutboundProperties(Set.of("API.Example.Test")));
+        MockRestServiceServer.bindTo(builder).build().expect(anything()).andRespond(withSuccess());
+
+        assertThat(builder.build().get().uri("https://API.EXAMPLE.test/x").retrieve().toBodilessEntity().getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    @Test
+    void get_hostOutsideTheAllowList_isRefusedBeforeAnyConnection() {
+        final RestClient.Builder builder = guarded(new OutboundHttpConfig.OutboundProperties(Set.of("api.example.test")));
+        final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        final RestClient client = builder.build();
+
+        assertThatThrownBy(() -> client.get().uri("http://169.254.169.254/latest/meta-data").retrieve().body(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("169.254.169.254");
+
+        server.verify();
+    }
+
+    @Test
+    void get_emptyAllowList_blocksEveryOutboundCall() {
+        final RestClient client = guarded(new OutboundHttpConfig.OutboundProperties(Set.of())).build();
+
+        assertThatThrownBy(() -> client.get().uri("https://api.example.test/v1/ping").retrieve().body(String.class))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void get_requestWithoutAHost_isRefused() {
+        final RestClient client = guarded(new OutboundHttpConfig.OutboundProperties(Set.of("api.example.test"))).build();
+
+        assertThatThrownBy(() -> client.get().uri("file:///etc/passwd").retrieve().body(String.class))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void properties_commaSeparatedValue_bindsToTheAllowedHosts() {
+        final OutboundHttpConfig.OutboundProperties bound = new Binder(new MapConfigurationPropertySource(
+                        java.util.Map.of("security.outbound.allowed-hosts", "a.example.test,b.example.test")))
+                .bind("security.outbound", Bindable.of(OutboundHttpConfig.OutboundProperties.class))
+                .get();
+
+        assertThat(bound.allowedHosts()).containsExactlyInAnyOrder("a.example.test", "b.example.test");
+    }
+
+    @Test
+    void properties_unset_bindToAnEmptyAllowList() {
+        final OutboundHttpConfig.OutboundProperties bound = new Binder(new MapConfigurationPropertySource(java.util.Map.of("security.outbound.x", "y")))
+                .bindOrCreate("security.outbound", Bindable.of(OutboundHttpConfig.OutboundProperties.class));
+
+        assertThat(bound.allowedHosts()).isEmpty();
+    }
+}

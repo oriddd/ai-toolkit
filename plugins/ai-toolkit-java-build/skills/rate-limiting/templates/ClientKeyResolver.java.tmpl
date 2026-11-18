@@ -1,0 +1,12 @@
+package {{basePackage}}.ratelimit;
+
+import jakarta.servlet.http.HttpServletRequest;
+import java.security.Principal;
+
+public class ClientKeyResolver {
+
+    public String resolve(final HttpServletRequest request) {
+        final Principal principal = request.getUserPrincipal();
+        return principal != null ? "user:" + principal.getName() : "ip:" + request.getRemoteAddr();
+    }
+}

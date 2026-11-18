@@ -1,0 +1,53 @@
+package {{basePackage}}.client.reports;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.client.AuthorizedClientServiceOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
+import org.springframework.web.client.RestClient;
+
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "reports", name = "enabled", havingValue = "true")
+@EnableConfigurationProperties(ReportsProperties.class)
+public class ReportsRestClientConfig {
+
+    @Bean
+    OAuth2AuthorizedClientManager serviceAuthorizedClientManager(
+            final ClientRegistrationRepository clientRegistrations, final OAuth2AuthorizedClientService authorizedClients) {
+        final AuthorizedClientServiceOAuth2AuthorizedClientManager manager =
+                new AuthorizedClientServiceOAuth2AuthorizedClientManager(clientRegistrations, authorizedClients);
+        manager.setAuthorizedClientProvider(OAuth2AuthorizedClientProviderBuilder.builder().clientCredentials().build());
+        return manager;
+    }
+
+    @Bean
+    ReportsClient reportsClient(
+            final RestClient.Builder restClientBuilder,
+            final ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
+            final ClientHttpRequestFactorySettings requestFactorySettings,
+            final OAuth2AuthorizedClientManager serviceAuthorizedClientManager,
+            final OAuth2AuthorizedClientService authorizedClients,
+            final ReportsProperties props) {
+        final OAuth2ClientHttpRequestInterceptor oauth2 = new OAuth2ClientHttpRequestInterceptor(serviceAuthorizedClientManager);
+        oauth2.setClientRegistrationIdResolver(request -> ReportsClient.DEPENDENCY);
+        oauth2.setAuthorizationFailureHandler(OAuth2ClientHttpRequestInterceptor.authorizationFailureHandler(authorizedClients));
+        final RestClient restClient = restClientBuilder
+                .clone()
+                .baseUrl(props.baseUrl())
+                .requestFactory(requestFactoryBuilder.build(requestFactorySettings
+                        .withConnectTimeout(props.connectTimeout())
+                        .withReadTimeout(props.readTimeout())
+                        .withRedirects(ClientHttpRequestFactorySettings.Redirects.DONT_FOLLOW)))
+                .requestInterceptor(oauth2)
+                .build();
+        return new ReportsClient(restClient, props);
+    }
+}

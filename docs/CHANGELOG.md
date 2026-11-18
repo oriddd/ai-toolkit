@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Java executable proofs and last fixes (2026-11-18)
+
+- `tools/render-java-proof.sh` now also renders and runs: data-privacy (AES-GCM converter, blind index, last-4 masking, retention, erasure), security-hardening (CORS, headers/HSTS, SSRF allow-list), the request-metrics Filter/Recorder/Parser stack, a graceful-shutdown test with a real in-flight request, Bucket4j and Resilience4j rate limiting (Redis adapter with `--with-it`), the external-client OAuth2 integration test (revoked token evicted and replayed once), a Kafka broker-outage integration test for the outbox relay, and `ProductionSecurityChainTest` (real security chain, 8 cases) in the default run. Last green run: 322 unit and component tests, 15 integration tests, JaCoCo 99.9% line / 96.2% branch, PIT 97%.
+- `GlobalExceptionHandler` validation handlers are tagged with their tests: all eight combinations of the three strip tags pass `mvn verify`.
+- `openapi-first-codegen`: optional parameters must be `@Nullable` in overrides.
+- Java agents depend on `ai-toolkit-quality` and say what is missing without it.
+- `tools/test-hooks.sh` no longer passes large commands through argv (Windows) and skips dash cases when dash cannot run the hook.
+- ArchUnit caught an `adapter`/`ratelimit` package cycle: `RateLimitProperties` moved to `config`.
+- Restored original rules: quality-review thresholds and `when<Condition>_<Then>()`, hidden-side-effect rule, last-4 masking.
+
 ### Independent full-scan fixes (2026-11-17)
 
 - Cross-skill proofs: new maintainer tools `tools/render-java-proof.sh`, `tools/render-python-proof.sh` and `tools/render-rn-proof.sh` render every skill's templates/snippets into one fresh service or app and run the full gate (Java: Spotless, Error Prone + NullAway, SpotBugs, Checkstyle, JaCoCo per-class gate, PIT, ArchUnit, component and Testcontainers tests; Python: ruff, mypy strict, import-linter, unit coverage gate, Postgres/Redis/Kafka integration tests, docker build; React Native: tsc, ESLint boundaries, jest coverage gate, expo export, prebuild, Maestro syntax). They are maintainer pre-release checks, not CI (they need Docker or npm access).

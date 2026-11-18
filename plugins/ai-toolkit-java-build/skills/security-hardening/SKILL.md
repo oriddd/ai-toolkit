@@ -6,7 +6,7 @@ description: >
 tier: must
 applies_to: [rest, monolith]
 depends_on: [permissions]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.1
 last_reviewed: 2026-11-15
@@ -230,6 +230,16 @@ security:
 A refused call throws an unchecked `IllegalStateException` before any connection is opened (a misconfiguration, not an
 outage, so it is not a domain exception). List every downstream host the service calls, including the ones only a readiness indicator probes
 (`health-indicator` builds its client from the same builder).
+
+## 11. Templates
+
+Rendered into a service and run (slice tests, unit tests, JaCoCo, PIT) by `tools/render-java-proof.sh`; target package `config/`.
+
+- CORS (§3): [`CorsProperties`](./templates/CorsProperties.java.tmpl) (`security.cors.allowed-origins`, empty = deny all) and [`CorsConfig`](./templates/CorsConfig.java.tmpl); proven by [`CorsSecurityTest`](./templates/CorsSecurityTest.java.tmpl) against the real `permissions` `SecurityConfig` (listed origin allowed with `Max-Age: 3600` and no credentials, other origin, method or header refused with 403).
+- Headers (§6): [`SecurityHeadersConfig`](./templates/SecurityHeadersConfig.java.tmpl) registers Spring Security's own `HeaderWriterFilter` with `Referrer-Policy` and HSTS (one year, subdomains), next to the headers the chain already writes; [`SecurityHeadersTest`](./templates/SecurityHeadersTest.java.tmpl) asserts every header over HTTPS, on a 401, and the absence of HSTS over plain HTTP.
+- SSRF allow-list (§10): [`OutboundHostAllowList`](./templates/OutboundHostAllowList.java.tmpl) and [`OutboundHttpConfig`](./templates/OutboundHttpConfig.java.tmpl) (the properties record is registered with `@EnableConfigurationProperties`; an unset list blocks everything); [`OutboundHostAllowListTest`](./templates/OutboundHostAllowListTest.java.tmpl) proves an unlisted host (incl. the cloud metadata address) and a host-less URI are refused before any connection.
+- The slice tests carry the `[request-metrics]` tag lines of the `component-tests` `SecurityTest`: strip them (recipe: `exception-handling` SKILL.md §3a) when the service has no request-metrics.
+- Component and integration tests of a service that calls its own dependencies must list those hosts (`127.0.0.1` for a local stub) in `security.outbound.allowed-hosts` of the test configuration.
 
 ## Do / Don't
 

@@ -1,0 +1,12 @@
+package {{basePackage}}.privacy;
+
+import javax.crypto.SecretKey;
+
+public interface FieldKeyProvider {
+
+    int currentVersion();
+
+    SecretKey key(int version);
+
+    SecretKey blindIndexKey();
+}

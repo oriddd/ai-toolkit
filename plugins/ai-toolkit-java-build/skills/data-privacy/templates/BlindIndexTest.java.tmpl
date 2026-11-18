@@ -1,0 +1,52 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.Test;
+
+class BlindIndexTest {
+
+    private static FieldKeyProvider providerWith(final byte fill) {
+        final byte[] raw = new byte[32];
+        java.util.Arrays.fill(raw, fill);
+        final FieldKeyProvider provider = mock(FieldKeyProvider.class);
+        when(provider.blindIndexKey()).thenReturn(new SecretKeySpec(raw, "AES"));
+        return provider;
+    }
+
+    private final BlindIndex index = new BlindIndex(providerWith((byte) 7));
+
+    @Test
+    void of_sameValue_isDeterministicHex() {
+        assertThat(index.of("alice@example.com")).isEqualTo(index.of("alice@example.com")).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    void of_caseAndSurroundingWhitespace_areNormalised() {
+        assertThat(index.of("  Alice@Example.COM ")).isEqualTo(index.of("alice@example.com"));
+    }
+
+    @Test
+    void of_differentValues_differ() {
+        assertThat(index.of("alice@example.com")).isNotEqualTo(index.of("bob@example.com"));
+    }
+
+    @Test
+    void of_differentKeys_differ() {
+        assertThat(new BlindIndex(providerWith((byte) 8)).of("alice@example.com")).isNotEqualTo(index.of("alice@example.com"));
+    }
+
+    @Test
+    void of_unusableKey_failsClosed() {
+        final FieldKeyProvider provider = mock(FieldKeyProvider.class);
+        final SecretKey empty = mock(SecretKey.class);
+        when(provider.blindIndexKey()).thenReturn(empty);
+
+        assertThatThrownBy(() -> new BlindIndex(provider).of("x")).isInstanceOf(IllegalStateException.class);
+    }
+}

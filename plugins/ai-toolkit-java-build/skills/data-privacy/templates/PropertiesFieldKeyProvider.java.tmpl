@@ -1,0 +1,48 @@
+package {{basePackage}}.privacy;
+
+import java.util.Base64;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+public class PropertiesFieldKeyProvider implements FieldKeyProvider {
+    static final int AES_256_KEY_BYTES = 32;
+
+    private final EncryptionProperties props;
+
+    @Autowired
+    public PropertiesFieldKeyProvider(final EncryptionProperties props) {
+        this.props = props;
+        key(props.currentVersion());
+        blindIndexKey();
+    }
+
+    @Override
+    public int currentVersion() {
+        return props.currentVersion();
+    }
+
+    @Override
+    public SecretKey key(final int version) {
+        final String encoded = props.keys().get(version);
+        if (encoded == null) {
+            throw new IllegalStateException("No field-encryption key for version " + version);
+        }
+        return aesKey(encoded, "privacy.encryption.keys." + version);
+    }
+
+    @Override
+    public SecretKey blindIndexKey() {
+        return aesKey(props.blindIndexKey(), "privacy.encryption.blind-index-key");
+    }
+
+    private static SecretKey aesKey(final String base64, final String name) {
+        final byte[] raw = Base64.getDecoder().decode(base64);
+        if (raw.length != AES_256_KEY_BYTES) {
+            throw new IllegalStateException(name + " must be a base64-encoded 256-bit key");
+        }
+        return new SecretKeySpec(raw, "AES");
+    }
+}

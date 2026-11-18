@@ -1,0 +1,28 @@
+package {{basePackage}}.config;
+
+import java.time.Duration;
+import java.util.List;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(CorsProperties.class)
+public class CorsConfig {
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(final CorsProperties props) {
+        final CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(props.allowedOrigins());
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        cfg.setAllowCredentials(props.allowCredentials());
+        cfg.setMaxAge(Duration.ofHours(1));
+        final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", cfg);
+        return source;
+    }
+}

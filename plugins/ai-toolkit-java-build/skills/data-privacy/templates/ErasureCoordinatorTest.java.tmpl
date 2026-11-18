@@ -1,0 +1,47 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.springframework.context.ApplicationEventPublisher;
+
+class ErasureCoordinatorTest {
+
+    private static final Instant NOW = Instant.parse("2026-01-02T03:04:05Z");
+
+    private final ErasureStep first = mock(ErasureStep.class);
+    private final ErasureStep second = mock(ErasureStep.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final ErasureCoordinator coordinator =
+            new ErasureCoordinator(List.of(first, second), events, Clock.fixed(NOW, ZoneOffset.UTC));
+
+    @Test
+    void erase_runsEveryStepThenAnnouncesTheErasure() {
+        coordinator.erase("sub-1");
+
+        final InOrder order = inOrder(first, second, events);
+        order.verify(first).erase("sub-1");
+        order.verify(second).erase("sub-1");
+        order.verify(events).publishEvent(new SubjectErasedEvent("sub-1", NOW));
+    }
+
+    @Test
+    void erase_aFailingStep_announcesNothing() {
+        doThrow(new IllegalStateException("boom")).when(second).erase("sub-1");
+
+        assertThatThrownBy(() -> coordinator.erase("sub-1")).isInstanceOf(IllegalStateException.class);
+
+        verify(first).erase("sub-1");
+        verifyNoInteractions(events);
+    }
+}

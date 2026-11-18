@@ -42,3 +42,24 @@ a JWT with the required scope answers `200`, and an unknown path with a valid to
 
 This proves the security configuration is wired correctly, not just the
 controller logic.
+
+## Production chain proof
+
+The component profile swaps in its own permissive chain, `SecurityConfig` is excluded from JaCoCo and PIT as a `*Config`,
+and only the opt-in `*IT` suite boots the whole service, so the default gate proves the real chain only through this slice.
+Use [`templates/ProductionSecurityChainTest.java.tmpl`](../templates/ProductionSecurityChainTest.java.tmpl)
+(placeholders as above plus `{{ServiceClass}}`, the operation's collaborator; `{{apiPath}}` must be a collection path that
+answers `200` with the service mocked). It imports the real `SecurityConfig`, `ProblemDetailSecurityHandler`, the real
+`PermissionsHandler` stack with `permissions.service-account.allowed-scopes=read`, and mocks only the service and `JwtDecoder`:
+
+| Request | Expected |
+| --- | --- |
+| no token | `401` `application/problem+json`, `ERR-UNAUTHORIZED` |
+| token the decoder rejects | `401` `ERR-UNAUTHORIZED` |
+| service-account JWT with an allowed scope | `200` |
+| service-account JWT with another scope | `403` `ERR-FORBIDDEN` |
+| unknown path with a valid token | `403` `ERR-FORBIDDEN` (`denyAll`) |
+| `/actuator/env` with and without a token | `403` / `401` |
+| decoder throws `JwtDecoderInitializationException` (IdP down) | `503`, `Retry-After`, `ERR-UNAVAILABLE` |
+
+Apply the same `request-metrics` strip as for `SecurityTest`. Run it without the `component-test` profile.

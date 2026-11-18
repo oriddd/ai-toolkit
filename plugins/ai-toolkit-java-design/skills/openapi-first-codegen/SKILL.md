@@ -151,6 +151,20 @@ class FooController implements FooApi {                    // FooApi is generate
 }
 ```
 
+Optional parameters (`required: false` query/header params, and optional body properties) arrive as `null`. NullAway treats
+the generated package as unannotated, so the override's parameters are non-null by default: annotate each optional one
+`@Nullable` (`org.jspecify.annotations.Nullable`, the project's NullAway annotation) and handle `null` explicitly:
+
+```java
+@Override
+public ResponseEntity<WidgetResponse> getWidget(UUID id, @Nullable Layout layout, @Nullable String q) {
+    Layout effective = layout == null ? Layout.SUMMARY : layout;
+```
+
+Without the annotation a unit test calling `getWidget(id, null, null)` fails NullAway ("passing @Nullable parameter 'null'
+where @NonNull is required") and a dereference of the absent `layout` is an NPE at runtime. Unit tests pass `null` for the
+omitted parameters, or real values for the supplied ones. Verified on a generated `WidgetApi` under the full `ci` gates.
+
 Rules:
 - Controllers **only** implement generated interfaces. No `@GetMapping` /
   `@PostMapping` on the controller class — those live on the generated

@@ -1,0 +1,20 @@
+package {{basePackage}}.privacy;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Component;
+
+@Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class OutboxErasureStep implements ErasureStep {
+
+    private final JdbcClient jdbc;
+
+    @Override
+    public void erase(final String subjectId) {
+        jdbc.sql("DELETE FROM outbox WHERE aggregate_id = :subjectId").param("subjectId", subjectId).update();
+    }
+}

@@ -1,0 +1,118 @@
+package {{basePackage}}.component;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
+
+import {{basePackage}}.{{applicationClassName}};
+import {{basePackage}}.testconfig.ComponentTestConfiguration;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.availability.ApplicationAvailability;
+import org.springframework.boot.availability.AvailabilityChangeEvent;
+import org.springframework.boot.availability.ReadinessState;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.web.context.WebServerApplicationContext;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(ComponentTestConfiguration.class)
+@ActiveProfiles("component-test")
+class GracefulShutdownComponentTest {
+
+    private static final long IN_FLIGHT_MILLIS = 3_000;
+
+    @Autowired private Environment environment;
+
+    @RestController
+    static class SlowTestController {
+        private final CountDownLatch requestStarted = new CountDownLatch(1);
+
+        @GetMapping("/test/slow")
+        String slow() throws InterruptedException {
+            requestStarted.countDown();
+            Thread.sleep(IN_FLIGHT_MILLIS);
+            return "done";
+        }
+
+        @GetMapping("/test/fast")
+        String fast() {
+            return "fast";
+        }
+    }
+
+    @Test
+    void config_shutdownSettings_areGracefulWithPhaseTimeout() {
+        assertThat(environment.getProperty("server.shutdown", "graceful")).isEqualTo("graceful");
+        assertThat(environment.getProperty("spring.lifecycle.timeout-per-shutdown-phase")).isNotBlank();
+    }
+
+    @Test
+    void close_readiness_becomesRefusingTraffic() {
+        final ConfigurableApplicationContext app = startApp(event -> {});
+        final ApplicationAvailability availability = app.getBean(ApplicationAvailability.class);
+        assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.ACCEPTING_TRAFFIC);
+
+        app.close();
+
+        assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
+    }
+
+    @Test
+    void close_slowInFlightRequest_completesWith200WhileNewRequestsAreRefused() throws Exception {
+        final CountDownLatch shutdownStarted = new CountDownLatch(1);
+        final ConfigurableApplicationContext app = startApp(event -> {
+            if (event instanceof AvailabilityChangeEvent<?> change && change.getState() == ReadinessState.REFUSING_TRAFFIC) {
+                shutdownStarted.countDown();
+            }
+        });
+        final SlowTestController controller = app.getBean(SlowTestController.class);
+        final int port = Objects.requireNonNull(((WebServerApplicationContext) app).getWebServer()).getPort();
+        final String base = "http://localhost:" + port + app.getEnvironment().getProperty("server.servlet.context-path", "");
+        final HttpClient client = HttpClient.newHttpClient();
+        final long startedAt = System.nanoTime();
+        final CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                HttpRequest.newBuilder(URI.create(base + "/test/slow")).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(controller.requestStarted.await(10, TimeUnit.SECONDS)).isTrue();
+
+        final CompletableFuture<Void> shutdown = CompletableFuture.runAsync(app::close);
+        assertThat(shutdownStarted.await(10, TimeUnit.SECONDS)).isTrue();
+
+        await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThatThrownBy(() -> client.send(
+                                HttpRequest.newBuilder(URI.create(base + "/test/fast")).build(), HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class));
+        assertThat(inFlight).isNotDone();
+
+        final HttpResponse<String> response = inFlight.get(15, TimeUnit.SECONDS);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("done");
+        assertThat(Duration.ofNanos(System.nanoTime() - startedAt)).isGreaterThanOrEqualTo(Duration.ofMillis(IN_FLIGHT_MILLIS - 200));
+        shutdown.get(30, TimeUnit.SECONDS);
+    }
+
+    private static ConfigurableApplicationContext startApp(final ApplicationListener<ApplicationEvent> listener) {
+        return new SpringApplicationBuilder({{applicationClassName}}.class, ComponentTestConfiguration.class, SlowTestController.class)
+                .profiles("component-test")
+                .properties("server.port=0")
+                .listeners(listener)
+                .run();
+    }
+}

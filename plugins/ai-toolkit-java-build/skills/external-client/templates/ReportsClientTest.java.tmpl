@@ -1,0 +1,101 @@
+package {{basePackage}}.client.reports;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.UnavailableException;
+import java.io.IOException;
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.client.ClientAuthorizationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+
+class ReportsClientTest {
+
+    private static final String URL = "http://reports.test/reports/r-1";
+    private static final String JSON = "{\"id\":\"r-1\",\"title\":\"Q1\"}";
+
+    private final RestClient.Builder builder = RestClient.builder().baseUrl("http://reports.test");
+    private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+    private final ReportsClient client = new ReportsClient(
+            builder.build(), new ReportsProperties(true, "http://reports.test", "/reports/{id}", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+
+    @Test
+    void fetch_ok_returnsTheDecodedReport() throws Exception {
+        server.expect(requestTo(URL)).andExpect(method(HttpMethod.GET)).andRespond(withSuccess(JSON, MediaType.APPLICATION_JSON));
+
+        assertThat(client.fetch("r-1")).isEqualTo(new ReportResponse("r-1", "Q1"));
+        server.verify();
+    }
+
+    @Test
+    void fetch_unauthorizedOnce_isReplayedOnceAndSucceeds() throws Exception {
+        server.expect(once(), requestTo(URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        server.expect(once(), requestTo(URL)).andRespond(withSuccess(JSON, MediaType.APPLICATION_JSON));
+
+        assertThat(client.fetch("r-1").title()).isEqualTo("Q1");
+        server.verify();
+    }
+
+    @Test
+    void fetch_unauthorizedTwice_isADependencyFailureNotAThirdAttempt() {
+        server.expect(once(), requestTo(URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        server.expect(once(), requestTo(URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(DependencyException.class);
+        server.verify();
+    }
+
+    @Test
+    void fetch_forbidden_isADependencyFailureWithoutReplay() {
+        server.expect(once(), requestTo(URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(DependencyException.class);
+        server.verify();
+    }
+
+    @Test
+    void fetch_serverError_isUnavailable() {
+        server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(UnavailableException.class);
+    }
+
+    @Test
+    void fetch_emptyBodyOn200_isADependencyFailure() {
+        server.expect(requestTo(URL)).andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(DependencyException.class);
+    }
+
+    @Test
+    void fetch_connectionFailure_isUnavailable() {
+        server.expect(requestTo(URL)).andRespond(request -> {
+            throw new IOException("refused");
+        });
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(UnavailableException.class);
+    }
+
+    @Test
+    void fetch_tokenRequestFails_isUnavailableAndTheCauseIsKept() {
+        server.expect(requestTo(URL)).andRespond(request -> {
+            throw new ClientAuthorizationException(new OAuth2Error("invalid_client"), ReportsClient.DEPENDENCY);
+        });
+
+        assertThatThrownBy(() -> client.fetch("r-1"))
+                .isInstanceOf(UnavailableException.class)
+                .hasCauseInstanceOf(ClientAuthorizationException.class);
+    }
+}

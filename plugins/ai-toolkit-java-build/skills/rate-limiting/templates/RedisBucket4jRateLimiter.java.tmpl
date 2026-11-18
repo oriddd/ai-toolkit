@@ -1,0 +1,39 @@
+package {{basePackage}}.adapter.ratelimit.redis;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import {{basePackage}}.spi.ratelimit.RateLimitDecision;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.ConsumptionProbe;
+import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
+import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.codec.ByteArrayCodec;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+public class RedisBucket4jRateLimiter implements RateLimiterPort {
+    private final BucketConfiguration configuration;
+    private final LettuceBasedProxyManager<byte[]> proxyManager;
+
+    public RedisBucket4jRateLimiter(final RedisClient client, final long capacity, final Duration refillPeriod) {
+        this.configuration = BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(capacity).refillIntervally(capacity, refillPeriod))
+                .build();
+        final StatefulRedisConnection<byte[], byte[]> connection = client.connect(ByteArrayCodec.INSTANCE);
+        this.proxyManager = LettuceBasedProxyManager.builderFor(connection)
+                .withExpirationStrategy(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(refillPeriod.multipliedBy(2)))
+                .build();
+    }
+
+    @Override
+    public RateLimitDecision tryConsume(final String clientKey) {
+        final ConsumptionProbe probe = proxyManager
+                .builder()
+                .build(clientKey.getBytes(UTF_8), () -> configuration)
+                .tryConsumeAndReturnRemaining(1);
+        return new RateLimitDecision(probe.isConsumed(), TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+    }
+}

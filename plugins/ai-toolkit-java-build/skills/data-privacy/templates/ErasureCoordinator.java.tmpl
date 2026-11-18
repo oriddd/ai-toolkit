@@ -1,0 +1,26 @@
+package {{basePackage}}.privacy;
+
+import java.time.Clock;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class ErasureCoordinator {
+
+    private final List<ErasureStep> steps;
+    private final ApplicationEventPublisher events;
+    private final Clock clock;
+
+    @Transactional(rollbackFor = Exception.class)
+    public void erase(final String subjectId) {
+        steps.forEach(step -> step.erase(subjectId));
+        events.publishEvent(new SubjectErasedEvent(subjectId, clock.instant()));
+    }
+}

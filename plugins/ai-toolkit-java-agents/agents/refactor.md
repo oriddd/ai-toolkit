@@ -124,6 +124,9 @@ code, `ai-toolkit-quality:code-hygiene`, Sonar, docs — and finish with its evi
 on a Gradle build use the project's wrapper equivalent (`./gradlew build`). Fix failures at the cause; never suppress or
 weaken a check to get green. Return the evidence table to your caller unchanged, so it can relay it instead of running
 the gate a second time.
+Without the `ai-toolkit-quality` plugin the gate and hygiene skills are unavailable: fall back to the non-negotiables of
+`ai-toolkit-java-quality:golden-path` as the checklist (each with the command run and its result), and state in the report
+that the completion gate is incomplete.
 Gate check 5 (Standards) is the `ai-toolkit-java-agents:code-review` run from the delegation plan above: reuse its report as the
 evidence instead of reviewing a second time; re-run it only if you changed code after it. Without the Agent tool,
 run check 5 inline: apply `ai-toolkit-java-quality:quality-review` and `ai-toolkit-java-quality:golden-path` to the whole

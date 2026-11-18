@@ -1,0 +1,13 @@
+package {{basePackage}}.client.reports;
+
+import java.time.Duration;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+@ConfigurationProperties(prefix = "reports")
+public record ReportsProperties(
+        @DefaultValue("false") boolean enabled,
+        String baseUrl,
+        @DefaultValue("/reports/{id}") String reportPath,
+        @DefaultValue("2s") Duration connectTimeout,
+        @DefaultValue("5s") Duration readTimeout) {}

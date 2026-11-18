@@ -1,0 +1,20 @@
+package {{basePackage}}.privacy;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.introspect.Annotated;
+import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+
+public class LogMapperFactory {
+
+    public ObjectMapper create() {
+        return JsonMapper.builder()
+                .annotationIntrospector(new JacksonAnnotationIntrospector() {
+                    @Override
+                    public Object findSerializer(final Annotated annotated) {
+                        return annotated.hasAnnotation(Mask.class) ? MaskingSerializer.class : super.findSerializer(annotated);
+                    }
+                })
+                .build();
+    }
+}

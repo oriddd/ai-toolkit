@@ -1,0 +1,6 @@
+package {{basePackage}}.spi.ratelimit;
+
+public interface RateLimiterPort {
+
+    RateLimitDecision tryConsume(String clientKey);
+}

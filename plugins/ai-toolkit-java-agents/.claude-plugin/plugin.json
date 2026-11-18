@@ -17,6 +17,7 @@
   ],
   "dependencies": [
     "ai-toolkit-docs",
+    "ai-toolkit-quality",
     "ai-toolkit-java-design",
     "ai-toolkit-java-build",
     "ai-toolkit-java-quality",

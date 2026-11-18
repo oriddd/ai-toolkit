@@ -1,0 +1,41 @@
+package {{basePackage}}.monitor.parser;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.monitor.MonitoringConfig;
+import {{basePackage}}.monitor.MonitoringConstants;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+
+class MetricNameResolverTest {
+
+    private final MetricNameResolver resolver = new MetricNameResolver(new MonitoringConfig());
+
+    private static MockHttpServletRequest request(final String contextPath, final String path) {
+        final MockHttpServletRequest request = new MockHttpServletRequest("GET", contextPath + path);
+        request.setContextPath(contextPath);
+        return request;
+    }
+
+    @Test
+    void resolve_collectionAndItemPaths_mapToTheInvoiceMetric() {
+        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+        assertThat(resolver.resolve(request("{{contextPath}}", "/api/v1/invoices/42"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+    }
+
+    @Test
+    void resolve_contextPathIsStrippedBeforeMatching() {
+        assertThat(resolver.resolve(request("", "/api/v1/invoices"))).contains(MonitoringConstants.METRIC_INVOICE_REQUESTS);
+    }
+
+    @Test
+    void resolve_otherPaths_haveNoDomainMetric() {
+        assertThat(resolver.resolve(request("", "/api/v1/invoices/42/lines"))).isEmpty();
+        assertThat(resolver.resolve(request("", "/api/v1/other"))).isEmpty();
+    }
+
+    @Test
+    void resolve_nullRequest_isEmpty() {
+        assertThat(resolver.resolve(null)).isEmpty();
+    }
+}

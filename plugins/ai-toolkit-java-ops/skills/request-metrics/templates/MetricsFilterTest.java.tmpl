@@ -1,0 +1,142 @@
+package {{basePackage}}.monitor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.monitor.parser.MetricNameResolver;
+import {{basePackage}}.monitor.recorder.MetricsRecorder;
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import java.io.IOException;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockAsyncContext;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+
+class MetricsFilterTest {
+
+    private static final String METRIC = MonitoringConstants.METRIC_INVOICE_REQUESTS;
+
+    private final MetricNameResolver resolver = mock(MetricNameResolver.class);
+    private final MetricsRecorderRegistry registry = mock(MetricsRecorderRegistry.class);
+    private final MetricsRecorder recorder = mock(MetricsRecorder.class);
+    private final FilterChain chain = mock(FilterChain.class);
+    private final MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/invoices");
+    private final MockHttpServletResponse response = new MockHttpServletResponse();
+    private final MetricsFilter filter = new MetricsFilter(resolver, registry);
+
+    private void routeToRecorder() {
+        when(resolver.resolve(request)).thenReturn(Optional.of(METRIC));
+        when(registry.getRecorder(METRIC)).thenReturn(Optional.of(recorder));
+    }
+
+    @Test
+    void doFilter_recorderFound_recordsAfterTheChainRan() throws Exception {
+        routeToRecorder();
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(recorder).recordMetrics(anyLong(), any(), any());
+    }
+
+    @Test
+    void doFilter_chainThrows_recordsWithStatus500AndRethrows() throws Exception {
+        routeToRecorder();
+        doThrow(new ServletException("boom")).when(chain).doFilter(any(), any());
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
+
+        assertThat(response.getStatus()).isEqualTo(500);
+        verify(recorder).recordMetrics(anyLong(), any(), any());
+    }
+
+    @Test
+    void doFilter_chainThrowsAfterTheResponseIsCommitted_keepsTheStatus() throws Exception {
+        routeToRecorder();
+        response.setStatus(200);
+        response.setCommitted(true);
+        doThrow(new IOException("reset")).when(chain).doFilter(any(), any());
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(IOException.class);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verify(recorder).recordMetrics(anyLong(), any(), any());
+    }
+
+    @Test
+    void doFilter_noMetricForTheUri_neverAsksTheRegistry() throws Exception {
+        when(resolver.resolve(request)).thenReturn(Optional.empty());
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verifyNoInteractions(registry);
+    }
+
+    @Test
+    void doFilter_nameWithoutRecorder_isSkippedWithoutFailingTheRequest() throws Exception {
+        when(resolver.resolve(request)).thenReturn(Optional.of(METRIC));
+        when(registry.getRecorder(METRIC)).thenReturn(Optional.empty());
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(recorder, never()).recordMetrics(anyLong(), any(), any());
+    }
+
+    @Test
+    void doFilter_recorderFails_theRequestStillSucceeds() throws Exception {
+        routeToRecorder();
+        doThrow(new IllegalStateException("registry full")).when(recorder).recordMetrics(anyLong(), any(), any());
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void doFilter_asyncRequest_recordsOnceWhenTheAsyncRequestCompletes() throws Exception {
+        routeToRecorder();
+        request.setAsyncSupported(true);
+        request.startAsync();
+
+        filter.doFilter(request, response, chain);
+
+        verify(recorder, never()).recordMetrics(anyLong(), any(), any());
+        final MockAsyncContext context = (MockAsyncContext) request.getAsyncContext();
+        final AsyncListener listener = context.getListeners().get(0);
+        final AsyncEvent event = new AsyncEvent(context);
+        listener.onTimeout(event);
+        listener.onError(event);
+        listener.onStartAsync(event);
+        verify(recorder, never()).recordMetrics(anyLong(), any(), any());
+
+        context.complete();
+
+        verify(recorder).recordMetrics(anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldNotFilter_actuatorPaths_areSkippedAndApiPathsAreNot() {
+        final MockHttpServletRequest actuator = new MockHttpServletRequest("GET", "{{contextPath}}/actuator/prometheus");
+        actuator.setContextPath("{{contextPath}}");
+        final MockHttpServletRequest api = new MockHttpServletRequest("GET", "{{contextPath}}/api/v1/invoices");
+        api.setContextPath("{{contextPath}}");
+
+        assertThat(filter.shouldNotFilter(actuator)).isTrue();
+        assertThat(filter.shouldNotFilter(api)).isFalse();
+    }
+}

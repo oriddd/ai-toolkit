@@ -1,0 +1,24 @@
+package {{basePackage}}.privacy;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
+
+class OutboxErasureStepTest {
+
+    @Test
+    void erase_deletesTheSubjectsOutboxRows() {
+        final JdbcClient jdbc = mock(JdbcClient.class);
+        final StatementSpec statement = mock(StatementSpec.class);
+        when(jdbc.sql("DELETE FROM outbox WHERE aggregate_id = :subjectId")).thenReturn(statement);
+        when(statement.param("subjectId", "sub-1")).thenReturn(statement);
+
+        new OutboxErasureStep(jdbc).erase("sub-1");
+
+        verify(statement).update();
+    }
+}

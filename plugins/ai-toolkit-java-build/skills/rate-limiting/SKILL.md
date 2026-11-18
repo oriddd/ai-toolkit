@@ -5,7 +5,7 @@ description: >
 tier: should
 applies_to: [rest, monolith]
 depends_on: [observability, external-client, pluggable-architecture]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.1
 last_reviewed: 2026-11-15
@@ -186,6 +186,19 @@ then read `request.getRemoteAddr()`, never the header yourself.
 When a limit is reached:
 - Return **`429 Too Many Requests`**.
 - Include the **`Retry-After`** header (seconds or timestamp).
+
+## 6. Templates
+
+Rendered into a service and run (unit, component, JaCoCo, PIT) by `tools/render-java-proof.sh`; the Redis adapter runs against a
+`redis:7-alpine` Testcontainer in its `--with-it` step. Enable with `platform.ratelimit.enabled=true`
+(`provider: local|redis`, `capacity`, `refill-period`; defaults in [`RateLimitProperties`](./templates/RateLimitProperties.java.tmpl), package `config/` so that `adapter/` and `ratelimit/` stay cycle-free).
+
+- Port: [`RateLimiterPort`](./templates/RateLimiterPort.java.tmpl), [`RateLimitDecision`](./templates/RateLimitDecision.java.tmpl).
+- Local adapter (§2b): [`Bucket4jRateLimiter`](./templates/Bucket4jRateLimiter.java.tmpl) (Caffeine-bounded buckets, injectable `TimeMeter`); [`Bucket4jRateLimiterTest`](./templates/Bucket4jRateLimiterTest.java.tmpl) drives refill with a fake clock.
+- Filter (§2b): [`RateLimitFilter`](./templates/RateLimitFilter.java.tmpl) hands `TooManyRequestsException` to the advice, [`ClientKeyResolver`](./templates/ClientKeyResolver.java.tmpl) keys by principal, else remote address; registered by [`RateLimitConfig`](./templates/RateLimitConfig.java.tmpl) as a `FilterRegistrationBean` (after Spring Security, so the principal exists). [`RateLimitComponentTest`](./templates/RateLimitComponentTest.java.tmpl) proves 429 + `Retry-After` + the `ERR-TOO-MANY-REQUESTS` body through the real advice.
+- Client side (§2a, programmatic): [`OutboundRateLimiter`](./templates/OutboundRateLimiter.java.tmpl) wraps a Resilience4j `RateLimiter` and throws the domain 429 exception; the annotation form of §2a needs the aspect starter and is not shipped.
+- Redis (§3): [`RedisBucket4jRateLimiter`](./templates/RedisBucket4jRateLimiter.java.tmpl) + [`RedisRateLimitConfig`](./templates/RedisRateLimitConfig.java.tmpl) (`provider: redis`); [`RedisBucket4jRateLimiterIT`](./templates/RedisBucket4jRateLimiterIT.java.tmpl) shows two pods sharing one bucket.
+- Tests of the other classes: [`ClientKeyResolverTest`](./templates/ClientKeyResolverTest.java.tmpl), [`RateLimitFilterTest`](./templates/RateLimitFilterTest.java.tmpl), [`OutboundRateLimiterTest`](./templates/OutboundRateLimiterTest.java.tmpl).
 
 ## Do / Don't
 

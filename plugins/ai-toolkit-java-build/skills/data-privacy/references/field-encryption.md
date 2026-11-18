@@ -3,7 +3,7 @@
 Part of the [`data-privacy`](../SKILL.md) skill (§3). Hand-written `Cipher` code is the fallback when no vetted library
 (Tink `Aead`, the KMS SDK) is available; the stored format and the key-version rule below apply either way.
 
-The converter is a Spring `@Component`: Hibernate resolves `@Convert(converter = EncryptionConverter.class)` through Spring's
+The shipped, executed version of this code is in `../templates/` (`EncryptionConverter`, `FieldKeyProvider`, `PropertiesFieldKeyProvider`, `BlindIndex`). The converter is a Spring `@Component`: Hibernate resolves `@Convert(converter = EncryptionConverter.class)` through Spring's
 bean container, so the `FieldKeyProvider` is constructor-injected. The provider is the port to the KMS / Vault
 (`pluggable-architecture`): it returns the current key version and the key of any version.
 
@@ -62,7 +62,7 @@ public class EncryptionConverter implements AttributeConverter<String, String> {
 The column is `varchar` sized for `<version>:<base64(12 + n + 16 bytes)>`: plan for roughly 1.4 × the plaintext length plus 40.
 An unparsable or tampered value fails closed (`IllegalStateException`) — the GCM tag rejects any modified byte.
 
-Verified (JPA + H2, Spring Boot 3.5, Error Prone + NullAway clean): the column holds `1:…` with no plaintext; two equal
+Covered by `EncryptionConverterTest` and the Postgres integration step of `tools/render-java-proof.sh` (Spring Boot 3.5, Error Prone + NullAway clean): the column holds `1:…` with no plaintext; two equal
 e-mails store different ciphertexts; after `currentVersion()` moves to 2 new rows are written as `2:…` and rows written
 under version 1 still read back; a modified ciphertext is rejected; `null` maps to `null` both ways.
 

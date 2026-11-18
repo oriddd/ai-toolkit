@@ -1,0 +1,21 @@
+package {{basePackage}}.ratelimit;
+
+import {{basePackage}}.exception.TooManyRequestsException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+
+public class OutboundRateLimiter {
+
+    private final RateLimiter limiter;
+
+    public OutboundRateLimiter(final RateLimiter limiter) {
+        this.limiter = limiter;
+    }
+
+    public void acquire() throws TooManyRequestsException {
+        if (!limiter.acquirePermission()) {
+            final long refreshSeconds = limiter.getRateLimiterConfig().getLimitRefreshPeriod().toSeconds();
+            throw ExceptionMessages.rateLimitExceeded(Math.max(1, refreshSeconds));
+        }
+    }
+}

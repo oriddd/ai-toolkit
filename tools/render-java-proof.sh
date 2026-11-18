@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Maintainer pre-release check for the Java skills (NOT CI: the integration step needs Docker).
-# Renders EVERY shipped Java template into one fresh Spring Boot service, merges the pom pieces the skills tell a
-# developer to merge (static-analysis plugins, the dependencies of each skill), writes a tiny sample domain, runs
-# `spotless:apply` once (the skills require it before the first verify) and then `mvn verify`:
+# Renders every shipped Java template (and the tests that ship as templates) into one fresh Spring Boot service, merges the
+# pom pieces the skills tell a developer to merge, writes a small sample domain (Invoice), runs `spotless:apply` once (the
+# skills require it before the first verify) and then `mvn verify`:
 #   Spotless check, Error Prone + NullAway (ERROR), SpotBugs, Checkstyle, unit + component + ArchUnit tests,
 #   JaCoCo per-class gate (85 % line / 75 % branch), PIT mutation gate (>= 75 %).
-# With --with-it it also runs the Testcontainers integration test (Postgres 16 + apache/kafka:3.9.1).
+# Besides the structural skills it executes the templates of data-privacy, security-hardening, request-metrics,
+# graceful-shutdown (slow in-flight request), rate-limiting, external-client (OAuth2 against stub endpoints) and
+# messaging (broker pause). The final summary lists which skills are covered, which classes come from templates versus the
+# embedded sample, and which shipped templates or skills this script does not execute.
+# With --with-it it also runs the Testcontainers tests (Postgres 16, apache/kafka:3.9.1, redis:7-alpine).
 #
 # Usage: tools/render-java-proof.sh [--target DIR] [--with-it] [--online] [--render-only]
 #   --target DIR    project directory to (re)create (default: a fresh temp dir; an existing one must be empty or a previous proof)
@@ -27,7 +31,7 @@ while [ $# -gt 0 ]; do
     --with-it) WITH_IT=1; shift ;;
     --online) ONLINE=1; shift ;;
     --render-only) RENDER_ONLY=1; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -57,6 +61,8 @@ rm -rf "$TARGET"
 mkdir -p "$TARGET"
 touch "$TARGET/.render-java-proof"
 TARGET="$(cd "$TARGET" && pwd)"
+MANIFEST="$TARGET/.templates-manifest"
+: > "$MANIFEST"
 echo "== rendering into $TARGET"
 
 render() {
@@ -81,14 +87,9 @@ render() {
       -e "s|{{readinessEndpoint}}|/actuator/health/readiness|g" \
       -e "s|{{ControllerClass}}|InvoiceController|g" \
       -e "s|{{OperationClass}}|InvoiceOperation|g" \
+      -e "s|{{ServiceClass}}|InvoiceService|g" \
       -e "s|{{apiPath}}|/api/v1/invoices|g" \
       "$1"
-}
-
-# Tag strip recipe of exception-handling SKILL.md section 3a: every dependency is present except request-metrics
-# (its classes are prose-only references, so the [request-metrics] lines of SecurityTest are stripped).
-strip_tag() {
-  sed -e "/\[$1:begin\]/,/\[$1:end\]/d" -e "/\[$1\]/d"
 }
 
 # put <skill-relative template> : renders it to src/main|test/java/<its package>/<name>
@@ -103,11 +104,8 @@ put() {
   esac
   dir="$TARGET/$root/$(echo "$pkg" | tr . /)"
   mkdir -p "$dir"
-  if [ "$name" = "SecurityTest.java" ]; then
-    render "$src" | strip_tag request-metrics > "$dir/$name"
-  else
-    render "$src" > "$dir/$name"
-  fi
+  render "$src" > "$dir/$name"
+  echo "$1|${dir#$TARGET/}/$name" >> "$MANIFEST"
 }
 
 BUILD="ai-toolkit-java-build/skills"
@@ -173,6 +171,11 @@ deps = [
     dep("net.javacrumbs.shedlock", "shedlock-spring", "6.10.0"),
     dep("net.javacrumbs.shedlock", "shedlock-provider-jdbc-template", "6.10.0"),
     dep("io.micrometer", "micrometer-tracing-bridge-otel"),
+    dep("com.bucket4j", "bucket4j_jdk17-core", "8.22.0"),
+    dep("com.bucket4j", "bucket4j_jdk17-lettuce", "8.22.0"),
+    dep("io.lettuce", "lettuce-core"),
+    dep("com.github.ben-manes.caffeine", "caffeine"),
+    dep("io.github.resilience4j", "resilience4j-ratelimiter", "2.4.0"),
     dep(boot_g, "spring-boot-testcontainers", scope="test"),
     dep("org.testcontainers", "junit-jupiter", scope="test"),
     dep("org.testcontainers", "postgresql", scope="test"),
@@ -236,6 +239,43 @@ mv "$TARGET/src/main/java/$BASE_PATH/health/config/ReadinessProperties.java" "$T
 put "$QUALITY/component-tests/templates/ComponentTestConfiguration.java.tmpl"
 put "$QUALITY/component-tests/templates/SecurityTest.java.tmpl"
 mv "$TARGET/src/test/java/$BASE_PATH/security/SecurityTest.java" "$TARGET/src/test/java/$BASE_PATH/security/InvoiceControllerSecurityTest.java"
+put "$QUALITY/component-tests/templates/ProductionSecurityChainTest.java.tmpl"
+
+for t in FieldKeyProvider EncryptionProperties PropertiesFieldKeyProvider EncryptionConverter BlindIndex Mask MaskingSerializer LogMapperFactory \
+         UserProfile RetentionPurger RetentionProperties RetentionJob ErasureStep OutboxErasureStep SubjectErasedEvent ErasureCoordinator \
+         EncryptionConverterTest PropertiesFieldKeyProviderTest BlindIndexTest MaskingTest RetentionPurgerTest RetentionJobTest \
+         ErasureCoordinatorTest OutboxErasureStepTest EncryptionWiringTest; do
+  put "$BUILD/data-privacy/templates/$t.java.tmpl"
+done
+
+for t in CorsProperties CorsConfig SecurityHeadersConfig OutboundHostAllowList OutboundHttpConfig \
+         OutboundHostAllowListTest CorsSecurityTest SecurityHeadersTest; do
+  put "$BUILD/security-hardening/templates/$t.java.tmpl"
+done
+
+for t in RateLimiterPort RateLimitDecision RateLimitProperties Bucket4jRateLimiter ClientKeyResolver RateLimitFilter OutboundRateLimiter \
+         RateLimitConfig Bucket4jRateLimiterTest ClientKeyResolverTest RateLimitFilterTest OutboundRateLimiterTest RateLimitComponentTest; do
+  put "$BUILD/rate-limiting/templates/$t.java.tmpl"
+done
+if [ $WITH_IT -eq 1 ]; then
+  for t in RedisBucket4jRateLimiter RedisRateLimitConfig RedisBucket4jRateLimiterIT; do
+    put "$BUILD/rate-limiting/templates/$t.java.tmpl"
+  done
+fi
+
+for t in ReportsProperties ReportResponse ReportsClient ReportsRestClientConfig ReportsClientTest ReportsClientOAuth2IT; do
+  put "$BUILD/external-client/templates/$t.java.tmpl"
+done
+put "$BUILD/messaging/templates/OutboxBrokerOutageIT.java.tmpl"
+
+for t in MonitoringConstants MonitoringConfig MonitoringWebConfig ClientIdCaptureInterceptor MetricsFilter MetricsTagsHelper MetricsTimerHelper \
+         MetricNameResolver RequestMethodParser ResponseStatusParser ClientIdParser ExportFormatParser MetricsRecorder MetricsRecorderRegistry \
+         InvoiceMetricsRecorder ParsersTest MetricNameResolverTest MetricsFilterTest MetricsStackTest RequestMetricsComponentTest \
+         RequestMetricsSecurityTest; do
+  put "$OPS/request-metrics/templates/$t.java.tmpl"
+done
+
+put "$OPS/graceful-shutdown/templates/GracefulShutdownComponentTest.java.tmpl"
 
 MIGRATIONS="$TARGET/src/main/resources/db/migration"
 mkdir -p "$MIGRATIONS"
@@ -289,6 +329,12 @@ outbox.relay.topics.invoice: invoices
 inventory:
   base-url: ${INVENTORY_BASE_URL:http://localhost:9999}
   readiness-endpoint: /actuator/health/readiness
+
+security.outbound.allowed-hosts: ${OUTBOUND_ALLOWED_HOSTS:localhost}
+security.cors.allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+privacy.encryption.current-version: 1
+privacy.encryption.keys.1: ${PRIVACY_ENCRYPTION_KEY_1}
+privacy.encryption.blind-index-key: ${PRIVACY_BLIND_INDEX_KEY}
 YAML
 
 cat > "$TARGET/src/test/resources/application-component-test.yaml" <<'YAML'
@@ -305,6 +351,13 @@ spring:
     listener.auto-startup: false
     admin.auto-create: false
   security.oauth2.resourceserver.jwt.issuer-uri: https://issuer.example.test
+YAML
+
+mkdir -p "$TARGET/src/test/resources/config"
+cat > "$TARGET/src/test/resources/config/application.yaml" <<'YAML'
+security.outbound.allowed-hosts: localhost,127.0.0.1
+privacy.encryption.keys.1: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+privacy.encryption.blind-index-key: HyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4=
 YAML
 
 cat > "$MIGRATIONS/V001__create_invoices.sql" <<'SQL'
@@ -340,7 +393,9 @@ JAVA
 cat > "$SRC/entity/Invoice.java" <<'JAVA'
 package {{basePackage}}.entity;
 
+import {{basePackage}}.privacy.EncryptionConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -360,6 +415,7 @@ public class Invoice extends BaseEntity {
 
     @Id private UUID id;
 
+    @Convert(converter = EncryptionConverter.class)
     @Column(nullable = false)
     private String name;
 
@@ -1012,6 +1068,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.when;
 
+import {{basePackage}}.privacy.ErasureCoordinator;
+import {{basePackage}}.privacy.RetentionPurger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -1057,6 +1115,8 @@ class OrdersFlowIT {
     @LocalServerPort private int port;
     @Autowired private TestRestTemplate rest;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private RetentionPurger purger;
+    @Autowired private ErasureCoordinator erasure;
 
     private String url(final String path) {
         return "http://localhost:" + port + "/orders-service" + path;
@@ -1135,8 +1195,38 @@ class OrdersFlowIT {
         assertThat(jdbc.queryForObject("select count(*) from shedlock", Integer.class)).isGreaterThanOrEqualTo(1);
         final ResponseEntity<String> fetched = rest.exchange(url("/api/v1/invoices/" + id), HttpMethod.GET, entity("sa", null), String.class);
         assertThat(fetched.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(fetched.getBody()).contains("\"name\":\"acme\"");
+        assertThat(jdbc.queryForObject("select name from invoices where id = ?::uuid", String.class, id)).startsWith("1:").doesNotContain("acme");
         final ResponseEntity<String> duplicate = rest.exchange(url("/api/v1/invoices"), HttpMethod.POST, entity("sa", body), String.class);
         assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void retentionPurger_removesPublishedOutboxRowsAndProcessedEventsOlderThanTheCutoffOnly() {
+        final String oldId = UUID.randomUUID().toString();
+        jdbc.update("insert into outbox (id, version, aggregate_type, aggregate_id, event_type, payload, created_at, published_at) values (?::uuid, 0, 'invoice', ?, 'E', '{}', now() - interval '40 days', now() - interval '30 days')", oldId, oldId);
+        jdbc.update("insert into outbox (id, version, aggregate_type, aggregate_id, event_type, payload, created_at) values (gen_random_uuid(), 0, 'invoice', 'unpublished-old', 'E', '{}', now() - interval '40 days')");
+        jdbc.update("insert into processed_events (event_id, processed_at) values ('old-event', now() - interval '30 days')");
+        jdbc.update("insert into processed_events (event_id, processed_at) values ('fresh-event', now())");
+
+        final RetentionPurger.PurgeResult result = purger.purge(Instant.now().minusSeconds(14L * 24 * 3600));
+
+        assertThat(result.outboxRows()).isEqualTo(1);
+        assertThat(result.processedEvents()).isGreaterThanOrEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from outbox where id = ?::uuid", Integer.class, oldId)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from outbox where aggregate_id = 'unpublished-old'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id = 'old-event'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id = 'fresh-event'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void erasureCoordinator_deletesTheSubjectsOutboxRows() {
+        final String subject = UUID.randomUUID().toString();
+        jdbc.update("insert into outbox (id, version, aggregate_type, aggregate_id, event_type, payload, created_at, published_at) values (gen_random_uuid(), 0, 'invoice', ?, 'E', '{}', now(), now())", subject);
+
+        erasure.erase(subject);
+
+        assertThat(jdbc.queryForObject("select count(*) from outbox where aggregate_id = ?", Integer.class, subject)).isZero();
     }
 
     @Test
@@ -1195,5 +1285,54 @@ PY
 fi
 grep -E "All coverage checks" "$LOG" | sed -e 's/^\[INFO\] /jacoco: /' || true
 grep -E "^>> (Generated [0-9]+ mutations|Line Coverage|Mutations with no coverage)" "$LOG" | sed -e 's/^>> /pit: /' | tail -3 || true
+python3 - "$ROOT" "$TARGET" "$WITH_IT" "$status" <<'PY'
+import collections, csv, os, pathlib, sys
+root, target, with_it, status = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3] == "1", sys.argv[4]
+manifest = {}
+for line in (target / ".templates-manifest").read_text().splitlines():
+    template, path = line.split("|", 1)
+    manifest[path] = template.split("/")[2]
+rendered_by_skill = collections.defaultdict(list)
+for path, skill in manifest.items():
+    rendered_by_skill[skill].append(os.path.basename(path))
+csv_path = target / "target/site/jacoco/jacoco.csv"
+from_templates, embedded = collections.defaultdict(list), []
+if csv_path.exists():
+    for row in csv.DictReader(open(csv_path)):
+        outer = row["CLASS"].split(".")[0]
+        path = "src/main/java/" + row["PACKAGE"].replace(".", "/") + "/" + outer + ".java"
+        if path in manifest:
+            from_templates[manifest[path]].append(row["CLASS"])
+        else:
+            embedded.append(row["CLASS"])
+print()
+print("== coverage honesty")
+print("classes measured by JaCoCo that come from shipped templates, per skill:")
+for skill in sorted(from_templates):
+    print(f"  {skill}: {len(from_templates[skill])}")
+print(f"classes that come from the script's embedded sample domain (not shipped templates): {len(embedded)}: {', '.join(sorted(embedded))}")
+print("skills whose shipped templates were rendered and gated (main classes counted above; their tests are templates too):")
+print("  " + ", ".join(sorted(rendered_by_skill)))
+skills_with_java, unrendered, prose_only = set(), collections.defaultdict(list), []
+for skill_dir in sorted(root.glob("plugins/ai-toolkit-java-*/skills/*")):
+    templates = sorted((skill_dir / "templates").glob("*.java.tmpl")) if (skill_dir / "templates").is_dir() else []
+    if not templates:
+        prose_only.append(skill_dir.name)
+        continue
+    done = set(rendered_by_skill.get(skill_dir.name, []))
+    for template in templates:
+        if template.name[:-5] not in done:
+            unrendered[skill_dir.name].append(template.name[:-5])
+print("Java skills with NO shipped Java templates (prose, or non-Java templates only), so nothing of them is executed by this script:")
+print("  " + ", ".join(prose_only))
+print("shipped Java templates that this script does NOT render, per skill:")
+for skill in sorted(unrendered):
+    print(f"  {skill}: {', '.join(unrendered[skill])}")
+if not unrendered:
+    print("  none")
+print("run-mode notes: *IT classes (OrdersFlowIT, OutboxBrokerOutageIT, ReportsClientOAuth2IT, RedisBucket4jRateLimiterIT) execute only with --with-it;")
+print("  the Redis rate-limiter adapter is rendered only with --with-it (its coverage comes from the Redis Testcontainers IT).")
+print("  Not exercised anywhere: a forked-JVM SIGTERM (graceful shutdown closes the Spring context, the same path SIGTERM takes), Kubernetes probes and preStop timing.")
+PY
 if [ $status -eq 0 ]; then echo "GREEN: every shipped Java template, applied together, passes the toolkit's own gates"; else echo "RED: see $LOG"; fi
 exit $status

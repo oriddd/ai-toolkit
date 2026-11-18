@@ -1,0 +1,39 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+class MaskingTest {
+
+    private final ObjectMapper logMapper = new LogMapperFactory().create();
+
+    @Test
+    void logMapper_maskedFields_keepOnlyTheLastFourCharacters() throws Exception {
+        final String json = logMapper.writeValueAsString(new UserProfile("u-1", "alice@example.com", "+15551234567"));
+
+        assertThat(json).contains("\"email\":\"*************.com\"").contains("\"phoneNumber\":\"********4567\"");
+        assertThat(json).contains("\"id\":\"u-1\"").doesNotContain("alice").doesNotContain("+1555");
+    }
+
+    @Test
+    void logMapper_valueOfFourCharactersOrFewer_isShownInFull() throws Exception {
+        assertThat(logMapper.writeValueAsString(new UserProfile("u-1", "abcd", "123"))).contains("\"email\":\"abcd\"").contains("\"phoneNumber\":\"123\"");
+    }
+
+    @Test
+    void logMapper_nullMaskedField_isWrittenAsNull() throws Exception {
+        assertThat(logMapper.writeValueAsString(new UserProfile("u-1", "alice@example.com", null))).contains("\"phoneNumber\":null");
+    }
+
+    @Test
+    void plainObjectMapper_apiResponses_stillCarryTheRealValues() throws Exception {
+        assertThat(new ObjectMapper().writeValueAsString(new UserProfile("u-1", "alice@example.com", "1"))).contains("alice@example.com");
+    }
+
+    @Test
+    void toString_neverCarriesPii() {
+        assertThat(new UserProfile("u-1", "alice@example.com", "+15551234567")).hasToString("UserProfile[id=u-1]");
+    }
+}

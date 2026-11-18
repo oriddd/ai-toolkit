@@ -109,7 +109,10 @@ CREATE TABLE shedlock (
   refused (`MANDATORY`); rows written by a context that is then shut down are published, in order, by the next
   context (restart); a failure between the broker ack and `markPublished` publishes the row again on the next tick (6
   records for 4 events) and the consumer's `processed_events` gate keeps the effect at 4; a paused broker leaves the
-  row unpublished (the relay logs and stops) and `unpause` publishes it; the record carries `event-id`, the aggregate
+  row unpublished (the relay logs and stops) and `unpause` publishes it (executed by the shipped
+  [`OutboxBrokerOutageIT`](../templates/OutboxBrokerOutageIT.java.tmpl): events relayed, broker paused mid-relay, new rows stay
+  unpublished and none is lost, broker resumed, every row published, a duplicate record delivered on top, and the
+  `processed_events` gate plus the spied `processEvent` show exactly one effect per event); the record carries `event-id`, the aggregate
   id as key and `traceparent`; the `shedlock` row exists.
 - The outbox relay is unit-tested with a fake clock; the at-least-once
   consumer is integration-tested by publishing the same event twice and

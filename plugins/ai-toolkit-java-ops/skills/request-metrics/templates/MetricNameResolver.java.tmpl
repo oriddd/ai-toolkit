@@ -1,0 +1,28 @@
+package {{basePackage}}.monitor.parser;
+
+import {{basePackage}}.monitor.MonitoringConfig;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class MetricNameResolver {
+
+    private final MonitoringConfig monitoringConfig;
+
+    public Optional<String> resolve(final @Nullable HttpServletRequest request) {
+        if (request == null || request.getRequestURI() == null) {
+            return Optional.empty();
+        }
+        final String uri = request.getRequestURI().substring(request.getContextPath().length());
+        return monitoringConfig.patternToMetricName().stream()
+                .filter(entry -> entry.getKey().matcher(uri).matches())
+                .map(Map.Entry::getValue)
+                .findFirst();
+    }
+}

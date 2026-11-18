@@ -1,0 +1,49 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Base64;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+
+class EncryptionWiringTest {
+
+    private static final String KEY_1 = Base64.getEncoder().encodeToString(new byte[32]);
+    private static final String KEY_2 = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    @Configuration
+    @EnableConfigurationProperties(EncryptionProperties.class)
+    @Import({PropertiesFieldKeyProvider.class, EncryptionConverter.class, BlindIndex.class})
+    static class Wiring {}
+
+    private final ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(Wiring.class);
+
+    @Test
+    void context_withKeysFromProperties_wiresTheConverterAndTheBlindIndex() {
+        runner.withPropertyValues(
+                        "privacy.encryption.current-version=2",
+                        "privacy.encryption.keys.1=" + KEY_1,
+                        "privacy.encryption.keys.2=" + KEY_2,
+                        "privacy.encryption.blind-index-key=" + KEY_1)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    final EncryptionConverter converter = context.getBean(EncryptionConverter.class);
+                    final String stored = converter.convertToDatabaseColumn("alice@example.com");
+                    assertThat(stored).startsWith("2:");
+                    assertThat(converter.convertToEntityAttribute(stored)).isEqualTo("alice@example.com");
+                    assertThat(context.getBean(BlindIndex.class).of("Alice@example.com")).hasSize(64);
+                });
+    }
+
+    @Test
+    void context_withoutTheCurrentKey_failsAtStartupInsteadOfWritingPlaintext() {
+        runner.withPropertyValues(
+                        "privacy.encryption.current-version=3",
+                        "privacy.encryption.keys.1=" + KEY_1,
+                        "privacy.encryption.blind-index-key=" + KEY_1)
+                .run(context -> assertThat(context).hasFailed());
+    }
+}

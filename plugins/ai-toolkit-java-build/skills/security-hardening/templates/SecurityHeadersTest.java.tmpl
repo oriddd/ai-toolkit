@@ -1,0 +1,86 @@
+package {{basePackage}}.security;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.config.ProblemDetailSecurityHandler;
+import {{basePackage}}.config.SecurityConfig;
+import {{basePackage}}.config.SecurityHeadersConfig;
+import {{basePackage}}.controller.{{ControllerClass}};
+import {{basePackage}}.exception.handler.GlobalExceptionHandler;
+import {{basePackage}}.monitor.parser.ClientIdParser;   // [request-metrics]
+import {{basePackage}}.monitor.parser.MetricNameResolver;   // [request-metrics]
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;   // [request-metrics]
+import {{basePackage}}.operation.{{OperationClass}};
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(
+        controllers = {{ControllerClass}}.class,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
+@Import({
+    SecurityConfig.class,
+    ProblemDetailSecurityHandler.class,
+    GlobalExceptionHandler.class,
+    SecurityHeadersConfig.class,
+    SecurityHeadersTest.MeterRegistryConfiguration.class
+})
+class SecurityHeadersTest {
+
+    @TestConfiguration
+    static class MeterRegistryConfiguration {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
+    @Autowired MockMvc mvc;
+    @MockitoBean {{OperationClass}} operation;
+    @MockitoBean JwtDecoder jwtDecoder;
+    // [request-metrics:begin]
+    @MockitoBean MetricNameResolver metricNameResolver;
+    @MockitoBean MetricsRecorderRegistry metricsRecorderRegistry;
+    @MockitoBean ClientIdParser clientIdParser;
+    // [request-metrics:end]
+
+    @Test
+    void response_overHttps_carriesEverySecurityHeaderIncludingHsts() throws Exception {
+        mvc.perform(get("{{apiPath}}").secure(true).with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .andExpect(header().string("Strict-Transport-Security", "max-age=31536000 ; includeSubDomains"));
+    }
+
+    @Test
+    void response_rejectedWithoutToken_stillCarriesTheHeaders() throws Exception {
+        mvc.perform(get("{{apiPath}}").secure(true))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .andExpect(header().exists("Strict-Transport-Security"));
+    }
+
+    @Test
+    void response_overPlainHttp_hasNoHstsButKeepsTheOtherHeaders() throws Exception {
+        mvc.perform(get("{{apiPath}}").with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Strict-Transport-Security"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"));
+    }
+}

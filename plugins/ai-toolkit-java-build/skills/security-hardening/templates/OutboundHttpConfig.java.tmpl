@@ -1,0 +1,22 @@
+package {{basePackage}}.config;
+
+import java.util.Set;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.boot.web.client.RestClientCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(OutboundHttpConfig.OutboundProperties.class)
+public class OutboundHttpConfig {
+
+    @ConfigurationProperties(prefix = "security.outbound")
+    public record OutboundProperties(@DefaultValue Set<String> allowedHosts) {}
+
+    @Bean
+    RestClientCustomizer outboundHostAllowList(final OutboundProperties props) {
+        return builder -> builder.requestInterceptor(new OutboundHostAllowList(props.allowedHosts()));
+    }
+}

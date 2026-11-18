@@ -29,19 +29,21 @@ integration part needs Docker.
 
 It renders every shipped Java template into one fresh Spring Boot 3.5.16 service (the `ci` pom with the `static-analysis` plugins and the
 dependencies of each skill merged in, exception handling, permissions with the resource server, persistence + Flyway + outbox, Kafka messaging with the
-idempotent consumer, the external-client cache adapter, a health indicator, component tests, `ArchitectureTest`) plus a tiny sample domain,
+idempotent consumer, the external-client cache adapter and OAuth2 client, a health indicator, data-privacy, security-hardening, request-metrics, graceful-shutdown, rate-limiting, component tests, `ArchitectureTest`) plus a small sample domain,
 runs `mvn spotless:apply` once (rendered code is not pre-formatted), then `mvn verify`: Spotless check, Error Prone + NullAway at ERROR, SpotBugs,
 Checkstyle, unit, component and ArchUnit tests, the Jacoco per-class gate (85 % line / 75 % branch) and the PIT gate (>= 75 %). It exits non-zero on the first red gate and prints
 test counts, Jacoco and PIT totals.
 
 ```sh
 tools/render-java-proof.sh --target /tmp/java-proof            # unit + component tests, all static gates (about 2 minutes)
-tools/render-java-proof.sh --target /tmp/java-proof --with-it  # also the Testcontainers test (Postgres 16, apache/kafka:3.9.1)
+tools/render-java-proof.sh --target /tmp/java-proof --with-it  # also the *IT tests (Postgres 16, apache/kafka:3.9.1, redis:7-alpine, OAuth2 stubs, broker pause)
 ```
 
 Needs JDK 21 (`JAVA_HOME`, or an installed one is found), Maven, and for `--with-it` a running Docker or Colima. Maven runs offline when the
 Boot parent is in `~/.m2`; pass `--online` otherwise. A red run means a template or a skill instruction fails the toolkit's own gates when applied
-together with the others: fix the template, never the rendered project. Not covered: `request-metrics` and the OAuth2 client wiring (prose only,
-no templates).
+together with the others: fix the template, never the rendered project. The final summary lists exactly which skills are executed, which classes come
+from shipped templates versus the embedded sample, and which shipped Java templates or skills are not executed (prose-only skills such as
+`resilience-patterns` and `observability`); read it instead of assuming coverage. Run-mode limits are printed too: the `*IT` classes and the Redis adapter need
+`--with-it`, and graceful shutdown closes the Spring context rather than signalling a forked JVM.
 ## Code of Conduct
 Be professional and constructive.

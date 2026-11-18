@@ -11,9 +11,9 @@ import {{basePackage}}.config.SecurityConfig;
 import {{basePackage}}.controller.{{ControllerClass}};
 import {{basePackage}}.exception.constants.ExceptionMessages;
 import {{basePackage}}.exception.handler.GlobalExceptionHandler;
-import {{basePackage}}.monitor.ClientIdParser;   // [request-metrics]
-import {{basePackage}}.monitor.MetricNameResolver;   // [request-metrics]
-import {{basePackage}}.monitor.MetricsRecorderRegistry;   // [request-metrics]
+import {{basePackage}}.monitor.parser.ClientIdParser;   // [request-metrics]
+import {{basePackage}}.monitor.parser.MetricNameResolver;   // [request-metrics]
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;   // [request-metrics]
 import {{basePackage}}.operation.{{OperationClass}};
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

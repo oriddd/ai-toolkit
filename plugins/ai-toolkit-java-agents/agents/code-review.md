@@ -35,6 +35,8 @@ from memory. The loaded skills are authoritative; the quick references further d
 
 Also apply `ai-toolkit-quality:code-hygiene` to the diff: needless comments/docs, dead code, speculative abstraction,
 redundant or meaningless tests.
+Without the `ai-toolkit-quality` plugin, skip that skill and the Sonar reading, and state in the report that the hygiene and
+gate checks were not applied.
 
 ## Before you rate anything
 

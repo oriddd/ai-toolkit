@@ -1,0 +1,19 @@
+package {{basePackage}}.monitor;
+
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class MonitoringConfig {
+
+    private static final List<Map.Entry<Pattern, String>> PATTERN_TO_METRIC_NAME =
+            List.of(
+                    Map.entry(Pattern.compile("/api/v1/invoices"), MonitoringConstants.METRIC_INVOICE_REQUESTS),
+                    Map.entry(Pattern.compile("/api/v1/invoices/[^/]+"), MonitoringConstants.METRIC_INVOICE_REQUESTS));
+
+    public List<Map.Entry<Pattern, String>> patternToMetricName() {
+        return PATTERN_TO_METRIC_NAME;
+    }
+}

@@ -1,0 +1,52 @@
+package {{basePackage}}.ratelimit;
+
+import {{basePackage}}.adapter.ratelimit.bucket4j.Bucket4jRateLimiter;
+import {{basePackage}}.config.RateLimitProperties;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import io.github.bucket4j.TimeMeter;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.HandlerExceptionResolver;
+
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "platform.ratelimit", name = "enabled", havingValue = "true")
+@EnableConfigurationProperties(RateLimitProperties.class)
+public class RateLimitConfig {
+
+    @Bean
+    @ConditionalOnProperty(prefix = "platform.ratelimit", name = "provider", havingValue = "local", matchIfMissing = true)
+    RateLimiterPort localRateLimiter(final RateLimitProperties props) {
+        return new Bucket4jRateLimiter(props.capacity(), props.refillPeriod(), TimeMeter.SYSTEM_MILLISECONDS);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    ClientKeyResolver clientKeyResolver() {
+        return new ClientKeyResolver();
+    }
+
+    @Bean
+    FilterRegistrationBean<RateLimitFilter> rateLimitFilter(
+            final RateLimiterPort rateLimiter,
+            final ClientKeyResolver keyResolver,
+            @Qualifier("handlerExceptionResolver") final HandlerExceptionResolver exceptionResolver) {
+        return new FilterRegistrationBean<>(new RateLimitFilter(rateLimiter, keyResolver, exceptionResolver));
+    }
+
+    @Bean
+    OutboundRateLimiter outboundRateLimiter(final RateLimitProperties props) {
+        final RateLimiterConfig config = RateLimiterConfig.custom()
+                .limitForPeriod(props.outbound().limitForPeriod())
+                .limitRefreshPeriod(props.outbound().limitRefreshPeriod())
+                .timeoutDuration(java.time.Duration.ZERO)
+                .build();
+        return new OutboundRateLimiter(RateLimiter.of("outbound", config));
+    }
+}

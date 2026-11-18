@@ -35,3 +35,20 @@ answers `500` with the generic detail, so the catch-all keeps covering unchecked
 
 Component tests (see `component-tests`) prove the end-to-end status
 mapping for the full matrix (`200 / 400 / 403 / 404 / 406 / 409 / 500 / 503`).
+
+## Tag strip matrix (`[validation]`, `[security]`, `[persistence]`)
+
+Handler and test carry the same three tags, so any combination of kept and removed tags must compile and pass `mvn verify`
+(JaCoCo 85 % / 75 % per class, PIT). Prove it after changing either template: for each of the 8 combinations render the two
+templates (`{{basePackage}}` substituted), run the §3a `sed` recipe with the literal tag on both files for every removed tag
+**before** `spotless:apply` (formatting wraps tagged lines and loses the tag), drop the matching starters from the POM, then run
+`mvn verify`. Run it under `bash`, not `zsh` (zsh history-expands `$t:end`):
+
+```sh
+mask=5   # one fresh copy of both files per mask 0..7; bit 0 = validation, 1 = security, 2 = persistence, set bit = tag removed
+for f in GlobalExceptionHandler.java GlobalExceptionHandlerTest.java; do
+    (( mask & 1 )) && sed -e '/\[validation:begin\]/,/\[validation:end\]/d' -e '/\[validation\]/d' "$f" > g.tmp && mv g.tmp "$f"
+    (( mask & 2 )) && sed -e '/\[security:begin\]/,/\[security:end\]/d' -e '/\[security\]/d' "$f" > g.tmp && mv g.tmp "$f"
+    (( mask & 4 )) && sed -e '/\[persistence:begin\]/,/\[persistence:end\]/d' -e '/\[persistence\]/d' "$f" > g.tmp && mv g.tmp "$f"
+done
+```

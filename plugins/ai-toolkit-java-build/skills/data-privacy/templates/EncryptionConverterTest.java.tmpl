@@ -1,0 +1,126 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Objects;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.Test;
+
+class EncryptionConverterTest {
+
+    private static final String EMAIL = "alice@example.com";
+
+    private final MutableKeys keys = new MutableKeys();
+    private final EncryptionConverter converter = new EncryptionConverter(keys);
+
+    @Test
+    void convertToDatabaseColumn_email_storesVersionedCiphertextWithoutPlaintext() {
+        final String stored = encrypt(EMAIL);
+
+        assertThat(stored).startsWith("1:").doesNotContain(EMAIL);
+        assertThat(Base64.getDecoder().decode(stored.substring(2))).hasSize(12 + EMAIL.length() + 16);
+    }
+
+    @Test
+    void convertToDatabaseColumn_sameValueTwice_producesDifferentCiphertexts() {
+        assertThat(converter.convertToDatabaseColumn(EMAIL)).isNotEqualTo(converter.convertToDatabaseColumn(EMAIL));
+    }
+
+    @Test
+    void roundTrip_email_returnsThePlaintext() {
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(EMAIL))).isEqualTo(EMAIL);
+    }
+
+    @Test
+    void roundTrip_nonAsciiAndEmpty_survive() {
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn("zoë@例え.jp"))).isEqualTo("zoë@例え.jp");
+        assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(""))).isEmpty();
+    }
+
+    @Test
+    void nullValues_mapToNullBothWays() {
+        assertThat(converter.convertToDatabaseColumn(null)).isNull();
+        assertThat(converter.convertToEntityAttribute(null)).isNull();
+    }
+
+    @Test
+    void keyRotation_rowsWrittenUnderTheOldVersionStillReadAndNewRowsUseTheNewOne() {
+        final String oldRow = encrypt(EMAIL);
+
+        keys.current = 2;
+        final String newRow = encrypt(EMAIL);
+
+        assertThat(newRow).startsWith("2:");
+        assertThat(converter.convertToEntityAttribute(oldRow)).isEqualTo(EMAIL);
+        assertThat(converter.convertToEntityAttribute(newRow)).isEqualTo(EMAIL);
+    }
+
+    @Test
+    void convertToEntityAttribute_tamperedCiphertext_failsClosed() {
+        final String stored = encrypt(EMAIL);
+        final byte[] payload = Base64.getDecoder().decode(stored.substring(2));
+        payload[payload.length - 1] ^= 1;
+        final String tampered = "1:" + Base64.getEncoder().encodeToString(payload);
+
+        assertThatThrownBy(() -> converter.convertToEntityAttribute(tampered))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Field decryption failed");
+    }
+
+    @Test
+    void convertToEntityAttribute_wrongKeyVersion_failsClosed() {
+        final String stored = encrypt(EMAIL);
+
+        assertThatThrownBy(() -> converter.convertToEntityAttribute("2" + stored.substring(1)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Field decryption failed");
+    }
+
+    @Test
+    void convertToEntityAttribute_malformedValues_failClosed() {
+        assertThatThrownBy(() -> converter.convertToEntityAttribute("no-separator"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> converter.convertToEntityAttribute("x:AAAA")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> converter.convertToEntityAttribute("1:AAAA")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> converter.convertToEntityAttribute("1:!!!")).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void convertToDatabaseColumn_unusableKey_failsClosed() {
+        keys.broken = true;
+
+        assertThatThrownBy(() -> converter.convertToDatabaseColumn(EMAIL))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Field encryption failed");
+    }
+
+    private String encrypt(final String plaintext) {
+        return Objects.requireNonNull(converter.convertToDatabaseColumn(plaintext));
+    }
+
+    static final class MutableKeys implements FieldKeyProvider {
+        int current = 1;
+        boolean broken;
+
+        @Override
+        public int currentVersion() {
+            return current;
+        }
+
+        @Override
+        public SecretKey key(final int version) {
+            final byte[] raw = new byte[broken ? 5 : 32];
+            Arrays.fill(raw, (byte) version);
+            return new SecretKeySpec(raw, "AES");
+        }
+
+        @Override
+        public SecretKey blindIndexKey() {
+            return new SecretKeySpec(new byte[32], "AES");
+        }
+    }
+}

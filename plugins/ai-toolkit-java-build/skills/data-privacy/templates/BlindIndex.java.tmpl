@@ -1,0 +1,29 @@
+package {{basePackage}}.privacy;
+
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.util.HexFormat;
+import java.util.Locale;
+import javax.crypto.Mac;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class BlindIndex {
+    private static final String ALGORITHM = "HmacSHA256";
+
+    private final FieldKeyProvider keys;
+
+    public String of(final String value) {
+        try {
+            final Mac mac = Mac.getInstance(ALGORITHM);
+            mac.init(keys.blindIndexKey());
+            final String normalised = value.strip().toLowerCase(Locale.ROOT);
+            return HexFormat.of().formatHex(mac.doFinal(normalised.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Blind index computation failed", e);
+        }
+    }
+}

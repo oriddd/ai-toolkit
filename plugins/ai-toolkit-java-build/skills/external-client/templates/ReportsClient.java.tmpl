@@ -1,0 +1,60 @@
+package {{basePackage}}.client.reports;
+
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import java.io.IOException;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.security.oauth2.client.ClientAuthorizationException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse;
+
+public class ReportsClient {
+    public static final String DEPENDENCY = "reports-service";
+
+    private final RestClient restClient;
+    private final ReportsProperties props;
+
+    public ReportsClient(final RestClient restClient, final ReportsProperties props) {
+        this.restClient = restClient;
+        this.props = props;
+    }
+
+    public ReportResponse fetch(final String id) throws UnavailableException, DependencyException {
+        Reply reply = send(id);
+        if (reply.status().isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
+            reply = send(id);
+        }
+        if (reply.status().is5xxServerError()) {
+            throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, null);
+        }
+        final ReportResponse body = reply.body();
+        if (!reply.status().is2xxSuccessful() || body == null) {
+            throw ExceptionMessages.dependencyCallFailed(DEPENDENCY, reply.status().value());
+        }
+        return body;
+    }
+
+    private Reply send(final String id) throws UnavailableException {
+        return call(() -> restClient.get().uri(props.reportPath(), id).exchange((request, response) -> readReply(response)));
+    }
+
+    private record Reply(HttpStatusCode status, @Nullable ReportResponse body) {}
+
+    private static Reply readReply(final ConvertibleClientHttpResponse response) throws IOException {
+        final HttpStatusCode status = response.getStatusCode();
+        return new Reply(status, status.is2xxSuccessful() ? response.bodyTo(ReportResponse.class) : null);
+    }
+
+    private static Reply call(final Supplier<Reply> remoteCall) throws UnavailableException {
+        try {
+            return remoteCall.get();
+        } catch (ResourceAccessException | ClientAuthorizationException e) {
+            throw ExceptionMessages.dependencyUnavailable(DEPENDENCY, e);
+        }
+    }
+}

@@ -1,0 +1,28 @@
+package {{basePackage}}.config;
+
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpRequest;
+import org.springframework.http.client.ClientHttpRequestExecution;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
+import org.springframework.http.client.ClientHttpResponse;
+
+public class OutboundHostAllowList implements ClientHttpRequestInterceptor {
+    private final Set<String> allowedHosts;
+
+    public OutboundHostAllowList(final Set<String> allowedHosts) {
+        this.allowedHosts = allowedHosts.stream().map(h -> h.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    public ClientHttpResponse intercept(final HttpRequest request, final byte[] body, final ClientHttpRequestExecution execution)
+            throws IOException {
+        final String host = request.getURI().getHost();
+        if (host == null || !allowedHosts.contains(host.toLowerCase(Locale.ROOT))) {
+            throw new IllegalStateException("Outbound host is not in security.outbound.allowed-hosts: " + host);
+        }
+        return execution.execute(request, body);
+    }
+}

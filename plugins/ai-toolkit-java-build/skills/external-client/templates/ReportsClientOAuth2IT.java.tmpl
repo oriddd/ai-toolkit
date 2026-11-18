@@ -1,0 +1,172 @@
+package {{basePackage}}.client.reports;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import {{basePackage}}.exception.UnavailableException;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.http.client.HttpClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.oauth2.client.OAuth2ClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+@SpringBootTest(
+        classes = ReportsClientOAuth2IT.TestApp.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "reports.enabled=true",
+            "spring.security.oauth2.client.registration.reports-service.provider=reports-idp",
+            "spring.security.oauth2.client.registration.reports-service.client-id=orders",
+            "spring.security.oauth2.client.registration.reports-service.client-secret=s3cret",
+            "spring.security.oauth2.client.registration.reports-service.authorization-grant-type=client_credentials",
+            "spring.security.oauth2.client.registration.reports-service.scope=reports.read"
+        })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class ReportsClientOAuth2IT {
+
+    @Configuration
+    @ImportAutoConfiguration({OAuth2ClientAutoConfiguration.class, RestClientAutoConfiguration.class, HttpClientAutoConfiguration.class})
+    @Import(ReportsRestClientConfig.class)
+    static class TestApp {}
+
+    private static final AtomicInteger TOKENS_ISSUED = new AtomicInteger();
+    private static final AtomicReference<String> TOKEN_ENDPOINT_MODE = new AtomicReference<>("ok");
+    private static final AtomicReference<String> REVOKED_TOKEN = new AtomicReference<>("");
+    private static final List<String> TOKEN_REQUESTS = new CopyOnWriteArrayList<>();
+    private static final List<String> API_AUTHORIZATIONS = new CopyOnWriteArrayList<>();
+    private static final HttpServer TOKEN_SERVER = start(ReportsClientOAuth2IT::tokenEndpoint);
+    private static final HttpServer API_SERVER = start(ReportsClientOAuth2IT::api);
+
+    @Autowired private ReportsClient client;
+
+    @DynamicPropertySource
+    static void stubs(final DynamicPropertyRegistry registry) {
+        registry.add("reports.base-url", () -> "http://localhost:" + API_SERVER.getAddress().getPort());
+        registry.add(
+                "spring.security.oauth2.client.provider.reports-idp.token-uri",
+                () -> "http://localhost:" + TOKEN_SERVER.getAddress().getPort() + "/token");
+    }
+
+    @AfterAll
+    static void stopStubs() {
+        TOKEN_SERVER.stop(0);
+        API_SERVER.stop(0);
+    }
+
+    @BeforeEach
+    void resetStubs() {
+        TOKENS_ISSUED.set(0);
+        TOKEN_ENDPOINT_MODE.set("ok");
+        REVOKED_TOKEN.set("");
+        TOKEN_REQUESTS.clear();
+        API_AUTHORIZATIONS.clear();
+    }
+
+    @Test
+    void fetch_threeCalls_fetchOneTokenAndCacheIt() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            assertThat(client.fetch("r-1").title()).isEqualTo("Q1");
+        }
+
+        assertThat(TOKENS_ISSUED).hasValue(1);
+        assertThat(TOKEN_REQUESTS).hasSize(1);
+        assertThat(TOKEN_REQUESTS.get(0)).contains("authorization=Basic ").contains("grant_type=client_credentials").contains("scope=reports.read");
+        assertThat(API_AUTHORIZATIONS).containsExactly("Bearer token-1", "Bearer token-1", "Bearer token-1");
+    }
+
+    @Test
+    void fetch_revokedToken_isEvictedAndTheCallIsReplayedOnceWithANewToken() throws Exception {
+        assertThat(client.fetch("r-1").title()).isEqualTo("Q1");
+        REVOKED_TOKEN.set("token-1");
+
+        assertThat(client.fetch("r-1").title()).isEqualTo("Q1");
+
+        assertThat(TOKENS_ISSUED).hasValue(2);
+        assertThat(API_AUTHORIZATIONS).containsExactly("Bearer token-1", "Bearer token-1", "Bearer token-2");
+    }
+
+    @Test
+    void fetch_tokenEndpointRefusesTheClient_isUnavailableAndTheApiIsNeverCalled() {
+        TOKEN_ENDPOINT_MODE.set("unauthorized");
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(UnavailableException.class);
+
+        assertThat(API_AUTHORIZATIONS).isEmpty();
+    }
+
+    @Test
+    void fetch_tokenEndpointDown_isUnavailable() {
+        TOKEN_ENDPOINT_MODE.set("error");
+
+        assertThatThrownBy(() -> client.fetch("r-1")).isInstanceOf(UnavailableException.class);
+
+        assertThat(API_AUTHORIZATIONS).isEmpty();
+    }
+
+    private static HttpServer start(final Handler handler) {
+        try {
+            final HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+            server.createContext("/", exchange -> {
+                try (exchange) {
+                    handler.handle(exchange);
+                }
+            });
+            server.start();
+            return server;
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static void tokenEndpoint(final HttpExchange exchange) throws IOException {
+        TOKEN_REQUESTS.add("authorization=" + exchange.getRequestHeaders().getFirst("Authorization") + "&"
+                + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        switch (String.valueOf(TOKEN_ENDPOINT_MODE.get())) {
+            case "unauthorized" -> respond(exchange, 401, "{\"error\":\"invalid_client\"}");
+            case "error" -> respond(exchange, 500, "{\"error\":\"server_error\"}");
+            default ->
+                respond(exchange, 200, "{\"access_token\":\"token-" + TOKENS_ISSUED.incrementAndGet()
+                        + "\",\"token_type\":\"Bearer\",\"expires_in\":3600,\"scope\":\"reports.read\"}");
+        }
+    }
+
+    private static void api(final HttpExchange exchange) throws IOException {
+        final String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+        API_AUTHORIZATIONS.add(authorization);
+        if (("Bearer " + REVOKED_TOKEN.get()).equals(authorization)) {
+            respond(exchange, 401, "{\"error\":\"invalid_token\"}");
+            return;
+        }
+        respond(exchange, 200, "{\"id\":\"r-1\",\"title\":\"Q1\"}");
+    }
+
+    private static void respond(final HttpExchange exchange, final int status, final String body) throws IOException {
+        final byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, bytes.length);
+        exchange.getResponseBody().write(bytes);
+    }
+
+    @FunctionalInterface
+    private interface Handler {
+        void handle(HttpExchange exchange) throws IOException;
+    }
+}

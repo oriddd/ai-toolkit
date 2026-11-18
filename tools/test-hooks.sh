@@ -5,7 +5,14 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUARD="$ROOT/plugins/ai-toolkit-workflow/hooks/guard-git.sh"
 fail=0
-mk_json() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1"; }
+mk_json() {
+  local in out
+  in="$(mktemp)"; out="$(mktemp)"
+  printf '%s' "$1" > "$in"
+  python3 -c 'import json,sys; c=open(sys.argv[1],newline="",encoding="utf-8",errors="surrogateescape").read(); open(sys.argv[2],"w",encoding="utf-8",errors="surrogateescape").write(json.dumps({"tool_name":"Bash","tool_input":{"command":c}}, ensure_ascii=True)+"\n")' "$in" "$out"
+  cat "$out"
+  rm -f "$in" "$out"
+}
 expect_ask()   { out="$(mk_json "$1" | "$GUARD")"; if grep -q '"permissionDecision": "ask"' <<<"$out"; then :; else echo "FAIL (should ask): $1"; fail=1; fi; }
 expect_quiet() { out="$(mk_json "$1" | "$GUARD")"; if [ -n "$out" ]; then echo "FAIL (should be quiet): $1"; fail=1; fi; }
 
@@ -125,7 +132,7 @@ for payload in '' '{' 'null' '[]' '{"tool_input":null}' '{"tool_input":{"command
   chk_rc "odd payload $payload" bash -c 'printf "%s" "$1" | "$2"' _ "$payload" "$GUARD"
 done
 chk_rc "invalid utf-8" bash -c 'printf "{\"tool_input\":{\"command\":\"echo \xe6\xff\"}}" | "$1"' _ "$GUARD"
-long="$(python3 -c 'print("echo " + "x"*400000)')"
+long="echo $(head -c 400000 /dev/zero | tr '\0' x)"
 start=$(date +%s); mk_json "$long" | "$GUARD" >/dev/null; [ $(( $(date +%s) - start )) -le 10 ] || { echo "FAIL: 400 KB command took too long (a hang, not a slow runner)"; fail=1; }
 # missing parser file => exit 0 and the grep fallback still asks for a plain commit
 HD="$(mktemp -d)"; cp "$GUARD" "$HD/guard-git.sh"; chmod +x "$HD/guard-git.sh"

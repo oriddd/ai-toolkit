@@ -229,7 +229,7 @@ Rules:
   `OAuth2AuthorizationException` (`ClientAuthorizationException`) from the interceptor, not as
   `ResourceAccessException`: catch both around the call and map them to `UnavailableException`
   (`catch (ResourceAccessException | ClientAuthorizationException e)`); the API is not called at all in that case.
-- Proven against a stub token endpoint + stub API: one token request for three calls (Basic auth + `scope` in the
+- Proven by the shipped [`ReportsClientOAuth2IT`](../templates/ReportsClientOAuth2IT.java.tmpl) and [`ReportsClientTest`](../templates/ReportsClientTest.java.tmpl) (run by `tools/render-java-proof.sh`) against a stub token endpoint + stub API (earlier manual runs also covered): one token request for three calls (Basic auth + `scope` in the
   request), a new token once the old one is within the 60 s clock skew of its expiry, a revoked token replaced and the
   call succeeding on the replay, a token endpoint answering 401 or 500 → `UnavailableException`, API 503 →
   `UnavailableException`, API 403 → `DependencyException`.

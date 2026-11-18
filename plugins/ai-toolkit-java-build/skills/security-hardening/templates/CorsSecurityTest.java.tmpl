@@ -1,0 +1,121 @@
+package {{basePackage}}.security;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.config.CorsConfig;
+import {{basePackage}}.config.ProblemDetailSecurityHandler;
+import {{basePackage}}.config.SecurityConfig;
+import {{basePackage}}.controller.{{ControllerClass}};
+import {{basePackage}}.exception.handler.GlobalExceptionHandler;
+import {{basePackage}}.monitor.parser.ClientIdParser;   // [request-metrics]
+import {{basePackage}}.monitor.parser.MetricNameResolver;   // [request-metrics]
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;   // [request-metrics]
+import {{basePackage}}.operation.{{OperationClass}};
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(
+        controllers = {{ControllerClass}}.class,
+        properties = {
+            "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test",
+            "security.cors.allowed-origins=https://app.example.test"
+        })
+@Import({
+    SecurityConfig.class,
+    ProblemDetailSecurityHandler.class,
+    GlobalExceptionHandler.class,
+    CorsConfig.class,
+    CorsSecurityTest.MeterRegistryConfiguration.class
+})
+class CorsSecurityTest {
+
+    private static final String ALLOWED_ORIGIN = "https://app.example.test";
+    private static final String OTHER_ORIGIN = "https://evil.example.test";
+
+    @TestConfiguration
+    static class MeterRegistryConfiguration {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
+    @Autowired MockMvc mvc;
+    @MockitoBean {{OperationClass}} operation;
+    @MockitoBean JwtDecoder jwtDecoder;
+    // [request-metrics:begin]
+    @MockitoBean MetricNameResolver metricNameResolver;
+    @MockitoBean MetricsRecorderRegistry metricsRecorderRegistry;
+    @MockitoBean ClientIdParser clientIdParser;
+    // [request-metrics:end]
+
+    @Test
+    void preflight_listedOrigin_isAllowedWithMaxAgeAndNoCredentials() throws Exception {
+        mvc.perform(options("{{apiPath}}")
+                        .header("Origin", ALLOWED_ORIGIN)
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Authorization,Idempotency-Key"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN))
+                .andExpect(header().string("Access-Control-Max-Age", "3600"))
+                .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+    }
+
+    @Test
+    void preflight_unlistedOrigin_isRefused() throws Exception {
+        mvc.perform(options("{{apiPath}}")
+                        .header("Origin", OTHER_ORIGIN)
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    void preflight_methodOutsideTheAllowList_isRefused() throws Exception {
+        mvc.perform(options("{{apiPath}}")
+                        .header("Origin", ALLOWED_ORIGIN)
+                        .header("Access-Control-Request-Method", "TRACE"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void preflight_headerOutsideTheAllowList_isRefused() throws Exception {
+        mvc.perform(options("{{apiPath}}")
+                        .header("Origin", ALLOWED_ORIGIN)
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "X-Evil"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void actualRequest_listedOrigin_carriesTheAllowOriginHeader() throws Exception {
+        mvc.perform(get("{{apiPath}}")
+                        .header("Origin", ALLOWED_ORIGIN)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN));
+    }
+
+    @Test
+    void actualRequest_unlistedOrigin_isRefused() throws Exception {
+        mvc.perform(get("{{apiPath}}")
+                        .header("Origin", OTHER_ORIGIN)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+}
