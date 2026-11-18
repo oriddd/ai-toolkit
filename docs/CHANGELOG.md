@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Proportionality and review-round budget (2026-11-18)
+
+- `code-hygiene` (quality 1.6.0) gains a Proportionality section: state the requirements and the confirmed deployed topology, trace every new class, config key and chart value to a requirement, treat a diff far larger than the feature as a design smell to raise before adding more, keep broker/cache/cluster settings internal to the app or a chart helper, question an optional mechanism instead of patching its symptoms, and budget one review plus one fix pass per request. `completion-gate` check 1 (Scope) and the failure rules point to it.
+
 ### Java executable proofs and last fixes (2026-11-18)
 
 - `tools/render-java-proof.sh` now also renders and runs: data-privacy (AES-GCM converter, blind index, last-4 masking, retention, erasure), security-hardening (CORS, headers/HSTS, SSRF allow-list), the request-metrics Filter/Recorder/Parser stack, a graceful-shutdown test with a real in-flight request, Bucket4j and Resilience4j rate limiting (Redis adapter with `--with-it`), the external-client OAuth2 integration test (revoked token evicted and replayed once), a Kafka broker-outage integration test for the outbox relay, and `ProductionSecurityChainTest` (real security chain, 8 cases) in the default run. Last green run: 322 unit and component tests, 15 integration tests, JaCoCo 99.9% line / 96.2% branch, PIT 97%.

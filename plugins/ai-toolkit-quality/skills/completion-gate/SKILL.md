@@ -45,7 +45,7 @@ Run in order. On a failure fix the root cause, then restart from the build (a fi
 
 | # | Check | Passes when |
 | --- | --- | --- |
-| 1 | **Scope** | `git status` / `git diff --stat` show only files that belong to the task — no debug output, generated noise, formatting churn or stray files. |
+| 1 | **Scope** | `git status` / `git diff --stat` show only files that belong to the task — no debug output, generated noise, formatting churn or stray files — and the size is proportionate to the stated requirements (`code-hygiene` §5). |
 | 2 | **Build** | A clean build of the whole project succeeds. |
 | 3 | **Tests** | The **full** suite passes, not only the new tests. |
 | 4 | **Static analysis** | The language's lint, format and type/analysis checks pass (`static-analysis` skill of the language). |
@@ -93,7 +93,7 @@ One row per gate check, columns Check, Command, Result (Java shown; use the §3 
 | Static analysis | (part of verify)                | pass                                |
 | Standards       | code-review agent               | pass — no findings                  |
 | Coverage        | diff-cover jacoco.xml           | pass — 2 uncovered lines: <why>     |
-| Hygiene         | code-hygiene §5 on git diff     | pass                                |
+| Hygiene         | code-hygiene §5-6 on git diff   | pass                                |
 | Sonar           | read CI gate status             | not verified — no SONAR_TOKEN       |
 | Docs            | context-maintenance             | pass — progress-tracker.md updated  |
 ```
@@ -111,6 +111,7 @@ turn a skipped check into a pass.
   formatting and static analysis by design (Java non-negotiable 14, `openapi-first-codegen`).
 - A flaky or pre-existing failure is reported, not hidden: say which check, which test, and that it predates the change.
 - If you cannot make it pass, stop and report what is failing and why instead of declaring done.
+- Do not loop: one review and one fix pass per request. When a second round would mostly add code, config or tests around an optional mechanism, report that and propose the smaller design instead (`code-hygiene` §5).
 
 ## 6. Delegation
 

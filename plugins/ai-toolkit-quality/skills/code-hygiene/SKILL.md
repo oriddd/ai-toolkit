@@ -9,8 +9,8 @@ applies_to: [rest, event, scheduler, library, monolith, worker, cli, mobile]
 depends_on: []
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-15
+version: 1.1
+last_reviewed: 2026-11-18
 ---
 
 # Code Hygiene Skill
@@ -65,7 +65,18 @@ such a test; every other test must justify itself the same way.
 - New dependency? Justify it or remove it.
 - Generated files, build output, local config and secrets are never part of the diff.
 
-## 5. Self-review procedure
+## 5. Proportionality
+
+A diff can be clean line by line and still too big. Before building and again before saying done:
+
+1. **State the requirements** in one sentence each, with the deployed topology (replicas, regions, tenants) the developer confirmed. Ask when it is unknown; never assume the default.
+2. **Trace every new class, config key and chart value to a requirement.** No requirement, no code. A mechanism that serves a stricter guarantee than the stated one (exactly-once where "no duplicate, log the loss" was asked) is scope creep.
+3. **Compare size to the feature.** A diff of hundreds of files or thousands of lines for one behaviour is a design smell: stop, name the part that is infrastructure rather than behaviour, and offer the developer the smaller design or a split into PRs before adding more.
+4. **Infrastructure stays internal.** Broker, cache, cluster and discovery settings (ports, DNS names, tuning) are derived by the app or a chart helper. The chart exposes an on/off switch and what operators must really tune.
+5. **Findings that come from an optional mechanism** (a lock, a cluster, a lease) call for questioning the mechanism, not patching each symptom with more code, config and tests.
+6. **Review rounds are budgeted:** one review and one fix pass per request. Another round runs only when the developer asks, and it reports what each earlier round cost in added lines.
+
+## 6. Self-review procedure
 
 1. `git diff` (and `git status` for untracked files) — read every hunk as a reviewer.
 2. Scan added lines for the comment, test and dead-code smells above; grep the diff for
@@ -78,6 +89,7 @@ such a test; every other test must justify itself the same way.
 - ❌ Javadoc / docstring / JSDoc on every method "for completeness".
 - ❌ A test per getter to hit a coverage number.
 - ❌ Keeping a redundant test "just in case".
+- ❌ Building the strictest guarantee when the requirement was weaker, then hardening the machinery round after round.
 - ✅ Small diff, self-explanatory names, each test pins a behaviour.
 
 ## Cross-references
