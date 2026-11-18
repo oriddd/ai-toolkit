@@ -44,7 +44,8 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
     `service/`, `repository/`, `analyzer/` (or the `job/` / `handler/`
     packages a scheduler-type service uses, see `project-types`), and its own logger. Flag any
     scheduler that injects a `*Client`, `WebClient`, SDK stub, or reads
-    infrastructure `@Value` fields directly.
+    infrastructure `@Value` fields directly. Exempt: the `messaging` outbox relay, an infrastructure poller whose job is to
+    inject the broker producer; it still carries no business logic.
 
 10. **Logging** — `@Slf4j` (or `@Log4j2`, only when the service uses
     `spring-boot-starter-log4j2` instead of the default Logback); no `System.out`; no logging of secrets

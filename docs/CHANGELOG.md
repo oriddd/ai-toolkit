@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Draft plugin versions (2026-11-18)
 
 - Python and React Native plugins (phase and meta) are `1.1.0`. They were `0.x` after being `1.0.0` at the marketplace restructure, so installs made at `1.0.0` never saw an update; the experimental status stays in each plugin description.
+- Scheduler rule: the `messaging` outbox relay is an infrastructure poller and is exempt from `project-types` "never mix project types", quality-review 9e and the `code-structure` scheduler rule. Outbox relay: `lockAtMostFor` must stay above `batch × send timeout`; the guarantee is at-least-once with idempotent consumers. `static-analysis` `checkstyle.xml` now enforces F21 (complexity 10), F26 (NCSS 500) and F27 (fan-out 25) at warning severity.
 - Fact-check fixes: `spring-boot-conventions` dates the `PageImpl` warning (Spring Data 3.1) and the `serialization-mode` property (Boot 3.4+); `observability` names the Boot 4 OTLP endpoint key; `health-indicator` states how placeholders render; `docs/README.md` counts 48 quality-review items; `prepare-for-publish.sh` matches attribution case-insensitively and for more AI tools.
 
 ### Proportionality and review-round budget (2026-11-18)

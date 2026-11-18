@@ -205,7 +205,7 @@ Each layer in the hierarchy has a specific, focused responsibility:
   `service/`, `repository/`, and `analyzer/`. A scheduler that queries a
   client directly, builds its own query strings, or re-implements analysis
   logic is a duplication smell → move the logic into `repository/` or
-  `analyzer/` and inject it.
+  `analyzer/` and inject it. Exempt: the `messaging` outbox relay.
 - **Models** are immutable where possible (records, or `@lombok.Value` — never Spring's `@Value`).
 - Cross-cutting concerns (`permission`, `monitor`, `renderer`, `analyzer`)
   live in their own packages and are wired via Spring DI.

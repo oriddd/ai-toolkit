@@ -129,6 +129,8 @@ ArchUnit layer rules and in `quality-review` B6.
 maintainers don't have to reverse-engineer it.
 ❌ Never mix project types in one repo (HTTP API **and** scheduler **and**
 event consumer all in one deployable) — split them, share via libraries.
+Infrastructure pollers that another skill mandates, such as the `messaging` outbox relay, are not a project type and
+are exempt: only business entry points count.
 ❌ Never "upgrade" a Type C scheduler to a Type A REST service by bolting on
 controllers — start a new repo.
 

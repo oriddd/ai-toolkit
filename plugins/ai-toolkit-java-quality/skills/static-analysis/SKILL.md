@@ -30,7 +30,7 @@ on objective violations.
 | **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, threshold Medium; fail on any HIGH and any MEDIUM not in the baseline |
 | **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepExcludedPaths` skips generated sources (`-XepDisableWarningsInGeneratedCode` only silences warnings) |
 | **NullAway** | Null-safety: every reference is annotated `@Nullable` or assumed non-null | Annotated packages only |
-| **Checkstyle** | Team-specific rules: method length, file length, parameter count (`quality-review` F22–F24) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
+| **Checkstyle** | Team-specific rules: method length, file length, parameter count, complexity, fan-out, NCSS (`quality-review` F21–F24, F26, F27) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
 | **PMD** (optional) | Method/class size, complexity (overlaps with `quality-review`) | Often dropped in favour of SpotBugs + Sonar |
 | **Sonar** (optional) | Aggregated quality dashboard, hotspots | CI step that uploads to SonarCloud / SonarQube |
 
@@ -139,9 +139,9 @@ on objective violations.
 </build>
 ```
 
-Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F22–F24
+Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F21–F24, F26 and F27
 thresholds (add team-specific modules below these). The severities match
-quality-review: F22 and F24 are **WARN** there, so Checkstyle reports them
+quality-review: all of them except F23 are **WARN** there, so Checkstyle reports them
 without failing the build; only the F23 limit (300 lines) is an
 error. The plugin configuration above uses `<violationSeverity>error</violationSeverity>`,
 so warnings are printed but do not break the build:
@@ -168,6 +168,18 @@ so warnings are printed but do not break the build:
       <property name="max" value="4"/>
       <property name="ignoreOverriddenMethods" value="true"/>
       <property name="tokens" value="METHOD_DEF"/>
+    </module>
+    <!-- F21 cyclomatic complexity (WARN) -->
+    <module name="CyclomaticComplexity">
+      <property name="max" value="10"/>
+    </module>
+    <!-- F27 class fan-out (WARN) -->
+    <module name="ClassFanOutComplexity">
+      <property name="max" value="25"/>
+    </module>
+    <!-- F26 NCSS per file (WARN) -->
+    <module name="JavaNCSS">
+      <property name="fileMaximum" value="500"/>
     </module>
   </module>
 </module>

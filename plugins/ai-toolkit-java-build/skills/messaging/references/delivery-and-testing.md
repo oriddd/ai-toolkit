@@ -68,7 +68,7 @@ the path it serves.
 ```java
 @Configuration
 @EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "PT1M")
+@EnableSchedulerLock(defaultLockAtMostFor = "PT1M")          // the relay overrides it: keep lockAtMostFor > batch x send timeout
 @Profile("!component-test")                                  // component tests have no DataSource (component-tests §3b)
 class ShedLockConfig {
     @Bean
@@ -80,6 +80,8 @@ class ShedLockConfig {
     }
 }
 ```
+
+The lock is only a lease: keep the relay's `lockAtMostFor` above `batch × send timeout` (default 100 × 5 s), or a slow batch outlives it and a second pod republishes the same rows. Delivery is therefore at-least-once: consumers stay idempotent (`IdempotentConsumer`), and strict per-aggregate order across pods holds only while the lease does.
 
 ```sql
 -- V00x__create_shedlock.sql
