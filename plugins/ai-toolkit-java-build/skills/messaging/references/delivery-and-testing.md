@@ -68,7 +68,7 @@ the path it serves.
 ```java
 @Configuration
 @EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "PT1M")
+@EnableSchedulerLock(defaultLockAtMostFor = "PT1M")          // the relay overrides it: keep lockAtMostFor > batch x send timeout
 @Profile("!component-test")                                  // component tests have no DataSource (component-tests §3b)
 class ShedLockConfig {
     @Bean
@@ -80,6 +80,8 @@ class ShedLockConfig {
     }
 }
 ```
+
+The lock is only a lease: keep the relay's `lockAtMostFor` above `batch × send timeout` (default 100 × 5 s), or a slow batch outlives it and a second pod republishes the same rows. Delivery is therefore at-least-once: consumers stay idempotent (`IdempotentConsumer`), and strict per-aggregate order across pods holds only while the lease does.
 
 ```sql
 -- V00x__create_shedlock.sql
@@ -104,6 +106,16 @@ CREATE TABLE shedlock (
   overrides): outbox row → relay → record with the `event-id` header → consumer effect, row marked published, ShedLock row
   created; the same `event-id` twice → one effect; missing header or invalid JSON → `<topic>-dlt` without retries; a failing
   effect → retry topics, then DLT, and no `processed_events` row left behind.
+- Verified outbox run (Postgres 16 + `apache/kafka:3.9.1`, two application contexts on one database): a checked
+  exception after `append` rolls the entity row and the outbox row back together; `append` outside a transaction is
+  refused (`MANDATORY`); rows written by a context that is then shut down are published, in order, by the next
+  context (restart); a failure between the broker ack and `markPublished` publishes the row again on the next tick (6
+  records for 4 events) and the consumer's `processed_events` gate keeps the effect at 4; a paused broker leaves the
+  row unpublished (the relay logs and stops) and `unpause` publishes it (executed by the shipped
+  [`OutboxBrokerOutageIT`](../templates/OutboxBrokerOutageIT.java.tmpl): events relayed, broker paused mid-relay, new rows stay
+  unpublished and none is lost, broker resumed, every row published, a duplicate record delivered on top, and the
+  `processed_events` gate plus the spied `processEvent` show exactly one effect per event); the record carries `event-id`, the aggregate
+  id as key and `traceparent`; the `shedlock` row exists.
 - The outbox relay is unit-tested with a fake clock; the at-least-once
   consumer is integration-tested by publishing the same event twice and
   asserting one effect.

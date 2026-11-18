@@ -1,0 +1,128 @@
+package {{basePackage}}.monitor.parser;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.monitor.MonitoringConstants;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
+class ParsersTest {
+
+    private final RequestMethodParser methodParser = new RequestMethodParser();
+    private final ResponseStatusParser statusParser = new ResponseStatusParser();
+    private final ClientIdParser clientIdParser = new ClientIdParser();
+    private final ExportFormatParser formatParser = new ExportFormatParser();
+
+    @Test
+    void parseRequestMethod_request_returnsTheHttpMethod() {
+        assertThat(methodParser.parseRequestMethod(new MockHttpServletRequest("PATCH", "/x"))).isEqualTo("PATCH");
+    }
+
+    @Test
+    void parseRequestMethod_nullRequest_returnsUnknown() {
+        assertThat(methodParser.parseRequestMethod(null)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseRequestMethod_requestWithoutMethod_returnsUnknown() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod(null);
+
+        assertThat(methodParser.parseRequestMethod(request)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseResponseStatus_response_returnsTheStatusString() {
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setStatus(404);
+
+        assertThat(statusParser.parseResponseStatus(response)).isEqualTo("404");
+    }
+
+    @Test
+    void parseResponseStatus_nullResponse_returnsUnknown() {
+        assertThat(statusParser.parseResponseStatus(null)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseClientId_capturedAttribute_winsOverThePrincipal() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE, "captured");
+
+        assertThat(clientIdParser.parseClientId(request)).isEqualTo("captured");
+    }
+
+    @Test
+    void parseClientId_jwtWithAuthorizedParty_returnsTheAzpClaim() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setUserPrincipal(new JwtAuthenticationToken(jwtWith(Map.of("azp", "web-app"))));
+
+        assertThat(clientIdParser.parseClientId(request)).isEqualTo("web-app");
+    }
+
+    @Test
+    void parseClientId_jwtWithoutAuthorizedParty_returnsUnknown() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setUserPrincipal(new JwtAuthenticationToken(jwtWith(Map.of("scope", "read"))));
+
+        assertThat(clientIdParser.parseClientId(request)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseClientId_basicAuthentication_returnsBasic() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setUserPrincipal(new UsernamePasswordAuthenticationToken("alice", "secret"));
+
+        assertThat(clientIdParser.parseClientId(request)).isEqualTo(MonitoringConstants.BASIC);
+    }
+
+    @Test
+    void parseClientId_noPrincipalOrNullRequest_returnsUnknown() {
+        assertThat(clientIdParser.parseClientId(new MockHttpServletRequest())).isEqualTo(MonitoringConstants.UNKNOWN);
+        assertThat(clientIdParser.parseClientId(null)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseClientId_principalLookupFails_returnsUnknownInsteadOfFailingTheRequest() {
+        final MockHttpServletRequest request = mock(MockHttpServletRequest.class);
+        when(request.getUserPrincipal()).thenThrow(new IllegalStateException("broken"));
+
+        assertThat(clientIdParser.parseClientId(request)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    @Test
+    void parseExportFormat_knownFormat_isNormalisedToLowerCase() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setParameter("format", "CSV");
+
+        assertThat(formatParser.parseExportFormat(request)).isEqualTo("csv");
+    }
+
+    @Test
+    void parseExportFormat_callerSuppliedValue_isNeverUsedAsATag() {
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setParameter("format", "x-" + System.nanoTime());
+
+        assertThat(formatParser.parseExportFormat(request)).isEqualTo(MonitoringConstants.OTHER);
+    }
+
+    @Test
+    void parseExportFormat_missingOrBlank_returnsUnknown() {
+        final MockHttpServletRequest blank = new MockHttpServletRequest();
+        blank.setParameter("format", "  ");
+
+        assertThat(formatParser.parseExportFormat(new MockHttpServletRequest())).isEqualTo(MonitoringConstants.UNKNOWN);
+        assertThat(formatParser.parseExportFormat(blank)).isEqualTo(MonitoringConstants.UNKNOWN);
+    }
+
+    private static Jwt jwtWith(final Map<String, Object> claims) {
+        return Jwt.withTokenValue("t").header("alg", "none").claims(c -> c.putAll(claims)).claim("sub", "s").build();
+    }
+}

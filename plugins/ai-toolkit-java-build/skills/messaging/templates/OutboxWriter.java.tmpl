@@ -1,0 +1,54 @@
+package {{basePackage}}.messaging;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
+import java.time.Clock;
+import java.util.HashMap;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+/** Appends the event to the outbox inside the caller's transaction; MANDATORY refuses to run without one. */
+@Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class OutboxWriter {
+    private final OutboxRepository outboxRepo;
+    private final ObjectMapper objectMapper;
+    private final Clock clock;
+    private final ObjectProvider<Tracer> tracer;
+    private final ObjectProvider<Propagator> propagator;
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
+    public void append(String aggregateType, String aggregateId, Object event) {
+        outboxRepo.save(new OutboxEntity(aggregateType, aggregateId, event.getClass().getSimpleName(),
+                toJson(event), currentTraceparent(), clock.instant()));
+    }
+    private String toJson(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Event is not serialisable: " + event.getClass().getName(), e);
+        }
+    }
+    private @Nullable String currentTraceparent() {
+        Tracer t = tracer.getIfAvailable();
+        Propagator p = propagator.getIfAvailable();
+        if (t == null || p == null) {
+            return null;
+        }
+        TraceContext context = t.currentTraceContext().context();
+        if (context == null) {
+            return null;
+        }
+        Map<String, String> carrier = new HashMap<>();
+        p.inject(context, carrier, Map::put);
+        return carrier.get("traceparent");
+    }
+}

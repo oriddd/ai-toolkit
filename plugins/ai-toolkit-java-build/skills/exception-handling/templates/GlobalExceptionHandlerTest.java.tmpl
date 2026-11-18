@@ -1,0 +1,367 @@
+package {{basePackage}}.exception.handler;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.exception.BaseDomainException;
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.TooManyRequestsException;
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import jakarta.validation.ConstraintViolation;   // [validation]
+import jakarta.validation.ConstraintViolationException;   // [validation]
+import jakarta.validation.Valid;   // [validation]
+import jakarta.validation.Validation;   // [validation]
+import jakarta.validation.ValidationException;   // [validation]
+import jakarta.validation.constraints.Min;   // [validation]
+import jakarta.validation.constraints.NotBlank;   // [validation]
+import java.time.Duration;
+import java.util.Objects;
+import java.util.Set;   // [validation]
+import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.OptimisticLockingFailureException;   // [persistence]
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.access.AccessDeniedException;   // [security]
+import org.springframework.security.authentication.BadCredentialsException;   // [security]
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;   // [validation]
+import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;   // [validation]
+import org.springframework.web.bind.annotation.PostMapping;   // [validation]
+import org.springframework.web.bind.annotation.RequestBody;   // [validation]
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.ServletWebRequest;
+
+class GlobalExceptionHandlerTest {
+
+    private static final String PROBLEM_JSON = MediaType.APPLICATION_PROBLEM_JSON_VALUE;
+    private static final String INTERNAL_DETAIL = "Internal server error";
+
+    @RestController
+    static class FailingController {
+        private final Exception failure;
+
+        FailingController(Exception failure) {
+            this.failure = failure;
+        }
+
+        @GetMapping("/fail")
+        String fail() throws Exception {
+            throw failure;
+        }
+
+    // [validation:begin]
+        @PostMapping("/orders")
+        String create(@Valid @RequestBody OrderRequest body) {
+            return body.name();
+        }
+
+        @GetMapping("/orders/{id}")
+        String find(@PathVariable @Min(1) int id) {
+            return String.valueOf(id);
+        }
+    // [validation:end]
+    }
+
+    // [validation:begin]
+    record OrderRequest(@NotBlank String name) {}
+
+    // [validation:end]
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    private MockMvc mvcFailingWith(Exception failure) {
+    // [validation:begin]
+        final LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+    // [validation:end]
+        return MockMvcBuilders.standaloneSetup(new FailingController(failure))
+                .setControllerAdvice(handler)
+                .setMessageConverters(new MappingJackson2HttpMessageConverter())
+    // [validation:begin]
+                .setValidator(validator)
+    // [validation:end]
+                .build();
+    }
+
+    static Stream<Arguments> domainFailures() {
+        return Stream.of(
+                Arguments.of(
+                        ExceptionMessages.resourceNotFound("Invoice", "7"),
+                        404,
+                        ExceptionMessages.ERR_NOT_FOUND,
+                        "Invoice with id '7' was not found."),
+                Arguments.of(
+                        ExceptionMessages.versionConflict("Invoice", "7"),
+                        409,
+                        ExceptionMessages.ERR_CONFLICT,
+                        "Invoice '7' was modified concurrently."),
+                Arguments.of(
+                        ExceptionMessages.invalidField("amount", "must be positive"),
+                        400,
+                        ExceptionMessages.ERR_BAD_REQUEST,
+                        "Field 'amount' is invalid: must be positive"),
+                Arguments.of(
+                        ExceptionMessages.accessDenied("invoice-7"),
+                        403,
+                        ExceptionMessages.ERR_FORBIDDEN,
+                        "Access denied to 'invoice-7'."),
+                Arguments.of(
+                        ExceptionMessages.unsupportedApiVersion("[V1]"),
+                        406,
+                        ExceptionMessages.ERR_UNSUPPORTED_API_VERSION,
+                        "Unsupported API version. Supported versions: [V1]"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("domainFailures")
+    void domainException_mapsToItsStatusAndCatalogueCode(
+            BaseDomainException failure, int status, String errorCode, String detail) throws Exception {
+        mvcFailingWith(failure)
+                .perform(get("/fail"))
+                .andExpect(status().is(status))
+                .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(status))
+                .andExpect(jsonPath("$.errorCode").value(errorCode))
+                .andExpect(jsonPath("$.detail").value(detail));
+    }
+
+    @Test
+    void tooManyRequests_withRetryAfter_answers429AndRoundsRetryAfterUp() throws Exception {
+        mvcFailingWith(ExceptionMessages.rateLimitExceeded(12))
+                .perform(get("/fail"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "12"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_TOO_MANY_REQUESTS));
+    }
+
+    @Test
+    void tooManyRequests_withoutRetryAfter_answersDefault30Seconds() throws Exception {
+        mvcFailingWith(new TooManyRequestsException(ExceptionMessages.ERR_TOO_MANY_REQUESTS, "slow down"))
+                .perform(get("/fail"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "30"));
+    }
+
+    @Test
+    void unavailable_subSecondRetryAfter_answersAtLeastOneSecond() throws Exception {
+        mvcFailingWith(
+                        new UnavailableException(
+                                ExceptionMessages.ERR_UNAVAILABLE, "down", Duration.ofMillis(100)))
+                .perform(get("/fail"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "1"));
+    }
+
+    @Test
+    void unavailable_fractionalRetryAfter_roundsUp() throws Exception {
+        mvcFailingWith(
+                        new UnavailableException(
+                                ExceptionMessages.ERR_UNAVAILABLE, "down", Duration.ofMillis(1500)))
+                .perform(get("/fail"))
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "2"));
+    }
+
+    @Test
+    void unavailable_catalogueException_answers503WithOurOwnMessage() throws Exception {
+        mvcFailingWith(ExceptionMessages.dependencyUnavailable("foo", new IllegalStateException("secret")))
+                .perform(get("/fail"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "30"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_UNAVAILABLE))
+                .andExpect(jsonPath("$.detail").value("Downstream dependency foo is unavailable."));
+    }
+
+    @Test
+    void dependencyException_answers500WithGenericDetail() throws Exception {
+        final DependencyException failure = ExceptionMessages.dependencyCallFailed("foo", 418);
+
+        mvcFailingWith(failure)
+                .perform(get("/fail"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_DEPENDENCY))
+                .andExpect(jsonPath("$.detail").value(INTERNAL_DETAIL));
+    }
+
+    @Test
+    void baseDomainException_answers500WithGenericDetailAndNeverEchoesMessage() throws Exception {
+        final BaseDomainException failure = new BaseDomainException("ERR-X", "internal secret") {};
+
+        mvcFailingWith(failure)
+                .perform(get("/fail"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value("ERR-X"))
+                .andExpect(jsonPath("$.detail").value(INTERNAL_DETAIL));
+    }
+
+    @Test
+    void unexpectedRuntimeException_answers500WithGenericDetail() throws Exception {
+        mvcFailingWith(new IllegalStateException("boom: secret"))
+                .perform(get("/fail"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_INTERNAL))
+                .andExpect(jsonPath("$.detail").value(INTERNAL_DETAIL));
+    }
+
+    @Test
+    void unknownPath_springMvcError_carriesErrorCode() throws Exception {
+        mvcFailingWith(new IllegalStateException())
+                .perform(get("/no-such-path"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_NOT_FOUND));
+    }
+
+    @Test
+    void wrongVerb_springMvcError_carriesMethodNotAllowedCode() throws Exception {
+        mvcFailingWith(new IllegalStateException())
+                .perform(post("/fail"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_METHOD_NOT_ALLOWED));
+    }
+
+    private ProblemDetail springProblem(HttpStatus status, @Nullable Object body) {
+        final ResponseEntity<Object> response =
+                handler.handleExceptionInternal(
+                        new ErrorResponseException(status),
+                        body,
+                        new HttpHeaders(),
+                        status,
+                        new ServletWebRequest(new MockHttpServletRequest()));
+        return (ProblemDetail) Objects.requireNonNull(Objects.requireNonNull(response).getBody());
+    }
+
+    @Test
+    void handleExceptionInternal_bodyAlreadyHasErrorCode_keepsIt() {
+        final ProblemDetail body = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        body.setProperty("errorCode", "ERR-PRESET");
+
+        assertThat(springProblem(HttpStatus.BAD_REQUEST, body).getProperties())
+                .containsEntry("errorCode", "ERR-PRESET");
+    }
+
+    static Stream<Arguments> statusToErrorCode() {
+        return Stream.of(
+                Arguments.of(HttpStatus.UNAUTHORIZED, ExceptionMessages.ERR_UNAUTHORIZED),
+                Arguments.of(HttpStatus.FORBIDDEN, ExceptionMessages.ERR_FORBIDDEN),
+                Arguments.of(HttpStatus.NOT_FOUND, ExceptionMessages.ERR_NOT_FOUND),
+                Arguments.of(HttpStatus.METHOD_NOT_ALLOWED, ExceptionMessages.ERR_METHOD_NOT_ALLOWED),
+                Arguments.of(HttpStatus.NOT_ACCEPTABLE, ExceptionMessages.ERR_NOT_ACCEPTABLE),
+                Arguments.of(HttpStatus.CONFLICT, ExceptionMessages.ERR_CONFLICT),
+                Arguments.of(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ExceptionMessages.ERR_UNSUPPORTED_MEDIA_TYPE),
+                Arguments.of(HttpStatus.TOO_MANY_REQUESTS, ExceptionMessages.ERR_TOO_MANY_REQUESTS),
+                Arguments.of(HttpStatus.SERVICE_UNAVAILABLE, ExceptionMessages.ERR_UNAVAILABLE),
+                Arguments.of(HttpStatus.BAD_GATEWAY, ExceptionMessages.ERR_INTERNAL),
+                Arguments.of(HttpStatus.UNPROCESSABLE_ENTITY, ExceptionMessages.ERR_BAD_REQUEST));
+    }
+
+    @ParameterizedTest
+    @MethodSource("statusToErrorCode")
+    void handleExceptionInternal_springStatus_addsCatalogueErrorCode(HttpStatus status, String errorCode) {
+        assertThat(springProblem(status, null).getProperties()).containsEntry("errorCode", errorCode);
+    }
+
+    // [validation:begin]
+    @Test
+    void validBodyViolation_answers400WithFieldErrors() throws Exception {
+        mvcFailingWith(new IllegalStateException())
+                .perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_BAD_REQUEST))
+                .andExpect(jsonPath("$.detail").value("Request validation failed."))
+                .andExpect(jsonPath("$.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.errors[0].message").value("must not be blank"));
+    }
+
+    @Test
+    void parameterConstraintViolation_answers400WithParameterName() throws Exception {
+        mvcFailingWith(new IllegalStateException())
+                .perform(get("/orders/0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_BAD_REQUEST))
+                .andExpect(jsonPath("$.errors[0].field").value("id"))
+                .andExpect(jsonPath("$.errors[0].message").value("must be greater than or equal to 1"));
+    }
+
+    @Test
+    void constraintViolationException_answers400WithPropertyPath() throws Exception {
+        final Set<ConstraintViolation<OrderRequest>> violations =
+                Validation.buildDefaultValidatorFactory().getValidator().validate(new OrderRequest(" "));
+
+        mvcFailingWith(new ConstraintViolationException(violations))
+                .perform(get("/fail"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.errors[0].message").value("must not be blank"));
+    }
+
+    @Test
+    void validationException_wrappingUnavailable_answers503() throws Exception {
+        final ValidationException failure =
+                new ValidationException("rule failed", ExceptionMessages.dependencyUnavailable("rules", null));
+
+        mvcFailingWith(failure)
+                .perform(get("/fail"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
+    }
+
+    @Test
+    void validationException_otherCause_answers500WithGenericDetail() throws Exception {
+        mvcFailingWith(new ValidationException("rule failed", new IllegalStateException("bug")))
+                .perform(get("/fail"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_INTERNAL))
+                .andExpect(jsonPath("$.detail").value(INTERNAL_DETAIL));
+    }
+
+    @Test
+    void validationException_noCause_answers500() throws Exception {
+        mvcFailingWith(new ValidationException("rule failed"))
+                .perform(get("/fail"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    // [validation:end]
+    // [persistence:begin]
+    @Test
+    void optimisticLockingFailure_answers409() throws Exception {
+        mvcFailingWith(new OptimisticLockingFailureException("stale"))
+                .perform(get("/fail"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_CONFLICT));
+    }
+
+    // [persistence:end]
+    // [security:begin]
+    @Test
+    void accessDenied_isRethrownForSpringSecurity() {
+        assertThatThrownBy(() -> mvcFailingWith(new AccessDeniedException("no")).perform(get("/fail")))
+                .hasRootCauseInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void authenticationException_isRethrownForSpringSecurity() {
+        assertThatThrownBy(() -> mvcFailingWith(new BadCredentialsException("no")).perform(get("/fail")))
+                .hasRootCauseInstanceOf(BadCredentialsException.class);
+    }
+    // [security:end]
+}

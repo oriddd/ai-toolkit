@@ -78,7 +78,7 @@ def generate(out):
     def write(path, text, mode=None):
         path = os.path.join(out, path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as h:
+        with open(path, "w", encoding="utf-8", newline="\n") as h:
             h.write(text)
         if mode:
             os.chmod(path, mode)

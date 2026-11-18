@@ -39,8 +39,11 @@ my-service/
 │   ├── models/                  # pydantic request/response models + domain value objects
 │   ├── errors/                  # exception hierarchy + message catalogue (see `python-error-handling`)
 │   └── config/                  # pydantic-settings classes
-└── tests/                       # mirrors src/ one-to-one (see `python-unit-tests`)
+└── tests/                       # mirrors src/ one-to-one; a package, with an __init__.py in every directory
 ```
+
+Every directory under `src/my_service/` and `tests/` is a package (an empty `__init__.py`); `python-unit-tests` explains
+what breaks without them under pytest and mypy.
 
 Create only the packages you need; never scaffold empty ones. A growing service may group by feature
 (`orders/api`, `orders/services`, ...) with the same layer names inside each feature.
@@ -66,10 +69,19 @@ requires = ["uv_build>=0.13.7,<0.14.0"]   # written by `uv init` for the uv that
 build-backend = "uv_build"
 ```
 
+`uv init --package` also writes a `main()` with a `print` into `__init__.py` and a script entry for it: empty the
+file and delete the entry (ruff's T20 would flag it, and uvicorn starts the service, `python-persistence` §5).
 `uv_build` expects `src/<normalised project name>/__init__.py`; with another package name the build fails
 ("Expected a Python module at: src/orders_api/__init__.py"). Rename the package, or set
 `[tool.uv.build-backend] module-name = "my_service"`. Non-Python files inside the package (Alembic's
 `script.py.mako` and `versions/`) are included in the wheel without extra configuration.
+
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1b, §4, §5 | The complete `pyproject.toml` (every skill's dependencies and tool tables), settings classes, `Order` and `OrderResponse`, `Clock` and `IdGenerator` | Creating the project | [references/service-skeleton.md](./references/service-skeleton.md) |
 
 ## 2. Dependency direction
 
@@ -124,7 +136,8 @@ class CheckoutService:
 ```
 
 `Order` is the frozen domain model from `models/order.py` (`id`, `customer_id`, `total_cents`, `status`,
-`version`; see `python-persistence`).
+`version`; see `python-persistence`). `version` defaults to `1`, so a new order is built with four arguments and the
+repository hands back the stored version.
 
 Time, randomness, UUIDs and the environment are collaborators too (`Clock`, `IdGenerator`), never
 `datetime.now()` buried in logic. Wiring happens only in the composition root (`main.py`) and FastAPI
@@ -148,7 +161,7 @@ class DatabaseSettings(BaseSettings):
     def sqlalchemy_url(self) -> URL:     # the one place the secret joins the URL
         return make_url(self.url).set(password=self.password.get_secret_value())
 
-class AppSettings(BaseSettings):         # the composition root reads this once: create_app(settings)
+class AppSettings(BaseSettings):    # the composition root reads this once: create_app(settings)
     model_config = SettingsConfigDict(frozen=True)
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -168,7 +181,7 @@ class IsolatedDatabaseSettings(DatabaseSettings):    # tests/: constructor argum
         cls,
         settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,       # pydantic-settings passes all sources by keyword
+        env_settings: PydanticBaseSettingsSource,   # pydantic-settings passes sources by keyword
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:

@@ -11,13 +11,13 @@ elements (`message`, `groups`, `payload`) and declares its validator via
 `@Constraint(validatedBy = {...})`.
 
 ```java
-// annotation/EditableProductId.java
-@Constraint(validatedBy = {EditableProductIdValidator.class})
+// annotation/ValidProductId.java
+@Constraint(validatedBy = {ValidProductIdValidator.class})
 @Target({ElementType.PARAMETER, ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface EditableProductId {
-    String message() default "Product '{productId}' is not editable";   // {productId}: message parameter set by the validator
+public @interface ValidProductId {
+    String message() default "Product id '{productId}' is malformed";   // {productId}: message parameter set by the validator
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }
@@ -34,7 +34,7 @@ Rules:
   parameters (the most common case) and optionally `ElementType.FIELD` for DTO
   fields.
 - Keep the annotation name a **noun phrase** describing what it asserts (e.g.
-  `@EditableProductId`, `@ValidShippingMethod`) — not how it works.
+  `@ValidProductId`, `@ValidShippingMethod`) — not how it works.
 
 ### 2b. The validator class
 
@@ -47,17 +47,16 @@ beans works. Hibernate Validator then caches one instance per constraint and
 shares it across threads.
 
 ```java
-// validator/EditableProductIdValidator.java
+// validator/ValidProductIdValidator.java
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @Slf4j
-public class EditableProductIdValidator
-        implements ConstraintValidator<EditableProductId, String> {
+public class ValidProductIdValidator
+        implements ConstraintValidator<ValidProductId, String> {
 
-    private final ProductLookupService productLookupService;  // Spring bean from rule/
-    private final ProductEditabilityRule productEditabilityRule;  // domain rule bean
+    private final ProductIdFormatRule productIdFormatRule;  // domain rule bean: shape only, no I/O
 
     @Override
-    public void initialize(final EditableProductId annotation) {
+    public void initialize(final ValidProductId annotation) {
         // Capture any annotation attributes here (see §2d: this.allowed = Set.of(annotation.allowed())).
     }
 
@@ -68,12 +67,9 @@ public class EditableProductIdValidator
             return rejectWith(ctx, "Product ID must not be blank");
         }
 
-        // delegate to an injected lookup / rule bean — never a database or remote call written directly in the validator (input-validation SKILL: domain rule beans)
-        final String productType = productLookupService.getProductType(productId);
-
-        // "unknown" and "not editable" give the SAME message: this runs before authorization, so it must not reveal
-        // whether the product exists or what its type is (permissions §10)
-        if (productType != null && productEditabilityRule.isEditable(productType)) {
+        // shape only: the validator runs before authorization, so it never loads the resource the caller is authorized
+        // against. Existence and editability are checked in the operation, after PermissionsHandler (permissions §10).
+        if (productIdFormatRule.isWellFormed(productId)) {
             return true;
         }
         ctx.unwrap(HibernateConstraintValidatorContext.class)
@@ -135,7 +131,7 @@ public class ProductController {           // no class-level @Validated on Sprin
 
     @PatchMapping("/{productId}")
     public ResponseEntity<ProductResponse> update(
-            @PathVariable @EditableProductId String productId,
+            @PathVariable @ValidProductId String productId,
             @RequestBody @Valid UpdateProductRequest request) {
         // productId is already validated — no ad-hoc checks needed
         ...
@@ -151,7 +147,7 @@ public class ProductController {           // no class-level @Validated on Sprin
 - A controller that implements an **openapi-generator** interface inherits the generator's interface-level
   `@Validated`, so it takes the AOP path and raises `ConstraintViolationException`; the `exception-handling`
   template maps that to the same `400` shape.
-- **Spring Boot < 3.2 only:** `@Validated` on the controller class is required — without it `@EditableProductId` on a
+- **Spring Boot < 3.2 only:** `@Validated` on the controller class is required — without it `@ValidProductId` on a
   `@PathVariable` is silently ignored.
 - `@Valid` on `@RequestBody` triggers nested Jakarta validation of DTO fields. When the same method also has a
   constrained parameter, the body violations are reported in the same `HandlerMethodValidationException`.

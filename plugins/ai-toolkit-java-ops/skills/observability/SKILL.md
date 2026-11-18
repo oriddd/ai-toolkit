@@ -31,6 +31,7 @@ Metric names and tag style follow `request-metrics` (guild #24), so every metric
   kept as constants (`MonitoringConstants`). Keep cardinality bounded: values come from a closed set, with `UNKNOWN` /
   `OTHER` sentinels. **Never** a free-form id, URL, or message. `clientId` is allowed because it is the OAuth client
   (`azp`) — a small, registered set of callers — never an end-user id.
+  camelCase matches the user-tested `request-metrics` constants (`requestMethod`, `responseStatus`, `clientId`); the original observability text used snake_case only in its example and so disagreed with it, and one style per service keeps dashboards and queries uniform.
 - **Types.** `Counter` for events; `Timer` for latencies (records count +
   histogram); `Gauge` for current values (queue depth, pool size).
 - **Use the Filter + Recorder Registry pattern** from `request-metrics` so
@@ -146,13 +147,18 @@ spring:
 management.tracing.sampling.probability: 1.0
 ```
 
-These property names are for Spring Boot 3.5. Boot 4 moved the OpenTelemetry/OTLP properties and starters — check
-its migration guide before upgrading.
+These property names are for Spring Boot 3.5. Boot 4 moved the OpenTelemetry/OTLP properties and starters (the tracing
+endpoint becomes `management.opentelemetry.tracing.export.otlp.endpoint`) — check its migration guide before upgrading.
 
 Conventions:
 - W3C TraceContext headers (`traceparent`/`tracestate`) propagate
   automatically across `RestClient`/`WebClient` calls. **Never** invent
   your own correlation header.
+- Test it with `@AutoConfigureObservability`: `@SpringBootTest` disables tracing and the metrics exporters by default, so without it
+  the propagator is a no-op (no `traceparent` header is sent) and `/actuator/prometheus` answers `404`. Verified with it on Boot 3.5: `traceId` / `spanId` in MDC and
+  in the `logging.structured.format.console: logstash` JSON line, the `traceparent` header on a `RestClient` call made from the
+  request, the trace id on a `ContextPropagatingTaskDecorator` worker thread, and `callerId` on that thread only after the
+  `Slf4jThreadLocalAccessor("callerId")` registration of §2.
 - Custom spans only at meaningful boundaries (a use-case operation, an
   external call, an async hand-off). Span name = `<verb>_<noun>`
   (`export_invoice`), not the class+method name.

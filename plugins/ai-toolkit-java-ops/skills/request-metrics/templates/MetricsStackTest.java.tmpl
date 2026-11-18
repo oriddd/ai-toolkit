@@ -1,0 +1,117 @@
+package {{basePackage}}.monitor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.monitor.parser.ClientIdParser;
+import {{basePackage}}.monitor.parser.ExportFormatParser;
+import {{basePackage}}.monitor.parser.RequestMethodParser;
+import {{basePackage}}.monitor.parser.ResponseStatusParser;
+import {{basePackage}}.monitor.recorder.InvoiceMetricsRecorder;
+import {{basePackage}}.monitor.recorder.MetricsRecorder;
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+
+class MetricsStackTest {
+
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final MetricsTagsHelper tagsHelper =
+            new MetricsTagsHelper(new RequestMethodParser(), new ResponseStatusParser(), new ClientIdParser());
+    private final MetricsTimerHelper timerHelper = new MetricsTimerHelper(meters, tagsHelper);
+    private final InvoiceMetricsRecorder recorder = new InvoiceMetricsRecorder(timerHelper, new ExportFormatParser());
+
+    private final MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/invoices");
+    private final MockHttpServletResponse response = new MockHttpServletResponse();
+
+    @Test
+    void buildGenericTags_request_carriesMethodStatusAndClientIdInCamelCase() {
+        request.setAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE, "billing");
+        response.setStatus(201);
+
+        assertThat(tagsHelper.buildGenericTags(request, response))
+                .containsExactlyInAnyOrder(Tag.of("requestMethod", "POST"), Tag.of("responseStatus", "201"), Tag.of("clientId", "billing"));
+    }
+
+    @Test
+    void recordMetrics_request_registersTheDomainTimerWithTheGenericAndTheFormatTags() {
+        request.setAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE, "billing");
+        request.setParameter("format", "pdf");
+        response.setStatus(201);
+
+        recorder.recordMetrics(250, request, response);
+
+        final Timer timer = meters.get("orders.invoices.requests")
+                .tags("requestMethod", "POST", "responseStatus", "201", "clientId", "billing", "format", "pdf")
+                .timer();
+        assertThat(timer.count()).isEqualTo(1);
+        assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(250);
+    }
+
+    @Test
+    void recordMetrics_twoRequestsWithTheSameTags_shareOneTimer() {
+        recorder.recordMetrics(10, request, response);
+        recorder.recordMetrics(20, request, response);
+
+        assertThat(meters.find("orders.invoices.requests").timers()).hasSize(1);
+        assertThat(meters.get("orders.invoices.requests").timer().count()).isEqualTo(2);
+    }
+
+    @Test
+    void buildGenericTimer_request_hasTheSloBucketsOfTheHelper() {
+        final Timer timer = timerHelper.buildGenericTimer("orders.generic", request, response);
+
+        assertThat(timer.takeSnapshot().histogramCounts()).extracting(c -> c.bucket(TimeUnit.MILLISECONDS)).contains(100d, 500d, 2000d);
+        assertThat(timer.getId().getTags()).extracting(Tag::getKey).containsExactlyInAnyOrder("requestMethod", "responseStatus", "clientId");
+    }
+
+    @Test
+    void canHandle_onlyTheSupportedMetricName() {
+        assertThat(recorder.canHandle("orders.invoices.requests")).isTrue();
+        assertThat(recorder.canHandle("other.metric")).isFalse();
+        assertThat(recorder.canHandle(" ")).isFalse();
+        assertThat(recorder.canHandle(null)).isFalse();
+    }
+
+    @Test
+    void registry_routesByMetricNameAndMissingNamesAreEmpty() {
+        final MetricsRecorderRegistry registry = new MetricsRecorderRegistry(List.of(recorder));
+
+        assertThat(registry.getRecorder("orders.invoices.requests")).containsSame(recorder);
+        assertThat(registry.getRecorder("unknown")).isEqualTo(Optional.empty());
+    }
+
+    @Test
+    void registry_twoRecordersForOneMetric_failsAtStartup() {
+        final MetricsRecorder twin = mock(MetricsRecorder.class);
+        when(twin.getSupportedMetricName()).thenReturn("orders.invoices.requests");
+
+        assertThatThrownBy(() -> new MetricsRecorderRegistry(List.of(recorder, twin)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Two recorders for metric 'orders.invoices.requests'");
+    }
+
+    @Test
+    void captureInterceptor_storesTheParsedClientIdOnTheRequest() throws Exception {
+        final ClientIdParser parser = mock(ClientIdParser.class);
+        final HttpServletRequest captured = new MockHttpServletRequest();
+        when(parser.parseClientId(captured)).thenReturn("svc");
+
+        final boolean proceed = new ClientIdCaptureInterceptor(parser).preHandle(captured, response, new Object());
+
+        assertThat(proceed).isTrue();
+        assertThat(captured.getAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE)).isEqualTo("svc");
+        verify(parser).parseClientId(captured);
+    }
+}

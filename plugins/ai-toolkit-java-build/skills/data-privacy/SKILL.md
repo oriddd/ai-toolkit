@@ -4,7 +4,7 @@ description: Handle PII (Personally Identifiable Information) and GDPR requireme
 tier: must
 applies_to: [rest, event, monolith]
 depends_on: [persistence, observability, pluggable-architecture]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.0
 last_reviewed: 2026-11-11
@@ -71,10 +71,14 @@ public class MaskingSerializer extends JsonSerializer<String> {
             gen.writeNull();
             return;
         }
-        gen.writeString(value.isEmpty() ? value : value.charAt(0) + "***");   // keep nothing that identifies the person (not the last 4 characters of an email)
+        gen.writeString(value.replaceAll(".(?=.{4})", "*"));
     }
 }
 ```
+
+The default shows the last 4 characters. For short or highly identifying values (a 4-character value is shown in full;
+an e-mail's last 4 characters are rarely sensitive but a short name is), mask first-character style instead:
+`value.isEmpty() ? value : value.charAt(0) + "***"`.
 
 ## 3. PII in Database (Encryption)
 
@@ -89,6 +93,7 @@ The converter must use authenticated encryption — never `Cipher.getInstance("A
 - **Keys:** fetched from a KMS / Vault (envelope encryption: a data key wrapped by a master key), never from
   `application.yaml` or the image.
 - **Prefer a vetted library** (e.g. Google Tink `Aead`, or your KMS client's encryption SDK) over hand-written `Cipher` code.
+  The verified hand-written `EncryptionConverter` and its `FieldKeyProvider` port are in [`references/field-encryption.md`](./references/field-encryption.md).
 
 ```java
 @Entity
@@ -133,6 +138,17 @@ Define and enforce data retention periods.
 
 Every access to PII should be logged.
 - Use the observability skill to ensure that "who accessed whose data" is captured in audit logs.
+
+## 7. Templates
+
+Every class below is rendered into a service and gated (unit tests, JaCoCo, PIT) by `tools/render-java-proof.sh`; the
+Hibernate attribute conversion runs against Postgres in its `--with-it` step. Target package `privacy/`.
+
+- Encryption (§3): [`FieldKeyProvider`](./templates/FieldKeyProvider.java.tmpl) (the KMS port, including the blind-index key), [`PropertiesFieldKeyProvider`](./templates/PropertiesFieldKeyProvider.java.tmpl) + [`EncryptionProperties`](./templates/EncryptionProperties.java.tmpl) (keys from `privacy.encryption.keys.<version>` and `privacy.encryption.blind-index-key`, base64 256-bit, injected from env / a Secret, never committed; fails at startup on a missing or wrongly sized key), [`EncryptionConverter`](./templates/EncryptionConverter.java.tmpl) (AES-256-GCM, `<version>:<base64>`), [`BlindIndex`](./templates/BlindIndex.java.tmpl) (HMAC-SHA256 of the normalised value).
+- Masking (§2): [`Mask`](./templates/Mask.java.tmpl), [`MaskingSerializer`](./templates/MaskingSerializer.java.tmpl) (last 4 characters shown), [`LogMapperFactory`](./templates/LogMapperFactory.java.tmpl), example record [`UserProfile`](./templates/UserProfile.java.tmpl).
+- Retention and erasure (§4, §5): [`RetentionPurger`](./templates/RetentionPurger.java.tmpl) + [`RetentionJob`](./templates/RetentionJob.java.tmpl) + [`RetentionProperties`](./templates/RetentionProperties.java.tmpl) (published outbox rows and `processed_events` older than `privacy.retention.outbox`), [`ErasureCoordinator`](./templates/ErasureCoordinator.java.tmpl) running every [`ErasureStep`](./templates/ErasureStep.java.tmpl) (example [`OutboxErasureStep`](./templates/OutboxErasureStep.java.tmpl)) and announcing a [`SubjectErasedEvent`](./templates/SubjectErasedEvent.java.tmpl). Add one `ErasureStep` per store that holds the subject's PII.
+- Tests (copy with their class): [`EncryptionConverterTest`](./templates/EncryptionConverterTest.java.tmpl), [`EncryptionWiringTest`](./templates/EncryptionWiringTest.java.tmpl), [`PropertiesFieldKeyProviderTest`](./templates/PropertiesFieldKeyProviderTest.java.tmpl), [`BlindIndexTest`](./templates/BlindIndexTest.java.tmpl), [`MaskingTest`](./templates/MaskingTest.java.tmpl), [`RetentionPurgerTest`](./templates/RetentionPurgerTest.java.tmpl), [`RetentionJobTest`](./templates/RetentionJobTest.java.tmpl), [`ErasureCoordinatorTest`](./templates/ErasureCoordinatorTest.java.tmpl), [`OutboxErasureStepTest`](./templates/OutboxErasureStepTest.java.tmpl).
+- Test keys: put throwaway base64 keys in `src/test/resources/config/application.yaml` (merged with the main file, never shipped); the retention, erasure and `@Convert` paths need the persistence and messaging tables, so they are proven by the integration test.
 
 ## Do / Don't
 

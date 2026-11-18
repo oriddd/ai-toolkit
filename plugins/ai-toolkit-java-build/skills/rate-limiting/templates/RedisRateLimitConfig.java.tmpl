@@ -1,0 +1,23 @@
+package {{basePackage}}.adapter.ratelimit.redis;
+
+import {{basePackage}}.config.RateLimitProperties;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import io.lettuce.core.RedisClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "platform.ratelimit", name = "provider", havingValue = "redis")
+public class RedisRateLimitConfig {
+
+    @Bean(destroyMethod = "shutdown")
+    RedisClient rateLimitRedisClient(final RateLimitProperties props) {
+        return RedisClient.create(props.redisUri());
+    }
+
+    @Bean
+    RateLimiterPort redisRateLimiter(final RedisClient rateLimitRedisClient, final RateLimitProperties props) {
+        return new RedisBucket4jRateLimiter(rateLimitRedisClient, props.capacity(), props.refillPeriod());
+    }
+}

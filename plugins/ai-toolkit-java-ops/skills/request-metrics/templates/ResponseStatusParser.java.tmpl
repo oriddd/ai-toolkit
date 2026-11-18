@@ -1,0 +1,14 @@
+package {{basePackage}}.monitor.parser;
+
+import {{basePackage}}.monitor.MonitoringConstants;
+import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ResponseStatusParser {
+
+    public String parseResponseStatus(final @Nullable HttpServletResponse response) {
+        return response == null ? MonitoringConstants.UNKNOWN : String.valueOf(response.getStatus());
+    }
+}

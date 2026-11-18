@@ -1,0 +1,48 @@
+package {{basePackage}}.messaging;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.data.domain.Limit;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+@Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@Slf4j
+public class OutboxRelay {
+    private final OutboxRepository outboxRepo;
+    private final OutboxMarker outboxMarker;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxProperties props;
+    @Scheduled(fixedDelayString = "${outbox.relay.delay:PT0.2S}")
+    @SchedulerLock(name = "outbox-relay", lockAtMostFor = "PT1M")
+    public void publishPending() {
+        try {
+            for (OutboxEntity row : outboxRepo.findByPublishedAtIsNullOrderByCreatedAtAsc(Limit.of(props.batchSize()))) {
+                publish(row);
+                outboxMarker.markPublished(row.getId());
+            }
+        } catch (Exception e) {
+            log.warn("Outbox relay stopped at the first failed row; it retries on the next tick", e);
+        }
+    }
+    private void publish(OutboxEntity row) throws Exception {
+        String topic = props.topics().get(row.getAggregateType());
+        if (topic == null) {
+            throw new IllegalStateException("No topic configured for aggregate type " + row.getAggregateType());
+        }
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, row.getAggregateId(), row.getPayload());
+        record.headers().add("event-id", row.getId().toString().getBytes(StandardCharsets.UTF_8));
+        String traceparent = row.getTraceparent();
+        if (traceparent != null) {
+            record.headers().add("traceparent", traceparent.getBytes(StandardCharsets.UTF_8));
+        }
+        kafkaTemplate.send(record).get(props.sendTimeout().toMillis(), TimeUnit.MILLISECONDS);
+    }
+}

@@ -29,8 +29,10 @@ fails the build. Never silence a rule to make a PR green.
 ```
 eslint.config.mjs
 .prettierrc.json
-.prettierignore            # coverage/ (and any other generated output)
+.prettierignore            # generated output: coverage, dist, ios, android, .expo
 tsconfig.json              # strict, see react-native-code-structure
+babel.config.js            # module-resolver aliases that Metro and Jest need (react-native-code-structure, references/expo-template-setup.md)
+jest.config.js  jest.setup.ts   # react-native-unit-tests
 .husky/pre-commit
 package.json               # scripts + lint-staged
 ```
@@ -88,7 +90,7 @@ const sameFeature = (types) =>
 const ALL = ['routes', 'bootstrap', 'feature', ...Object.keys(LAYERS)];
 
 export default defineConfig(
-  { ignores: ['node_modules', 'ios', 'android', 'coverage', '.expo'] },
+  { ignores: ['node_modules', 'ios', 'android', 'coverage', 'dist', '.expo'] },
   tseslint.configs.strictTypeChecked,
   { languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } } },
   {
@@ -163,9 +165,19 @@ Expo SDK 58 with Expo Router 58: seven such probes failed, cross-feature imports
 { "singleQuote": true, "trailingComma": "all", "printWidth": 100, "semi": true }
 ```
 
-Prettier owns formatting; ESLint carries no stylistic rules (`eslint-config-prettier` last). Add
-`coverage` to `.prettierignore`: `prettier --check .` otherwise fails on the HTML report the previous
-`jest --coverage` run left behind. Code snippets in these skills are compressed for reading; run
+Prettier owns formatting; ESLint carries no stylistic rules (`eslint-config-prettier` last). `.prettierignore` lists the
+generated output, otherwise `prettier --check .` fails on the HTML report of the previous `jest --coverage` run and on
+the bundle of `expo export` and the project of `expo prebuild`:
+
+```
+coverage
+dist
+ios
+android
+.expo
+```
+
+Code snippets in these skills are compressed for reading; run
 `npx prettier --write .` after pasting them.
 
 ## 4. Pre-commit: fast feedback

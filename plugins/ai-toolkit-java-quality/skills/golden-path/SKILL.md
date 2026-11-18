@@ -6,8 +6,8 @@ applies_to: [rest, event, scheduler, library, monolith]
 depends_on: [code-structure, quality-review]
 ships_templates: false
 hitl: false
-version: 1.0
-last_reviewed: 2026-11-03
+version: 1.1
+last_reviewed: 2026-11-17
 ---
 
 # Golden Path Skill
@@ -47,6 +47,10 @@ create-repo (HITL, main session)         ← generates skeleton, asks its Phase 
         ├─► documentation-and-adr  + uml-diagram
         └─► context-maintenance          ← every time architecture moves
 ```
+
+> **Rendered code goes through `mvn spotless:apply` before the first `mvn verify`.** Templates are not pre-formatted
+> (and `sortPom` reorders the generated `pom.xml`), so the Spotless check fails otherwise. Every template ships its own
+> unit tests: the per-class JaCoCo gate and PIT apply to shipped classes too; pure `*Config` wiring is the one explicit exclusion.
 
 ## 4. Guild non-negotiables (24)
 
@@ -144,7 +148,7 @@ producing code must validate the diff against this list before returning.
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
     exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
-    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    `readReply` handles all non-2xx (`WebClient`/`exchangeToMono` only for
     reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).

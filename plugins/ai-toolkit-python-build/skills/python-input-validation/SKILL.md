@@ -36,6 +36,13 @@ src/my_service/
 and services import it, it imports repository Protocols and the leaf packages. Add it to the import-linter `layers`
 contract (`python-static-analysis` §3) when you create it.
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §2 to §4 | Validated types, request models, a rule object with a collaborator, table-driven tests | Adding a model or a rule | [references/validation-modules.md](./references/validation-modules.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["pydantic>=2.8", "email-validator>=2.2"]
@@ -92,7 +99,7 @@ class Rule[T](Protocol):
     async def check(self, value: T) -> None: ...      # raises a DomainError
 
 class EmailAlreadyRegisteredError(ConflictError):
-    code = ErrorCodes.EMAIL_ALREADY_REGISTERED          # catalogue entry: see `python-error-handling`
+    code = ErrorCodes.EMAIL_ALREADY_REGISTERED   # catalogue entry: see `python-error-handling`
 
 class EmailNotRegisteredRule:
     def __init__(self, users: UserRepository) -> None:
@@ -100,7 +107,8 @@ class EmailNotRegisteredRule:
 
     async def check(self, email: str) -> None:
         if await self._users.exists_by_email(email):
-            raise EmailAlreadyRegisteredError()          # no email param: it would reach `detail` and the logs
+            # no email param: it would reach `detail` and the logs
+            raise EmailAlreadyRegisteredError()
 ```
 
 A "this email is taken" answer tells anyone probing the endpoint which addresses have accounts

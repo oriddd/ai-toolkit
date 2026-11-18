@@ -121,6 +121,8 @@ only for libraries; services test the one version they ship. Push the image only
 separate step with registry credentials scoped to that job.
 
 ## 3. Dockerfile: multi-stage, non-root
+### `Dockerfile`
+
 ```dockerfile
 FROM python:3.14-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:<uv-version> /uv /usr/local/bin/uv
@@ -149,6 +151,20 @@ HEALTHCHECK CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://
 CMD ["uvicorn", "my_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-graceful-shutdown", "20"]
 ```
 
+**Prerequisite: BuildKit.** `RUN --mount=type=cache` is a BuildKit feature. Build with BuildKit explicitly:
+
+```sh
+docker buildx build -t my-service:local --load .      # or: DOCKER_BUILDKIT=1 docker build -t my-service:local .
+```
+
+Without BuildKit the classic builder stops with `the --mount option requires BuildKit`, and with
+`DOCKER_BUILDKIT=1` but no buildx plugin Docker 23+ stops with `BuildKit is enabled but the buildx component is
+missing`. Docker Desktop and the CI action above (`docker/setup-buildx-action`) ship buildx; on Colima or a plain
+Docker Engine install it (`brew install docker-buildx`, then add `"cliPluginsExtraDirs":
+["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`; on Linux, the `docker-buildx-plugin` package).
+A builder that cannot run BuildKit needs a Dockerfile without the two `--mount=type=cache` options (slower
+rebuilds, same image).
+
 `--proxy-headers` trusts `X-Forwarded-For`/`-Proto` only from the addresses in `FORWARDED_ALLOW_IPS` (uvicorn reads
 the variable; unset means `127.0.0.1` only). The ingress CIDR differs per cluster, so the Deployment sets it
 (`python-cd`), never the image, and never to `*` (`python-security` §4).
@@ -164,7 +180,17 @@ reads it when the project is installed (drop it from the `COPY` if you do not de
 Dependencies are copied before source so the expensive layer is cached. The runtime stage has no
 compiler, no uv, no dev dependencies and no source tree (only the non-editable `.venv`), and runs as an
 unprivileged user that cannot write to the installed code. `.dockerignore` excludes
-`.git`, `.venv`, `tests`, `__pycache__`, `.env*`.
+`.git`, `.venv`, `tests`, `__pycache__`, `.env*`:
+
+### `.dockerignore`
+
+```
+.git
+.venv
+tests
+__pycache__
+.env*
+```
 
 Migrations run from the same image, once per deploy and before the new version takes traffic (a Kubernetes
 Job or Helm pre-upgrade hook, or an init step of the deploy pipeline): `alembic upgrade head` with the runtime

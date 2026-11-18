@@ -1,0 +1,146 @@
+package {{basePackage}}.security;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.config.ProblemDetailSecurityHandler;
+import {{basePackage}}.config.SecurityConfig;
+import {{basePackage}}.controller.{{ControllerClass}};
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.exception.handler.GlobalExceptionHandler;
+import {{basePackage}}.monitor.parser.ClientIdParser;   // [request-metrics]
+import {{basePackage}}.monitor.parser.MetricNameResolver;   // [request-metrics]
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;   // [request-metrics]
+import {{basePackage}}.operation.{{OperationClass}};
+import {{basePackage}}.permission.PermissionsHandler;
+import {{basePackage}}.permission.PermissionsProperties;
+import {{basePackage}}.permission.PermissionsRegistry;
+import {{basePackage}}.permission.SpringSecurityCallerContextResolver;
+import {{basePackage}}.permission.strategy.ScopeBasedPermissionsCheck;
+import {{basePackage}}.service.{{ServiceClass}};
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(
+        controllers = {{ControllerClass}}.class,
+        properties = {
+            "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test",
+            "permissions.service-account.allowed-scopes=read"
+        })
+@Import({
+    SecurityConfig.class,
+    ProblemDetailSecurityHandler.class,
+    GlobalExceptionHandler.class,
+    {{OperationClass}}.class,
+    PermissionsHandler.class,
+    PermissionsRegistry.class,
+    SpringSecurityCallerContextResolver.class,
+    ScopeBasedPermissionsCheck.class,
+    ProductionSecurityChainTest.WiringConfiguration.class
+})
+class ProductionSecurityChainTest {
+
+    @TestConfiguration
+    @EnableConfigurationProperties(PermissionsProperties.class)
+    static class WiringConfiguration {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
+    @Autowired MockMvc mvc;
+    @MockitoBean {{ServiceClass}} service;
+    @MockitoBean JwtDecoder jwtDecoder;
+    // [request-metrics:begin]
+    @MockitoBean MetricNameResolver metricNameResolver;
+    @MockitoBean MetricsRecorderRegistry metricsRecorderRegistry;
+    @MockitoBean ClientIdParser clientIdParser;
+    // [request-metrics:end]
+
+    private static JwtRequestPostProcessor serviceAccountWithScope(String scope) {
+        return jwt().jwt(token -> token.subject("svc").claim("azp", "svc"))
+                .authorities(new SimpleGrantedAuthority("SCOPE_" + scope));
+    }
+
+    @Test
+    void api_noToken_returns401ProblemJson() throws Exception {
+        mvc.perform(get("{{apiPath}}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_UNAUTHORIZED));
+    }
+
+    @Test
+    void api_invalidToken_returns401ProblemJson() throws Exception {
+        when(jwtDecoder.decode(anyString())).thenThrow(new BadJwtException("bad"));
+
+        mvc.perform(get("{{apiPath}}").header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_UNAUTHORIZED));
+    }
+
+    @Test
+    void api_validJwtWithAllowedScope_returns200() throws Exception {
+        mvc.perform(get("{{apiPath}}").with(serviceAccountWithScope("read"))).andExpect(status().isOk());
+    }
+
+    @Test
+    void api_validJwtWithWrongScope_returns403ProblemJson() throws Exception {
+        mvc.perform(get("{{apiPath}}").with(serviceAccountWithScope("other")))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_FORBIDDEN));
+    }
+
+    @Test
+    void unknownPath_withToken_returns403ProblemJson() throws Exception {
+        mvc.perform(get("/no-such-path").with(serviceAccountWithScope("read")))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_FORBIDDEN));
+    }
+
+    @Test
+    void actuatorEnv_withToken_returns403() throws Exception {
+        mvc.perform(get("/actuator/env").with(serviceAccountWithScope("read"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void actuatorEnv_noToken_returns401() throws Exception {
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void identityProviderDown_returns503WithRetryAfter() throws Exception {
+        when(jwtDecoder.decode(anyString()))
+                .thenThrow(new JwtDecoderInitializationException("discovery failed", new IOException("down")));
+
+        mvc.perform(get("{{apiPath}}").header("Authorization", "Bearer some-token"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.errorCode").value(ExceptionMessages.ERR_UNAVAILABLE));
+    }
+}

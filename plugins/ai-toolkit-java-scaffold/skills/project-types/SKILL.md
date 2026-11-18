@@ -27,7 +27,7 @@ combination of skills and call `create-repo` with the right answers.
 | **B. Event-driven service** | Consumes from broker, may publish — no HTTP API | A minus the HTTP-only skills (`api-design`, `permissions`, `component-tests` — it drives the HTTP API through `TestRestTemplate` — and `request-metrics`, a per-request HTTP filter) + `messaging` (mandatory) + `persistence` (almost always) + `integration-tests` (the end-to-end test: produce → consume → assert) | `api-design`, `permissions`, `component-tests` (only if a tiny status/admin HTTP API exists) |
 | **C. Scheduler / batch job** | `@Scheduled` or one-shot CLI, no HTTP | `ci`, `cd`, `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client`, `observability`, `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `local-dev-experience`, `static-analysis`, `graceful-shutdown`, `pluggable-architecture`, `resilience-patterns`, `context-maintenance`, `health-indicator` (long-running `@Scheduled` deployments on Kubernetes) | `persistence`, `adapter-contract-tests` |
 | **D. Library / SDK** | Reusable JAR consumed by other services | `code-structure`, `spring-boot-conventions`, `exception-handling`, `external-client` (if it wraps a remote service), `sdk-publishing` (mandatory), `unit-tests`, `quality-review`, `release-versioning`, `documentation-and-adr`, `static-analysis` | `permissions` if the library brings auth bits |
-| **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + intra-process events between modules via `ApplicationEventPublisher` / Spring Modulith (`code-structure` §4k, Pattern D — durable event publication registry, future-proof for a broker) | `messaging` once events leave the process (broker + outbox) |
+| **E. Monolith with microservice bones** | Single deployable that owns multiple bounded contexts but is structured so future split is cheap | A + `domain-modeling` (mandatory) + `messaging` (intra-process events via `ApplicationEventPublisher`, future-proof for a broker); Spring Modulith note: `code-structure` §4k, Pattern D (durable event publication registry) | broker + outbox once events leave the process |
 
 ## 2. Decision flow
 
@@ -103,7 +103,7 @@ Type E (monolith):
   [#9a] projectKind: service
   domain-modeling: yes
   module events: code-structure §4k (Spring Modulith; outbox-ready event publication registry);
-  messaging only for a real broker ([#16])
+  messaging: yes (Spring events, outbox-ready); broker and outbox only once events leave the process ([#16])
 ```
 
 ## 5. Renaming guidance
@@ -129,6 +129,8 @@ ArchUnit layer rules and in `quality-review` B6.
 maintainers don't have to reverse-engineer it.
 ❌ Never mix project types in one repo (HTTP API **and** scheduler **and**
 event consumer all in one deployable) — split them, share via libraries.
+Infrastructure pollers that another skill mandates, such as the `messaging` outbox relay, are not a project type and
+are exempt: only business entry points count.
 ❌ Never "upgrade" a Type C scheduler to a Type A REST service by bolting on
 controllers — start a new repo.
 

@@ -1,0 +1,25 @@
+package {{basePackage}}.health.config;
+
+import java.time.Duration;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestClient;
+
+@Configuration
+public class ReadinessClientConfig {
+
+    @Bean
+    RestClient readinessRestClient(
+            final RestClient.Builder builder,
+            final ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder,
+            final ClientHttpRequestFactorySettings requestFactorySettings) {
+        return builder.requestFactory(
+                        requestFactoryBuilder.build(
+                                requestFactorySettings
+                                        .withConnectTimeout(Duration.ofSeconds(2))
+                                        .withReadTimeout(Duration.ofSeconds(2))))
+                .build();
+    }
+}

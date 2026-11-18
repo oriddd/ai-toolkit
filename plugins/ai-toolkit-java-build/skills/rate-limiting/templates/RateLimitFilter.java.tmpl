@@ -1,0 +1,43 @@
+package {{basePackage}}.ratelimit;
+
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.spi.ratelimit.RateLimitDecision;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerExceptionResolver;
+
+public class RateLimitFilter extends OncePerRequestFilter {
+
+    private final RateLimiterPort rateLimiter;
+    private final ClientKeyResolver keyResolver;
+    private final HandlerExceptionResolver exceptionResolver;
+
+    public RateLimitFilter(
+            final RateLimiterPort rateLimiter, final ClientKeyResolver keyResolver, final HandlerExceptionResolver exceptionResolver) {
+        this.rateLimiter = rateLimiter;
+        this.keyResolver = keyResolver;
+        this.exceptionResolver = exceptionResolver;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(final HttpServletRequest request) {
+        return !request.getRequestURI().startsWith(request.getContextPath() + "/api/");
+    }
+
+    @Override
+    protected void doFilterInternal(
+            final HttpServletRequest request, final HttpServletResponse response, final FilterChain chain)
+            throws ServletException, IOException {
+        final RateLimitDecision decision = rateLimiter.tryConsume(keyResolver.resolve(request));
+        if (!decision.allowed()) {
+            exceptionResolver.resolveException(request, response, null, ExceptionMessages.rateLimitExceeded(decision.retryAfterSeconds()));
+            return;
+        }
+        chain.doFilter(request, response);
+    }
+}

@@ -1,0 +1,78 @@
+package {{basePackage}}.adapter.cache.http;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.spi.cache.CacheKey;
+import java.time.Duration;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class HttpCacheAdapterTest {
+
+    private static final CacheKey KEY = new CacheKey("user-1");
+
+    @Mock private CacheClient client;
+
+    private HttpCacheAdapter adapter() {
+        return new HttpCacheAdapter(client, new CacheEntryConverter());
+    }
+
+    @Test
+    void get_hit_returnsTheDecodedBytes() throws Exception {
+        when(client.fetch("user-1")).thenReturn(Optional.of(new CacheEntryResponse("user-1", "AQI=", 1000)));
+
+        assertThat(adapter().get(KEY)).hasValueSatisfying(value -> assertThat(value).containsExactly(1, 2));
+    }
+
+    @Test
+    void get_miss_isEmpty() throws Exception {
+        when(client.fetch("user-1")).thenReturn(Optional.empty());
+
+        assertThat(adapter().get(KEY)).isEmpty();
+    }
+
+    @Test
+    void get_outage_propagatesTheDomainException() throws Exception {
+        final UnavailableException outage = ExceptionMessages.dependencyUnavailable("cache-service", null);
+        when(client.fetch("user-1")).thenThrow(outage);
+
+        assertThatThrownBy(() -> adapter().get(KEY)).isSameAs(outage);
+    }
+
+    @Test
+    void put_valueAndTtl_storesTheEncodedEntry() throws Exception {
+        adapter().put(KEY, new byte[] {1, 2}, Duration.ofSeconds(1));
+
+        verify(client).store(new CacheEntryResponse("user-1", "AQI=", 1000));
+    }
+
+    @Test
+    void put_outage_propagatesTheDomainException() throws Exception {
+        final UnavailableException outage = ExceptionMessages.dependencyUnavailable("cache-service", null);
+        doThrow(outage).when(client).store(new CacheEntryResponse("user-1", "AQI=", 1000));
+
+        assertThatThrownBy(() -> adapter().put(KEY, new byte[] {1, 2}, Duration.ofSeconds(1))).isSameAs(outage);
+    }
+
+    @Test
+    void evict_key_delegatesTheRawKey() throws Exception {
+        adapter().evict(KEY);
+
+        verify(client).evict("user-1");
+    }
+
+    @Test
+    void providerId_isHttp() {
+        assertThat(adapter().providerId()).isEqualTo("http");
+    }
+}

@@ -44,7 +44,8 @@ Bind the block with one `FooProperties` `@ConfigurationProperties` record
 </dependency>
 ```
 
-> **Boot 4 note:** the AOP starter is named `spring-boot-starter-aspectj` there.
+> **Boot 4 note:** the AOP starter is named `spring-boot-starter-aspectj` there and the Resilience4j starter is
+> `resilience4j-spring-boot4` (explicit `<version>`, not in the BOM; `resilience4j-spring-boot3` refuses to start on Boot 4).
 
 Merge under the single top-level `resilience4j:` key of `application.yaml`:
 
@@ -54,6 +55,8 @@ resilience4j:
     failureRateThreshold: 50
     slowCallDurationThreshold: 1s           # below the 2s read timeout, so slowness opens the circuit before timeouts pile up
     slidingWindowSize: 20
+    ignoreExceptions:                       # a 4xx (DependencyException) is the caller's fault and must not open the circuit
+      - com.example.foo.exception.DependencyException
   retry.instances.foo-service:
     maxAttempts: 3
     waitDuration: 200ms
@@ -87,6 +90,8 @@ Rules:
   therefore **rethrows** a mapped domain exception unchanged: wrapping everything into one type would hide
   `UnavailableException` from `retryExceptions`, and Retry would never fire. A non-retryable error
   (`DependencyException`) must stay a different domain exception.
+- The fallback may declare `throws BaseDomainException`: the aspect chain propagates the checked exception unchanged
+  (proven with a Spring slice test: fallback rethrow, retry count, open circuit → `UnavailableException`).
 - Test it: two 503s then a 200 → the client is called **3 times** and succeeds; a 400 → called **once**.
 - **Bound the total time**: per-attempt read timeout × `maxAttempts` + waits must stay below the caller's SLA
   (2s × 3 + 0.2s + 0.4s ≈ 6.6s here). Tighten the read timeout before adding attempts.

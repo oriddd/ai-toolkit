@@ -1,0 +1,49 @@
+package {{basePackage}}.monitor;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class MetricsTimerHelper {
+
+    private static final Duration[] SLO_DURATIONS = {
+        Duration.ofMillis(100),
+        Duration.ofMillis(150),
+        Duration.ofMillis(200),
+        Duration.ofMillis(300),
+        Duration.ofMillis(400),
+        Duration.ofMillis(500),
+        Duration.ofMillis(750),
+        Duration.ofSeconds(1),
+        Duration.ofSeconds(2)
+    };
+
+    private final MeterRegistry meterRegistry;
+    private final MetricsTagsHelper metricsTagsHelper;
+
+    public Timer buildGenericTimer(final String metricName, final HttpServletRequest request, final HttpServletResponse response) {
+        return buildTimerWithExtraTags(metricName, request, response);
+    }
+
+    public Timer buildTimerWithExtraTags(
+            final String metricName, final HttpServletRequest request, final HttpServletResponse response, final Tag... extraTags) {
+        final Set<Tag> tags = new HashSet<>(metricsTagsHelper.buildGenericTags(request, response));
+        tags.addAll(Arrays.asList(extraTags));
+        return Timer.builder(metricName)
+                .tags(tags)
+                .publishPercentileHistogram(false)
+                .serviceLevelObjectives(SLO_DURATIONS)
+                .register(meterRegistry);
+    }
+}

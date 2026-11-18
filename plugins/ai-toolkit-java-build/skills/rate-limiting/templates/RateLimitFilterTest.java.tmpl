@@ -1,0 +1,70 @@
+package {{basePackage}}.ratelimit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import {{basePackage}}.exception.TooManyRequestsException;
+import {{basePackage}}.spi.ratelimit.RateLimitDecision;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import jakarta.servlet.FilterChain;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.HandlerExceptionResolver;
+
+class RateLimitFilterTest {
+
+    private final RateLimiterPort limiter = mock(RateLimiterPort.class);
+    private final HandlerExceptionResolver resolver = mock(HandlerExceptionResolver.class);
+    private final FilterChain chain = mock(FilterChain.class);
+    private final MockHttpServletRequest request = new MockHttpServletRequest("GET", "{{contextPath}}{{apiPath}}");
+    private final MockHttpServletResponse response = new MockHttpServletResponse();
+    private final RateLimitFilter filter = new RateLimitFilter(limiter, new ClientKeyResolver(), resolver);
+
+    RateLimitFilterTest() {
+        request.setContextPath("{{contextPath}}");
+        request.setRemoteAddr("10.0.0.9");
+    }
+
+    @Test
+    void doFilter_allowed_continuesTheChain() throws Exception {
+        when(limiter.tryConsume("ip:10.0.0.9")).thenReturn(new RateLimitDecision(true, 0));
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verifyNoInteractions(resolver);
+    }
+
+    @Test
+    void doFilter_refused_handsTheDomainExceptionToTheAdviceAndStopsTheChain() throws Exception {
+        when(limiter.tryConsume("ip:10.0.0.9")).thenReturn(new RateLimitDecision(false, 42));
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        final ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(resolver).resolveException(eq(request), eq(response), isNull(), exception.capture());
+        assertThat(exception.getValue()).isInstanceOf(TooManyRequestsException.class);
+        assertThat(((TooManyRequestsException) exception.getValue()).getRetryAfter()).hasValueSatisfying(wait -> assertThat(wait.toSeconds()).isEqualTo(42));
+    }
+
+    @Test
+    void doFilter_pathOutsideTheApi_isNotLimited() throws Exception {
+        final MockHttpServletRequest health = new MockHttpServletRequest("GET", "{{contextPath}}/actuator/health");
+        health.setContextPath("{{contextPath}}");
+
+        filter.doFilter(health, response, chain);
+
+        verify(chain).doFilter(health, response);
+        verifyNoInteractions(limiter);
+    }
+}

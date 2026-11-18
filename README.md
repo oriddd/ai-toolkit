@@ -34,7 +34,7 @@ Windows notes and the commit-guard limits: [`setup/claude-code/README.md`](./set
 
 | Language | Status | Prerequisites |
 | --- | --- | --- |
-| Java | **Supported** — the user-tested core of the catalogue; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
+| Java | **Supported** — the original skills were user-tested; the added and rewritten parts are covered by evals and executed proofs, not by production use; trigger-tested by the eval suites in [`evals/`](./evals) | Java 21, Spring Boot 3.5 (Jakarta EE 10), Maven, **Lombok** (`org.projectlombok:lombok`, `<optional>true</optional>`, version from the Boot parent) |
 | Python | **Experimental** — required concerns only, not yet validated on production projects | Python 3.14 (3.12+ supported), FastAPI, uv |
 | React Native | **Experimental** — required concerns only, not yet validated on production projects | React Native with TypeScript, Expo (EAS) or bare workflow (Fastlane), npm |
 
@@ -48,9 +48,10 @@ messaging (compile only), request-metrics, graceful-shutdown, component-test and
 and on 4.1.2 and passed the same 26 tests on both. A few edits are dual-compatible and already in the templates; the rest
 differ on 4.x (Jackson 3, modular starters, renamed packages and auto-configuration classes, Hibernate 7 `hibernate-processor`,
 Testcontainers 2, `TestRestTemplate` module): see
-[`spring-boot-4.md`](./plugins/ai-toolkit-java-design/skills/spring-boot-conventions/references/spring-boot-4.md). Not verified
-on 4.x: Flyway on Postgres, outbound OAuth2 client, springdoc, openapi-generator, Resilience4j, Bucket4j, ShedLock, Kafka retry/DLT
-against a broker, the JPA metamodel generation, and the Spotless/SpotBugs/JaCoCo/PIT gates. **Open-source support for 3.5 ended on 2026-06-30**
+[`spring-boot-4.md`](./plugins/ai-toolkit-java-design/skills/spring-boot-conventions/references/spring-boot-4.md). Also verified on 4.1.2: Resilience4j (needs
+`resilience4j-spring-boot4` with an explicit version), Bucket4j local and Redis, the outbound OAuth2 client, the Kafka outbox on Flyway/Postgres and
+openapi-generator output under the full Spotless/SpotBugs/JaCoCo/PIT gates. Not verified on 4.x: RabbitMQ, springdoc, ShedLock, `@RetryableTopic` retry/DLT
+against a broker, the JPA metamodel generation, field encryption on Hibernate 7, the Jackson 3 masking serializer, and Helm/Docker on a Boot 4 service. **Open-source support for 3.5 ended on 2026-06-30**
 ([support window](https://spring.io/projects/spring-boot#support)): new 3.5 patches need commercial support, so plan the
 Boot 4 move; `create-repo` says so when it asks for the Boot version.
 Every skill carries a `last_reviewed` date and is re-reviewed on a fixed cadence — see

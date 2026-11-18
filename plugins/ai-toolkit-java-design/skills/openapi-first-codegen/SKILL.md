@@ -106,7 +106,7 @@ default for the plugin). They MUST be:
 </plugin>
 ```
 
-Pin the generator version in `<properties>` and let Renovate bump it. The generated code also needs
+Pin the generator version in `<properties>` (`openapi-generator.version`, 7.17.0 verified on Boot 3.5) and let Renovate bump it. The generated code also needs
 `spring-boot-starter-validation` (`jakarta.validation` constraints from `useBeanValidation`, on by default). The
 generated interfaces are annotated `@Validated`, so parameter constraints are checked through the AOP proxy and fail
 with `ConstraintViolationException` — the `exception-handling` template maps it to `400`.
@@ -122,11 +122,13 @@ Add to the relevant plugins (paths are repo-relative):
 | Plugin | Exclusion |
 | --- | --- |
 | **Jacoco** (`jacoco-maven-plugin`)         | `<exclude>**/generated/**</exclude>` in the `<configuration><excludes>` block (covers `generated/api/model/` and `generated/configuration/`). |
-| **Spotless**                                | `<excludes><exclude>target/generated-sources/**</exclude></excludes>` inside the `<java>` block. |
+| **Spotless**                                | Nothing by default: it formats `src/main/java` and `src/test/java` only, never `target/`. Add `<excludes><exclude>target/generated-sources/**</exclude></excludes>` inside `<java>` only if you widened `<includes>`. |
 | **SpotBugs / FindSecBugs**                  | `<excludeFilterFile>` referencing a filter that matches `{{basePackage}}.generated.**`. |
 | **ArchUnit** (in tests)                     | Exclude **by package**: generated and hand-written classes both compile to `target/classes`, so a path filter on `target/generated-sources/**` matches nothing. Use `ImportOption.DoNotIncludeArchives` plus a custom `ImportOption` such as `location -> !location.contains("/generated/")`, or `.resideOutsideOfPackage("..generated..")` in each rule. |
 | **NullAway / Error-Prone**                  | `-XepExcludedPaths:.*/generated-sources/.*` and `-XepOpt:NullAway:UnannotatedSubPackages={{basePackage}}.generated`. |
 | **Sonar (optional)**                        | `sonar.coverage.exclusions=**/generated/**`, `sonar.exclusions=**/generated/**`. |
+
+Verified with the full `ci` pom gates (`mvn clean verify`: Spotless, Checkstyle, Error Prone + NullAway at ERROR, SpotBugs, JaCoCo 85/75 per class, PIT 75): generated models and interfaces appear in none of the reports, a `@WebMvcTest` with `@Import(EnumConverterConfiguration.class)` answers 400 for `?layout=bogus` and for an invalid body, and an ArchUnit rule keeps `..generated..` out of `..service..`, `..domain..` and `..exception..`.
 
 Without these, every spec change inflates the coverage delta and triggers
 false-positive findings.
@@ -148,6 +150,20 @@ class FooController implements FooApi {                    // FooApi is generate
     }
 }
 ```
+
+Optional parameters (`required: false` query/header params, and optional body properties) arrive as `null`. NullAway treats
+the generated package as unannotated, so the override's parameters are non-null by default: annotate each optional one
+`@Nullable` (`org.jspecify.annotations.Nullable`, the project's NullAway annotation) and handle `null` explicitly:
+
+```java
+@Override
+public ResponseEntity<WidgetResponse> getWidget(UUID id, @Nullable Layout layout, @Nullable String q) {
+    Layout effective = layout == null ? Layout.SUMMARY : layout;
+```
+
+Without the annotation a unit test calling `getWidget(id, null, null)` fails NullAway ("passing @Nullable parameter 'null'
+where @NonNull is required") and a dereference of the absent `layout` is an NPE at runtime. Unit tests pass `null` for the
+omitted parameters, or real values for the supplied ones. Verified on a generated `WidgetApi` under the full `ci` gates.
 
 Rules:
 - Controllers **only** implement generated interfaces. No `@GetMapping` /

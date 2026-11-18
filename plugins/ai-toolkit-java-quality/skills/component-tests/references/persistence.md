@@ -25,9 +25,10 @@ spring:
 ```
 
 - Excluding JPA also removes the `PlatformTransactionManager`, so `@Transactional` and an injected
-  `TransactionTemplate` fail. Register a no-op `AbstractPlatformTransactionManager` bean in
-  `ComponentTestConfiguration` (its `doGetTransaction` returns a new `Object()`, `doBegin`/`doCommit`/`doRollback` do
-  nothing) — the fakes hold the state, so there is nothing to roll back.
+  `TransactionTemplate` fail at startup (a messaging consumer injects one). `ComponentTestConfiguration.java.tmpl` ships
+  the no-op `AbstractPlatformTransactionManager` bean inside its `// [persistence:begin]` … `// [persistence:end]`
+  block: keep it with persistence, remove it (and its `[persistence]` imports) without. The fakes hold the state, so
+  there is nothing to begin, commit or roll back.
 - With messaging, also drop listener startup and topic creation (above) and fake the `KafkaTemplate` /
   publisher port; `@RetryableTopic` and `@KafkaListener` containers otherwise retry `localhost:9092` in every context.
 

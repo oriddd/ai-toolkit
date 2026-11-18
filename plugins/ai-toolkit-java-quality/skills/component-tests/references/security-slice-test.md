@@ -22,35 +22,44 @@ Test dependencies: `org.springframework.security:spring-security-test`
 (test scope, for `jwt()`), plus `spring-boot-starter-oauth2-resource-server`
 for a JWT resource server.
 
-```java
-// issuer-uri: application.yaml reads ${JWT_ISSUER_URI} with no default (permissions §7); without a value the
-// resource-server auto-configuration fails to evaluate its condition and the slice does not start
-@WebMvcTest(controllers = FooController.class,
-        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
-@Import(SecurityConfig.class)              // the production filter chain (+ any validator / ValidationConfig the controller uses)
-class FooSecurityTest {
-    @Autowired MockMvc mvc;
-    @MockitoBean FooOperation fooOperation; // the controller's only collaborator
-    @MockitoBean JwtDecoder jwtDecoder;     // jwt() bypasses it; the resource-server config still needs the bean
-    // request-metrics beans in the slice: MetricsFilter, ClientIdCaptureInterceptor (omit without request-metrics)
-    @MockitoBean MetricNameResolver metricNameResolver;
-    @MockitoBean MetricsRecorderRegistry metricsRecorderRegistry;
-    @MockitoBean ClientIdParser clientIdParser;
+Use [`templates/SecurityTest.java.tmpl`](../templates/SecurityTest.java.tmpl) (placeholders `{{basePackage}}`,
+`{{ControllerClass}}`, `{{OperationClass}}` — the controller's only collaborator — and `{{apiPath}}`, a path the
+production chain requires authentication for). It proves, against the production filter chain: no token answers `401`,
+a JWT with the required scope answers `200`, and an unknown path with a valid token answers `403` as
+`application/problem+json` carrying `ERR-FORBIDDEN`. The parts that make the slice start:
 
-    @Test
-    void getFoo_noToken_returns401() throws Exception {
-        mvc.perform(get("/api/v1/foo/123"))
-           .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void getFoo_jwtWithRequiredScope_returns200() throws Exception {
-        mvc.perform(get("/api/v1/foo/123")
-                .with(jwt().jwt(b -> b.subject("alice")).authorities(new SimpleGrantedAuthority("SCOPE_read"))))
-           .andExpect(status().isOk());
-    }
-}
-```
+- `@Import({SecurityConfig.class, ProblemDetailSecurityHandler.class, GlobalExceptionHandler.class})`: a `@WebMvcTest`
+  loads `@RestControllerAdvice` but not plain `@Component`s, and `SecurityConfig` injects `ProblemDetailSecurityHandler`.
+  Importing only `SecurityConfig` fails with `NoSuchBeanDefinitionException: ProblemDetailSecurityHandler`.
+- A nested `@TestConfiguration` with a `SimpleMeterRegistry` bean: the handler counts `security.auth.failure`, and the
+  slice has no `MeterRegistry` (no metrics auto-configuration).
+- `properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=…"`: `application.yaml` reads `${JWT_ISSUER_URI}`
+  with no default (`permissions` §7); without a value the resource-server auto-configuration cannot evaluate its
+  condition and the slice does not start.
+- `@MockitoBean JwtDecoder`: `jwt()` bypasses it, but the resource-server configuration still needs the bean.
+- The `[request-metrics]` block (`MetricNameResolver`, `MetricsRecorderRegistry`, `ClientIdParser`): omit it without
+  `request-metrics`; remove it with the `exception-handling` §3a `sed` recipe (literal tag `request-metrics`).
 
 This proves the security configuration is wired correctly, not just the
 controller logic.
+
+## Production chain proof
+
+The component profile swaps in its own permissive chain, `SecurityConfig` is excluded from JaCoCo and PIT as a `*Config`,
+and only the opt-in `*IT` suite boots the whole service, so the default gate proves the real chain only through this slice.
+Use [`templates/ProductionSecurityChainTest.java.tmpl`](../templates/ProductionSecurityChainTest.java.tmpl)
+(placeholders as above plus `{{ServiceClass}}`, the operation's collaborator; `{{apiPath}}` must be a collection path that
+answers `200` with the service mocked). It imports the real `SecurityConfig`, `ProblemDetailSecurityHandler`, the real
+`PermissionsHandler` stack with `permissions.service-account.allowed-scopes=read`, and mocks only the service and `JwtDecoder`:
+
+| Request | Expected |
+| --- | --- |
+| no token | `401` `application/problem+json`, `ERR-UNAUTHORIZED` |
+| token the decoder rejects | `401` `ERR-UNAUTHORIZED` |
+| service-account JWT with an allowed scope | `200` |
+| service-account JWT with another scope | `403` `ERR-FORBIDDEN` |
+| unknown path with a valid token | `403` `ERR-FORBIDDEN` (`denyAll`) |
+| `/actuator/env` with and without a token | `403` / `401` |
+| decoder throws `JwtDecoderInitializationException` (IdP down) | `503`, `Retry-After`, `ERR-UNAVAILABLE` |
+
+Apply the same `request-metrics` strip as for `SecurityTest`. Run it without the `component-test` profile.

@@ -114,15 +114,27 @@ cloned with CRLF). Without bash the hooks fail non-blocking and the commit guard
   `gh repo create|delete|edit|rename|archive|sync|fork`, `gh workflow run|enable|disable`, issue/secret/variable writes,
   and `gh api` calls that write;
 - **publishing:** `npm|yarn|pnpm|bun publish|version` (also with `--prefix`/`-r`), `yarn npm publish`, `mvn`/`mvnw(.cmd)`
-  `release:*|deploy`, Gradle `publish*` tasks (not `publishToMavenLocal`), `twine upload`, `poetry|cargo|uv|hatch|flit publish`.
+  `release:*|deploy`, Gradle `publish*` tasks (not `publishToMavenLocal`), `twine upload` (also `python -m twine upload`, `uv run|uvx|pipx run|poetry run twine upload`), `poetry|cargo|uv|hatch|flit publish`;
+- **launchers:** the command after `find|fd -exec|-execdir|-ok|-x` is checked like a top-level command (`find . -exec git commit …`).
 
-A flag such as `--abort`, `--continue`, `-h` or `--dry-run` makes a command safe only when it really is that flag (not an option
+- **destructive housekeeping and config:** `git reflog expire|delete`, `git gc --prune`, `git worktree remove|prune`,
+  `git remote add|remove|rename|set-url|prune`, and `git config` writes (reads such as `--get`, `--list` or a single key are fine);
+- **`--continue`:** `git rebase|cherry-pick|merge|revert --continue` creates the commit, so it asks.
+
+A flag such as `--abort`, `--skip`, `-h` or `--dry-run` makes a command safe only when it really is that flag (not an option
 value like `git commit -m "--abort"`). The parser handles multi-line commands, quoted paths, comments, heredocs, `bash -c`,
 `| sh`, wrappers like `sudo`/`env`/`watch`, and git aliases. It is a **best-effort safety net, not a security boundary**: it
 cannot see variable indirection, scripts that commit internally, other tools, or anything outside Claude's Bash tool, and it
-needs `python3` 3.7+ — otherwise a smaller pure-bash parser applies (no heredoc, alias or `$(…)` handling). The real controls
+needs `python3` 3.7+ — otherwise a smaller pure-bash parser applies (no heredoc, alias or `$(…)` handling). Known residual gaps:
+shell variable indirection (`x=commit; git $x`, `git ${CMD:-commit}`), `$(which git) commit` when `python3` is missing, and
+scripts or Makefile targets that commit or publish internally are not caught. Two over-asks are accepted on purpose:
+`git tag -d` asks (it rewrites tags) and `npm publish --dry-run` asks (only `--help` is exempt). The real controls
 are branch protection, server-side rules and a pre-push/commit-msg git hook. It never blocks on its own failure: a bug in the
-hook exits 0.
+hook exits 0. Short options are read per subcommand (`-s` takes a value only for merge, rebase and pull, so `git tag -s v1` asks).
+
+**Known residual gaps** (not guarded): `git branch -d`/`-m` renames, `git checkout <branch>` over uncommitted changes, `git update-index`,
+`git lfs push`, `git notes` writes, `git replace`, `git submodule update --init`, `git remote update`, editing `.git/` files directly, and
+everything done through scripts, Makefiles or IDE tooling.
 
 **Headless runs (`claude -p`).** "Ask" needs someone to answer. In a headless run there is nobody, so a guarded command is
 refused even when your prompt asked for it. Run the commit or push yourself afterwards, run the session interactively, or

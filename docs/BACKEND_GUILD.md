@@ -1,5 +1,7 @@
 # Backend Guild — Golden Path
 
+Last reviewed: 2026-11-17
+
 This is the **curated bundle** that every backend service your team
 builds should follow when an agent (or a human) generates code. It
 filters the atomic skills in [`REGISTRY.md`](./REGISTRY.md) into a
@@ -278,6 +280,10 @@ create-repo (HITL, main session)         ← generates skeleton, asks its Phase 
         └─► context-maintenance          ← every time architecture moves
 ```
 
+> **Rendered code goes through `mvn spotless:apply` before the first `mvn verify`.** Templates are not pre-formatted
+> (and `sortPom` reorders the generated `pom.xml`), so the Spotless check fails otherwise. Every template ships its own
+> unit tests: the per-class JaCoCo gate and PIT apply to shipped classes too; pure `*Config` wiring is the one explicit exclusion.
+
 ## 3. Task-driven agent recipes
 
 Each recipe lists **only** the skills that materially constrain the change.
@@ -467,7 +473,7 @@ producing code must validate the diff against this list before returning.
     `RestClient`, `Mono`, `Flux`, and remote
     DTOs never escape the package, and every non-2xx is mapped to a domain
     exception inside it. In the Full 5-Layer pattern, `RestClient` `exchange` +
-    `handleResponse` handles all non-2xx (`WebClient`/`exchangeToMono` only for
+    `readReply` handles all non-2xx (`WebClient`/`exchangeToMono` only for
     reactive callers), and filter map, request building,
     response parsing, and boolean response checks each live in their own
     dedicated class (`external-client`).
@@ -478,9 +484,21 @@ producing code must validate the diff against this list before returning.
     one `MonitoringConfig` entry. Parsers never return `null` or blank
     (`request-metrics`).
 
+## 4b. When the request conflicts with the catalogue
+
+If the user explicitly asks for something a skill forbids (for example "just use `@Value` for this one property", "skip the DLQ for this consumer"):
+
+1. **Surface the conflict.** Quote the skill section that prohibits it.
+2. **Offer the canonical alternative.**
+3. **Proceed only if the user confirms.** Then mark the code `// ARCHITECTURE-EXCEPTION: <skill> §<N> — <reason>` and write an ADR under `docs/adr/`; an exception without an ADR is rejected at PR review.
+
+A subagent cannot ask: it writes nothing for the conflicting part and returns `NEEDS INPUT:` with the quoted section and the alternative.
+
+**Every non-trivial decision cites skill + section** (for example "applied `spring-boot-conventions` §7b — property-driven interval") in the summary, so reviewers can grep for the citations.
+
 ## 5. Pre-flight checklist — first PR of a new service
 
-- [ ] `mvn -q verify` passes locally and in CI.
+- [ ] `mvn -q spotless:apply` was run once on the rendered code, then `mvn -q verify` passes locally and in CI.
 - [ ] Mutation score ≥ 75 % on the touched packages.
 - [ ] Liveness + readiness probes return 200 against a real run.
 - [ ] Docker image runs as **non-root** and starts on a clean machine.

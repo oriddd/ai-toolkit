@@ -70,6 +70,9 @@ warn_unreachable = true
 files = ["src", "tests"]
 mypy_path = "src"          # `mypy tests/unit/test_x.py` resolves the project from src/, not as an untyped install
 ```
+`files = ["src", "tests"]` with `mypy_path = "src"` needs every directory under `tests/` to be a package (an empty
+`__init__.py`, `python-unit-tests` Layout). Without them mypy stops with `Source file found twice under different
+module names: "cache" and "tests.fakes.cache"`.
 Every function is fully typed; `Any` is a last resort. Prefer `Protocol`, `TypedDict`, generics.
 Third-party packages without stubs: first add the stub package if one exists (`types-docker`), otherwise a
 narrow `[[tool.mypy.overrides]]` (`module = ["aiokafka", "aiokafka.*"]`, `ignore_missing_imports = true`), never

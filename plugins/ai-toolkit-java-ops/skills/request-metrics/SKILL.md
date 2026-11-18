@@ -7,7 +7,7 @@ description: >
 tier: must
 applies_to: [rest, monolith]
 depends_on: [code-structure, observability, spring-boot-conventions, strategy-registry-pattern]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.1
 last_reviewed: 2026-11-15
@@ -73,6 +73,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 | §6–§8 | tag parsers, `MetricsTagsHelper`, `MetricsTimerHelper` | extracting tags or building the Timer with SLO buckets | [`parsers-and-helpers.md`](./references/parsers-and-helpers.md) |
 | §9–§11 | `MetricsRecorder`, `MetricsRecorderRegistry`, adding a use-case recorder | adding a new metric (the only change needed) | [`recorders-and-registry.md`](./references/recorders-and-registry.md) |
 | §12 | tests for the metrics stack | testing filter, parsers or recorders | [`testing.md`](./references/testing.md) |
+| §13 | shipped templates | copying the executed Filter + Recorder + Parser stack and its tests | [`templates.md`](./references/templates.md) |
 
 ## Do / Don't
 

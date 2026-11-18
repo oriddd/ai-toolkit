@@ -30,6 +30,13 @@ src/my_service/errors/
 src/my_service/api/errors.py   # the one handler registration
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1 to §4 | `codes.py`, `base.py`, `domain.py`, `problem.py` and `api/errors.py` as complete modules | Creating the error contract | [references/error-modules.md](./references/error-modules.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["fastapi>=0.115", "pydantic>=2.8"]
@@ -86,13 +93,17 @@ class ErrorCodes:
     ORDER_ALREADY_EXISTS = ErrorCode(
         "ORDER_ALREADY_EXISTS", 409, "Order already exists", "Order {order_id} already exists")
     ORDER_VERSION_CONFLICT = ErrorCode(
-        "ORDER_VERSION_CONFLICT", 409, "Version conflict", "Order {order_id} was modified concurrently")
+        "ORDER_VERSION_CONFLICT", 409, "Version conflict",
+        "Order {order_id} was modified concurrently")
     EMAIL_ALREADY_REGISTERED = ErrorCode(  # no email in the text: it would reach body and logs
-        "EMAIL_ALREADY_REGISTERED", 409, "Email already registered", "This email is already registered")
+        "EMAIL_ALREADY_REGISTERED", 409, "Email already registered",
+        "This email is already registered")
     DEPENDENCY_UNAVAILABLE = ErrorCode(
-        "DEPENDENCY_UNAVAILABLE", 503, "Dependency unavailable", "Dependency {dependency} is unavailable")
+        "DEPENDENCY_UNAVAILABLE", 503, "Dependency unavailable",
+        "Dependency {dependency} is unavailable")
     DEPENDENCY_BAD_RESPONSE = ErrorCode(   # the dependency answered, but not per its contract
-        "DEPENDENCY_BAD_RESPONSE", 502, "Bad dependency response", "Dependency {dependency} sent an invalid response")
+        "DEPENDENCY_BAD_RESPONSE", 502, "Bad dependency response",
+        "Dependency {dependency} sent an invalid response")
     NOT_AUTHENTICATED = ErrorCode(
         "NOT_AUTHENTICATED", 401, "Not authenticated", "A valid bearer token is required")
     FORBIDDEN = ErrorCode("FORBIDDEN", 403, "Forbidden", "The caller may not perform this action")
@@ -147,7 +158,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
         return _problem(request, status_code=422, title="Validation failed",
-                        detail="Request is invalid", code="VALIDATION_FAILED", errors=field_errors(exc))
+                        detail="Request is invalid", code="VALIDATION_FAILED",
+                        errors=field_errors(exc))
 
     @app.exception_handler(StarletteHTTPException)  # starlette.exceptions.HTTPException: 404, 405
     async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -169,7 +181,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 def field_errors(exc: RequestValidationError) -> list[FieldError]:
     # loc/type/msg only: exc.errors() also has the rejected `input` (see python-input-validation)
     return [
-        FieldError(field=".".join(str(part) for part in err["loc"]), code=err["type"], message=err["msg"])
+        FieldError(
+            field=".".join(str(part) for part in err["loc"]), code=err["type"], message=err["msg"]
+        )
         for err in exc.errors()
     ]
 

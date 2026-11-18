@@ -1,0 +1,94 @@
+package {{basePackage}}.monitor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import {{basePackage}}.config.ProblemDetailSecurityHandler;
+import {{basePackage}}.config.SecurityConfig;
+import {{basePackage}}.controller.{{ControllerClass}};
+import {{basePackage}}.exception.handler.GlobalExceptionHandler;
+import {{basePackage}}.monitor.parser.ClientIdParser;
+import {{basePackage}}.monitor.parser.ExportFormatParser;
+import {{basePackage}}.monitor.parser.MetricNameResolver;
+import {{basePackage}}.monitor.parser.RequestMethodParser;
+import {{basePackage}}.monitor.parser.ResponseStatusParser;
+import {{basePackage}}.monitor.recorder.InvoiceMetricsRecorder;
+import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;
+import {{basePackage}}.operation.{{OperationClass}};
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(
+        controllers = {{ControllerClass}}.class,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
+@Import({
+    SecurityConfig.class,
+    ProblemDetailSecurityHandler.class,
+    GlobalExceptionHandler.class,
+    MonitoringConfig.class,
+    MonitoringWebConfig.class,
+    ClientIdCaptureInterceptor.class,
+    MetricsFilter.class,
+    MetricNameResolver.class,
+    MetricsRecorderRegistry.class,
+    InvoiceMetricsRecorder.class,
+    MetricsTimerHelper.class,
+    MetricsTagsHelper.class,
+    RequestMethodParser.class,
+    ResponseStatusParser.class,
+    ClientIdParser.class,
+    ExportFormatParser.class,
+    RequestMetricsSecurityTest.MeterRegistryConfiguration.class
+})
+class RequestMetricsSecurityTest {
+
+    private static final String METRIC = "orders.invoices.requests";
+
+    @TestConfiguration
+    static class MeterRegistryConfiguration {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
+    @Autowired MockMvc mvc;
+    @Autowired MeterRegistry meterRegistry;
+    @MockitoBean {{OperationClass}} operation;
+    @MockitoBean JwtDecoder jwtDecoder;
+
+    @Test
+    void get_authenticatedClient_isTaggedWithItsAuthorizedParty() throws Exception {
+        mvc.perform(get("{{apiPath}}").with(jwt().jwt(j -> j.claim("azp", "billing")).authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("SCOPE_read"))))
+                .andExpect(status().isOk());
+
+        assertThat(meterRegistry.get(METRIC)
+                        .tags("requestMethod", "GET", "responseStatus", "200", "clientId", "billing", "format", "UNKNOWN")
+                        .timer()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void get_rejectedBySecurity_isStillRecordedBecauseTheFilterRunsFirst() throws Exception {
+        mvc.perform(get("{{apiPath}}")).andExpect(status().isUnauthorized());
+
+        assertThat(meterRegistry.get(METRIC)
+                        .tags("requestMethod", "GET", "responseStatus", "401", "clientId", "UNKNOWN")
+                        .timer()
+                        .count())
+                .isEqualTo(1);
+    }
+}

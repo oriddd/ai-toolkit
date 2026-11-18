@@ -1,0 +1,98 @@
+package {{basePackage}}.permission;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
+class SpringSecurityCallerContextResolverTest {
+
+    private final SpringSecurityCallerContextResolver resolver = new SpringSecurityCallerContextResolver();
+
+    @BeforeEach
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static Jwt jwt(final String subject, @Nullable final String authorizedParty) {
+        final Jwt.Builder builder =
+                Jwt.withTokenValue("token")
+                        .header("alg", "none")
+                        .subject(subject)
+                        .issuedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                        .expiresAt(Instant.parse("2026-01-01T01:00:00Z"));
+        if (authorizedParty != null) {
+            builder.claim("azp", authorizedParty);
+        }
+        return builder.build();
+    }
+
+    private static void authenticate(final Jwt jwt, final String... authorities) {
+        final List<GrantedAuthority> granted = Arrays.stream(authorities).<GrantedAuthority>map(SimpleGrantedAuthority::new).toList();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, granted));
+    }
+
+    @Test
+    void resolve_subjectEqualsAuthorizedParty_isServiceAccount() {
+        authenticate(jwt("billing-client", "billing-client"));
+
+        assertThat(resolver.resolve()).isEqualTo(CallerContext.SERVICE_ACCOUNT);
+    }
+
+    @Test
+    void resolve_subjectDiffersFromAuthorizedParty_isUser() {
+        authenticate(jwt("alice", "web-app"));
+
+        assertThat(resolver.resolve()).isEqualTo(CallerContext.USER);
+    }
+
+    @Test
+    void resolve_tokenWithoutAuthorizedParty_isUser() {
+        authenticate(jwt("alice", null));
+
+        assertThat(resolver.resolve()).isEqualTo(CallerContext.USER);
+    }
+
+    @Test
+    void resolve_noAuthentication_isNull() {
+        assertThat(resolver.resolve()).isNull();
+    }
+
+    @Test
+    void resolve_nonJwtAuthentication_isNull() {
+        SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated("bob", "n/a", List.of()));
+
+        assertThat(resolver.resolve()).isNull();
+    }
+
+    @Test
+    void grantedScopes_mixedAuthorities_returnsOnlyScopesWithoutThePrefix() {
+        authenticate(jwt("alice", "web-app"), "SCOPE_read", "SCOPE_invoices.write", "ROLE_ADMIN");
+
+        assertThat(resolver.grantedScopes()).containsExactlyInAnyOrder("read", "invoices.write");
+    }
+
+    @Test
+    void grantedScopes_noAuthentication_isEmpty() {
+        assertThat(resolver.grantedScopes()).isEmpty();
+    }
+
+    @Test
+    void grantedScopes_noScopeAuthorities_isEmpty() {
+        authenticate(jwt("alice", "web-app"), "ROLE_ADMIN");
+
+        assertThat(resolver.grantedScopes()).isEmpty();
+    }
+}

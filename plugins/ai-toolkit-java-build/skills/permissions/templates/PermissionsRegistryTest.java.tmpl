@@ -1,0 +1,68 @@
+package {{basePackage}}.permission;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class PermissionsRegistryTest {
+
+    private static PermissionsCheckStrategy strategyFor(final CallerContext... contexts) {
+        final PermissionsCheckStrategy strategy = mock(PermissionsCheckStrategy.class);
+        when(strategy.supportedContexts()).thenReturn(List.of(contexts));
+        return strategy;
+    }
+
+    @Test
+    void getStrategy_registeredContext_returnsItsStrategy() {
+        final PermissionsCheckStrategy serviceAccount = strategyFor(CallerContext.SERVICE_ACCOUNT);
+        final PermissionsCheckStrategy user = strategyFor(CallerContext.USER);
+
+        final PermissionsRegistry registry = new PermissionsRegistry(List.of(serviceAccount, user));
+
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).containsSame(serviceAccount);
+        assertThat(registry.getStrategy(CallerContext.USER)).containsSame(user);
+    }
+
+    @Test
+    void getStrategy_oneStrategyForSeveralContexts_servesEachOfThem() {
+        final PermissionsCheckStrategy both = strategyFor(CallerContext.SERVICE_ACCOUNT, CallerContext.USER);
+
+        final PermissionsRegistry registry = new PermissionsRegistry(List.of(both));
+
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).containsSame(both);
+        assertThat(registry.getStrategy(CallerContext.USER)).containsSame(both);
+    }
+
+    @Test
+    void getStrategy_unregisteredContext_isEmpty() {
+        final PermissionsRegistry registry = new PermissionsRegistry(List.of(strategyFor(CallerContext.USER)));
+
+        assertThat(registry.getStrategy(CallerContext.SERVICE_ACCOUNT)).isEmpty();
+    }
+
+    @Test
+    void getStrategy_noStrategiesAtAll_isEmpty() {
+        assertThat(new PermissionsRegistry(List.of()).getStrategy(CallerContext.USER)).isEmpty();
+    }
+
+    @Test
+    void getStrategy_nullContext_isEmpty() {
+        final PermissionsRegistry registry = new PermissionsRegistry(List.of(strategyFor(CallerContext.USER)));
+
+        assertThat(registry.getStrategy(null)).isEmpty();
+    }
+
+    @Test
+    void constructor_twoStrategiesForOneContext_failsStartup() {
+        final List<PermissionsCheckStrategy> clashing =
+                List.of(strategyFor(CallerContext.USER), strategyFor(CallerContext.USER));
+
+        assertThatThrownBy(() -> new PermissionsRegistry(clashing))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Two permission strategies support USER");
+    }
+}

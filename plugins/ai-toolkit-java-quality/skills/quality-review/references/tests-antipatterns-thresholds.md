@@ -41,7 +41,7 @@ Part of the [`quality-review`](../SKILL.md) skill. Section numbers and headings 
     See `unit-tests` §"Test Every LEGO Brick".
 
 22. **Test naming convention** — test methods follow
-    `methodName_condition_expectedResult()` naming (`unit-tests`). Flag vague names like `test1()`, `testMethod()`, `happyPath()`.
+    `methodName_condition_expectedResult()` or `when<Condition>_<Then>()` naming (`unit-tests` mandates the first form for new tests; the second is accepted in review). Flag vague names like `test1()`, `testMethod()`, `happyPath()`.
 
 ### E. Testability Anti-Patterns (see `testable-code-principles`)
 
@@ -111,10 +111,10 @@ junit-named edge case may justify breaking one).
 | --- | --- | --- |
 | F21. Cyclomatic complexity per method | **≤ 10** | PMD / Checkstyle `CyclomaticComplexity` |
 | F22. Method length (effective LOC, ignoring blank/`}`) | **≤ 30** | manual / Checkstyle |
-| F23. Class length | **≤ 200** (hard ceiling 300 — the only F-item that breaks the build, via Checkstyle) | Checkstyle |
+| F23. Class length | **≤ 300** (the only F-item that breaks the build, via Checkstyle `FileLength`) | Checkstyle |
 | F24. Number of method parameters | **≤ 4** (use a record / parameter object beyond; constructors excluded — injected collaborators) | Checkstyle (warning) |
 | F25. Number of fields | **≤ 7** (sign of class doing too much) | manual |
-| F26. NCSS (non-commenting source statements) per file | **≤ 200** (500 could never fire before the F23 ceiling) | PMD / Checkstyle `JavaNCSS` |
+| F26. NCSS (non-commenting source statements) per file | **≤ 500** | PMD / Checkstyle `JavaNCSS` |
 | F27. Class fan-out (number of other types referenced) | **≤ 25** | Checkstyle `ClassFanOutComplexity` |
 | F28. Cognitive complexity per method | **≤ 15** | SonarQube |
 | F29. Public API surface of a `client/<dep>/` sub-package | **≤ 1 facade type** that callers depend on (others may be public if returned from the facade) | manual |

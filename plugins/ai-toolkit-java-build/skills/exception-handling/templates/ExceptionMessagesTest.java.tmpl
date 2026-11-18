@@ -1,0 +1,116 @@
+package {{basePackage}}.exception.constants;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.exception.BaseDomainException;
+import {{basePackage}}.exception.BadRequestException;
+import {{basePackage}}.exception.ConflictException;
+import {{basePackage}}.exception.DependencyException;
+import {{basePackage}}.exception.ForbiddenException;
+import {{basePackage}}.exception.NotFoundException;
+import {{basePackage}}.exception.TooManyRequestsException;
+import {{basePackage}}.exception.UnavailableException;
+import {{basePackage}}.exception.UnsupportedApiVersionException;
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+
+class ExceptionMessagesTest {
+
+    private static void assertCodeAndMessage(
+            BaseDomainException e, String expectedCode, String expectedMessage) {
+        assertThat(e.getErrorCode()).isEqualTo(expectedCode);
+        assertThat(e.getMessage()).isEqualTo(expectedMessage);
+    }
+
+    @Test
+    void resourceNotFound_typeAndId_buildsNotFound() {
+        final NotFoundException e = ExceptionMessages.resourceNotFound("Invoice", "42");
+
+        assertCodeAndMessage(e, ExceptionMessages.ERR_NOT_FOUND, "Invoice with id '42' was not found.");
+    }
+
+    @Test
+    void versionConflict_typeAndId_buildsConflict() {
+        final ConflictException e = ExceptionMessages.versionConflict("Invoice", "42");
+
+        assertCodeAndMessage(e, ExceptionMessages.ERR_CONFLICT, "Invoice '42' was modified concurrently.");
+    }
+
+    @Test
+    void invalidField_fieldAndReason_buildsBadRequest() {
+        final BadRequestException e = ExceptionMessages.invalidField("amount", "must be positive");
+
+        assertCodeAndMessage(
+                e, ExceptionMessages.ERR_BAD_REQUEST, "Field 'amount' is invalid: must be positive");
+    }
+
+    @Test
+    void accessDenied_action_buildsForbidden() {
+        final ForbiddenException e = ExceptionMessages.accessDenied("invoice-42");
+
+        assertCodeAndMessage(e, ExceptionMessages.ERR_FORBIDDEN, "Access denied to 'invoice-42'.");
+    }
+
+    @Test
+    void callerContextNotFound_buildsForbidden() {
+        assertCodeAndMessage(
+                ExceptionMessages.callerContextNotFound(),
+                ExceptionMessages.ERR_FORBIDDEN,
+                "No caller context could be resolved.");
+    }
+
+    @Test
+    void unrecognizedCallerContext_context_buildsForbidden() {
+        assertCodeAndMessage(
+                ExceptionMessages.unrecognizedCallerContext("robot"),
+                ExceptionMessages.ERR_FORBIDDEN,
+                "Unrecognized caller context: robot");
+    }
+
+    @Test
+    void callerHasNoPermissions_resourceId_buildsForbidden() {
+        assertCodeAndMessage(
+                ExceptionMessages.callerHasNoPermissions("inv-1"),
+                ExceptionMessages.ERR_FORBIDDEN,
+                "Caller has no permissions on 'inv-1'.");
+    }
+
+    @Test
+    void rateLimitExceeded_seconds_buildsTooManyRequestsWithRetryAfter() {
+        final TooManyRequestsException e = ExceptionMessages.rateLimitExceeded(1500);
+
+        assertCodeAndMessage(
+                e,
+                ExceptionMessages.ERR_TOO_MANY_REQUESTS,
+                "Rate limit exceeded; retry after 1500 seconds.");
+        assertThat(e.getRetryAfter()).contains(Duration.ofSeconds(1500));
+    }
+
+    @Test
+    void dependencyUnavailable_dependencyAndCause_buildsUnavailableWrappingCause() {
+        final IllegalStateException cause = new IllegalStateException("down");
+
+        final UnavailableException e = ExceptionMessages.dependencyUnavailable("foo", cause);
+
+        assertCodeAndMessage(
+                e, ExceptionMessages.ERR_UNAVAILABLE, "Downstream dependency foo is unavailable.");
+        assertThat(e.getCause()).isSameAs(cause);
+    }
+
+    @Test
+    void dependencyCallFailed_dependencyAndStatus_buildsDependencyException() {
+        final DependencyException e = ExceptionMessages.dependencyCallFailed("foo", 418);
+
+        assertCodeAndMessage(e, ExceptionMessages.ERR_DEPENDENCY, "Call to foo failed with status 418.");
+    }
+
+    @Test
+    void unsupportedApiVersion_versions_buildsUnsupportedApiVersion() {
+        final UnsupportedApiVersionException e = ExceptionMessages.unsupportedApiVersion("[V1, V2]");
+
+        assertCodeAndMessage(
+                e,
+                ExceptionMessages.ERR_UNSUPPORTED_API_VERSION,
+                "Unsupported API version. Supported versions: [V1, V2]");
+    }
+}

@@ -6,7 +6,7 @@ description: >
 tier: must
 applies_to: [rest, monolith]
 depends_on: [permissions]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.1
 last_reviewed: 2026-11-15
@@ -23,6 +23,7 @@ last_reviewed: 2026-11-15
 - Validation layer: assert invariants a single field cannot express (cross-field rules
   via a Spring `Validator`, existence checks via a constraint backed by a `rule/` bean) —
   never as ad-hoc `if/throw` guards in the service (`input-validation`).
+- Service/domain layer: re-asserts state-dependent invariants through domain exceptions (the controller cannot see them).
 - Persistence: schema constraints (`NOT NULL`, `CHECK`, length limits) — the
   database is the last line of defence.
 
@@ -51,7 +52,7 @@ origins:
 
 ```java
 @ConfigurationProperties(prefix = "security.cors")
-public record CorsProperties(List<String> allowedOrigins, boolean allowCredentials) {}
+public record CorsProperties(List<String> allowedOrigins, boolean allowCredentials) {}   // register it: @EnableConfigurationProperties(CorsProperties.class) on the config class (or @ConfigurationPropertiesScan)
 
 @Bean
 public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
@@ -71,7 +72,10 @@ public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
 Never `*` for origins when `allowCredentials = true`.
 
 The bean only takes effect through Spring Security: the `permissions` `SecurityConfig` template calls
-`.cors(Customizer.withDefaults())`, which picks up this `CorsConfigurationSource` bean.
+`.cors(Customizer.withDefaults())`, which picks up this `CorsConfigurationSource` bean. The path pattern is matched
+without the servlet context path, so `/api/**` is right for a service under `server.servlet.context-path: /orders`.
+Verified: a preflight from the listed origin answers 200 with `Access-Control-Allow-Origin`, `Max-Age: 3600` and no
+`Allow-Credentials`; any other origin gets 403.
 
 ## 4. Rate limiting
 
@@ -124,7 +128,9 @@ http.headers(h -> h
 ```
 
 Spring Security writes HSTS only on HTTPS requests. Behind a TLS-terminating ingress the app sees HTTP, so set
-`server.forward-headers-strategy=framework` (and let the ingress set `X-Forwarded-Proto`).
+`server.forward-headers-strategy=framework` (and let the ingress set `X-Forwarded-Proto`). Verified: without the
+forwarded header the response has `Referrer-Policy`, `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` but no
+HSTS; with `X-Forwarded-Proto: https` it adds `Strict-Transport-Security: max-age=31536000 ; includeSubDomains`.
 
 ## 7. Actuator lockdown
 
@@ -202,6 +208,7 @@ public class OutboundHostAllowList implements ClientHttpRequestInterceptor {
 }
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(OutboundHttpConfig.OutboundProperties.class)   // without it the record is no bean and startup fails
 public class OutboundHttpConfig {
 
     @ConfigurationProperties(prefix = "security.outbound")
@@ -220,8 +227,19 @@ security:
     allowed-hosts: ${OUTBOUND_ALLOWED_HOSTS}   # comma list, no default — an empty list blocks every outbound call
 ```
 
-List every downstream host the service calls, including the ones only a readiness indicator probes
+A refused call throws an unchecked `IllegalStateException` before any connection is opened (a misconfiguration, not an
+outage, so it is not a domain exception). List every downstream host the service calls, including the ones only a readiness indicator probes
 (`health-indicator` builds its client from the same builder).
+
+## 11. Templates
+
+Rendered into a service and run (slice tests, unit tests, JaCoCo, PIT) by `tools/render-java-proof.sh`; target package `config/`.
+
+- CORS (§3): [`CorsProperties`](./templates/CorsProperties.java.tmpl) (`security.cors.allowed-origins`, empty = deny all) and [`CorsConfig`](./templates/CorsConfig.java.tmpl); proven by [`CorsSecurityTest`](./templates/CorsSecurityTest.java.tmpl) against the real `permissions` `SecurityConfig` (listed origin allowed with `Max-Age: 3600` and no credentials, other origin, method or header refused with 403).
+- Headers (§6): [`SecurityHeadersConfig`](./templates/SecurityHeadersConfig.java.tmpl) registers Spring Security's own `HeaderWriterFilter` with `Referrer-Policy` and HSTS (one year, subdomains), next to the headers the chain already writes; [`SecurityHeadersTest`](./templates/SecurityHeadersTest.java.tmpl) asserts every header over HTTPS, on a 401, and the absence of HSTS over plain HTTP.
+- SSRF allow-list (§10): [`OutboundHostAllowList`](./templates/OutboundHostAllowList.java.tmpl) and [`OutboundHttpConfig`](./templates/OutboundHttpConfig.java.tmpl) (the properties record is registered with `@EnableConfigurationProperties`; an unset list blocks everything); [`OutboundHostAllowListTest`](./templates/OutboundHostAllowListTest.java.tmpl) proves an unlisted host (incl. the cloud metadata address) and a host-less URI are refused before any connection.
+- The slice tests carry the `[request-metrics]` tag lines of the `component-tests` `SecurityTest`: strip them (recipe: `exception-handling` SKILL.md §3a) when the service has no request-metrics.
+- Component and integration tests of a service that calls its own dependencies must list those hosts (`127.0.0.1` for a local stub) in `security.outbound.allowed-hosts` of the test configuration.
 
 ## Do / Don't
 

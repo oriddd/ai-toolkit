@@ -1,0 +1,47 @@
+package {{basePackage}}.messaging;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class OutboxMarkerTest {
+
+    private static final Instant NOW = Instant.parse("2026-01-02T03:04:05Z");
+
+    @Mock private OutboxRepository outboxRepo;
+
+    private OutboxMarker marker() {
+        return new OutboxMarker(outboxRepo, Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void markPublished_existingRow_setsPublishedAtFromTheClock() {
+        final OutboxEntity row = new OutboxEntity("invoice", "inv-1", "SampleEvent", "{}", null, NOW.minusSeconds(60));
+        when(outboxRepo.findById(row.getId())).thenReturn(Optional.of(row));
+
+        marker().markPublished(row.getId());
+
+        assertThat(row.getPublishedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void markPublished_unknownRow_looksItUpAndChangesNothing() {
+        final UUID id = UUID.randomUUID();
+        when(outboxRepo.findById(id)).thenReturn(Optional.empty());
+
+        marker().markPublished(id);
+
+        verify(outboxRepo).findById(id);
+    }
+}

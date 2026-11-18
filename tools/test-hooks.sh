@@ -5,8 +5,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUARD="$ROOT/plugins/ai-toolkit-workflow/hooks/guard-git.sh"
 fail=0
-mk_json() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1"; }
-expect_ask()   { out="$(mk_json "$1" | "$GUARD")"; if printf '%s' "$out" | grep -q '"permissionDecision": "ask"'; then :; else echo "FAIL (should ask): $1"; fail=1; fi; }
+mk_json() {
+  local in out
+  in="$(mktemp)"; out="$(mktemp)"
+  printf '%s' "$1" > "$in"
+  python3 -c 'import json,sys; c=open(sys.argv[1],newline="",encoding="utf-8",errors="surrogateescape").read(); open(sys.argv[2],"w",encoding="utf-8",errors="surrogateescape").write(json.dumps({"tool_name":"Bash","tool_input":{"command":c}}, ensure_ascii=True)+"\n")' "$in" "$out"
+  cat "$out"
+  rm -f "$in" "$out"
+}
+expect_ask()   { out="$(mk_json "$1" | "$GUARD")"; if grep -q '"permissionDecision": "ask"' <<<"$out"; then :; else echo "FAIL (should ask): $1"; fail=1; fi; }
 expect_quiet() { out="$(mk_json "$1" | "$GUARD")"; if [ -n "$out" ]; then echo "FAIL (should be quiet): $1"; fail=1; fi; }
 
 ASK=(
@@ -34,6 +41,14 @@ ASK=(
   'git checkout -B main' 'git switch -C main' 'git filter-branch --all' 'git filter-repo --path x' 'git pull --rebase' 'git pull -r origin main'
   'git subtree push --prefix x origin main' 'git submodule foreach git push' 'git submodule foreach --recursive "git push"' 'git svn dcommit'
   'git send-email x.patch' 'git stash' 'git stash push -m wip' 'git stash pop' 'git stash drop' 'git stash apply' 'git stash clear'
+  # --continue creates the commit; -s means --sign/--signoff except for merge/rebase/pull; destructive housekeeping
+  'git rebase --continue' 'git cherry-pick --continue' 'git merge --continue' 'git revert --continue'
+  'git tag -s v1' 'git tag -a -s v1 -m x' 'git tag -sm x v1' 'git tag -u KEY v1' 'git tag -f v1' 'git commit -s -m x' 'git cherry-pick -x abc'
+  'git merge -s ours feature' 'git rebase -s recursive -x "make test" main' 'git pull --rebase -s ours origin main'
+  'git reflog expire --expire=now --all' 'git reflog delete HEAD@{1}' 'git gc --prune=now' 'git gc --prune' 'git worktree remove ../wt'
+  'git worktree prune' 'git remote add origin url' 'git remote set-url origin url' 'git remote remove origin' 'git remote rename a b'
+  'git config user.name x' 'git config --global user.email a@b.c' 'git config --unset user.name' 'git config --add a.b c' 'git config -e'
+  'git config --replace-all a.b c' 'git config set a.b c' 'git config -f .gitmodules a.b c' 'git -C repo config core.hooksPath x'
   # gh writes (H-3) and publishers (H-4)
   'gh pr review 1 --approve' 'gh pr ready 1' 'gh pr close 1' 'gh release upload v1 a.zip' 'gh release edit v1' 'gh repo delete a/b --yes' 'gh workflow run ci.yml'
   'npm --prefix x publish' 'pnpm -r publish' 'yarn npm publish' 'mvnw.cmd deploy' './mvnw deploy' 'gradle publish' './gradlew :lib:publishToSonatype'
@@ -49,6 +64,10 @@ ASK=(
   # discarding uncommitted work (completion-gate §1)
   'git clean -fdx' 'git clean -f' 'git restore .' 'git restore src/A.java' 'git restore --staged --worktree f' 'git checkout -- f'
   'git checkout .' 'git checkout HEAD f' 'git checkout -f main' 'git switch --discard-changes main'
+  # launchers and find -exec (best effort)
+  'find . -name x -exec git commit -m x {} \;' 'find . -exec git push {} +' "find . -exec sh -c 'git commit -m x' \\;" 'find . -execdir git tag v1 \;'
+  'python -m twine upload dist/*' 'python3 -m twine upload dist/*' 'python3.12 -m twine upload dist/*' 'uv publish' 'uv run twine upload dist/*'
+  'uvx twine upload dist/*' 'pipx run twine upload dist/*' 'poetry run twine upload dist/*' 'poetry publish --build' 'fd -e py -x git commit'
 )
 # cases the no-python fallback is not expected to catch (it does not handle substitutions, aliases or heredocs)
 FB_SKIP_ASK=('$(echo git) push' '`which git` commit -m x' 'git -c alias.ci=commit ci -m x' 'git -c alias.p="!git push" p')
@@ -58,7 +77,7 @@ QUIET=(
   'git stash list' 'git tag' 'git tag -l' 'git tag --list "v*"' 'git reset HEAD file' 'git reset'
   'echo "use git commit later"' 'echo git commit' 'cat commit.txt' 'grep -r "git push" docs' 'mvn -B verify' 'npm run verify'
   'gh pr view 12' 'gh pr list' 'ls -la' 'python3 -m pytest'
-  'git merge --abort' 'git rebase --abort' 'git rebase --continue' 'git cherry-pick --abort' 'git push --dry-run' 'git push -n' 'git commit --dry-run'
+  'git merge --abort' 'git rebase --abort' 'git cherry-pick --abort' 'git push --dry-run' 'git push -n' 'git commit --dry-run'
   'git merge --no-commit feature' 'git commit -h' 'gh pr create --help' 'git rebase --show-current-patch' 'git am --abort'
   $'git status\ngit diff' 'git diff | grep commit' 'git status # commit later' 'git commit-graph verify' 'git merge-base a b'
   'npm run build' 'npm test' 'mvn -B verify' 'mvn dependency:tree' 'gh api repos/a/b/pulls' 'gh api -X GET repos/a/b'
@@ -67,6 +86,10 @@ QUIET=(
   'gh pr checks' 'gh release list' 'gh release view v1' 'gh repo view' 'gh workflow list' 'gh pr review --help' 'npm run release'
   'gradle build' './gradlew publishToMavenLocal' 'echo hi # git push' 'git log --grep "#1 commit"' 'echo "$(git log -1) commit msg"'
   '$EDITOR commit.txt' 'git status | bash' 'git subtree split --prefix x' 'git submodule foreach git status'
+  # read-only forms of the same subcommands
+  'git tag -l "v*"' 'git tag -n' 'git tag -v v1' 'git tag --contains abc' 'git commit -s --dry-run -m x'  'git reflog' 'git reflog show HEAD' 'git reflog -n 5' 'git gc' 'git gc --auto' 'git worktree list' 'git worktree add ../wt' 'git remote' 'git remote show origin'
+  'git remote get-url origin' 'git config --get user.name' 'git config user.name' 'git config --list' 'git config -l' 'git config --global --get a.b'
+  'git config list' 'git config get a.b' 'git config --show-origin --get a.b' 'git config -f .gitmodules --get a.b'
   # heredoc bodies are data unless fed to a shell (H-6)
   $'cat <<EOF\ngit commit -m x\nEOF' $'cat > f <<\'EOF\'\ngit push\nEOF\necho ok'
   # option values and read-only forms that mention deploy/publish/version
@@ -74,13 +97,14 @@ QUIET=(
   'yarn version --help' 'npm publish --help' "gh api graphql -f query='{ viewer { login } }'" 'git reset HEAD~1 -- file.txt'
   'git reset HEAD~1 a.txt b.txt' 'git clean -n' 'git clean -fdn' 'git clean --dry-run' 'git restore --staged f' 'git checkout main'
   'git checkout -b x origin/x' 'git switch main'
+  'find . -name x -exec ls {} \;' "find . -name '*.py' -exec grep commit {} +" 'python3 -m twine check dist/*' 'python3 -m pytest' 'uv run pytest' 'uv sync' 'poetry build'
 )
 FB_SKIP_QUIET=($'cat <<EOF\ngit commit -m x\nEOF' $'cat > f <<\'EOF\'\ngit push\nEOF\necho ok')
 for c in "${ASK[@]}";   do expect_ask "$c";   done
 for c in "${QUIET[@]}"; do expect_quiet "$c"; done
 # git aliases from the user's config are expanded
 GCFG="$(mktemp)"; printf '[alias]\n\tci = commit -v\n\tst = status\n\tpub = "!git push origin HEAD"\n' > "$GCFG"
-for c in 'git ci -m x' 'git pub'; do out="$(mk_json "$c" | GIT_CONFIG_GLOBAL="$GCFG" "$GUARD")"; printf '%s' "$out" | grep -q '"permissionDecision": "ask"' || { echo "FAIL (alias should ask): $c"; fail=1; }; done
+for c in 'git ci -m x' 'git pub'; do out="$(mk_json "$c" | GIT_CONFIG_GLOBAL="$GCFG" "$GUARD")"; grep -q '"permissionDecision": "ask"' <<<"$out" || { echo "FAIL (alias should ask): $c"; fail=1; }; done
 out="$(mk_json 'git st' | GIT_CONFIG_GLOBAL="$GCFG" "$GUARD")"; [ -z "$out" ] || { echo "FAIL (alias should be quiet): git st"; fail=1; }
 rm -f "$GCFG"
 # nested wrappers must not blow up the runtime
@@ -94,7 +118,7 @@ in_skip() { local x="$1"; shift; local y; for y in "$@"; do [ "$x" = "$y" ] && r
 for c in "${ASK[@]}" 'pnpm version patch'; do
   in_skip "$c" "${FB_SKIP_ASK[@]}" && continue
   out="$(mk_json "$c" | PATH="$SAFEBIN" "$GUARD")"
-  printf '%s' "$out" | grep -q '"permissionDecision":"ask"' || { echo "FAIL: no-python fallback missed: $c"; fail=1; }
+  grep -q '"permissionDecision":"ask"' <<<"$out" || { echo "FAIL: no-python fallback missed: $c"; fail=1; }
 done
 for c in "${QUIET[@]}"; do
   in_skip "$c" "${FB_SKIP_QUIET[@]}" && continue
@@ -108,15 +132,64 @@ for payload in '' '{' 'null' '[]' '{"tool_input":null}' '{"tool_input":{"command
   chk_rc "odd payload $payload" bash -c 'printf "%s" "$1" | "$2"' _ "$payload" "$GUARD"
 done
 chk_rc "invalid utf-8" bash -c 'printf "{\"tool_input\":{\"command\":\"echo \xe6\xff\"}}" | "$1"' _ "$GUARD"
-long="$(python3 -c 'print("echo " + "x"*400000)')"
+long="echo $(head -c 400000 /dev/zero | tr '\0' x)"
 start=$(date +%s); mk_json "$long" | "$GUARD" >/dev/null; [ $(( $(date +%s) - start )) -le 10 ] || { echo "FAIL: 400 KB command took too long (a hang, not a slow runner)"; fail=1; }
 # missing parser file => exit 0 and the grep fallback still asks for a plain commit
 HD="$(mktemp -d)"; cp "$GUARD" "$HD/guard-git.sh"; chmod +x "$HD/guard-git.sh"
 out="$(mk_json 'git commit -m x' | "$HD/guard-git.sh" 2>/dev/null)"; rc=$?
-{ [ $rc -eq 0 ] && printf '%s' "$out" | grep -q '"permissionDecision"'; } || { echo "FAIL: missing guard_git.py must exit 0 and fall back (rc=$rc)"; fail=1; }
+{ [ $rc -eq 0 ] && grep -q '"permissionDecision"' <<<"$out"; } || { echo "FAIL: missing guard_git.py must exit 0 and fall back (rc=$rc)"; fail=1; }
 out="$(mk_json 'git status' | "$HD/guard-git.sh" 2>/dev/null)"; [ -z "$out" ] || { echo "FAIL: fallback fired on git status"; fail=1; }
 rm -rf "$HD"
 [ $fail -eq 0 ] && echo "guard-git: ${#ASK[@]} ask-cases and ${#QUIET[@]} quiet-cases OK"
+
+# commit-msg hook from git-commit-conventions/SKILL.md, extracted and run under dash and bash
+CM="$(mktemp -d)"
+python3 - "$ROOT/plugins/ai-toolkit-workflow/skills/git-commit-conventions/SKILL.md" > "$CM/commit-msg.sh" <<'PYEOF'
+import re, sys
+for block in re.findall(r"```bash\n(.*?)```", open(sys.argv[1], encoding="utf-8").read(), re.S):
+    if "scripts/commit-msg.sh" in block:
+        print(block)
+        break
+PYEOF
+[ -s "$CM/commit-msg.sh" ] || { echo "FAIL: commit-msg.sh block not found in git-commit-conventions/SKILL.md"; fail=1; }
+cm_rc() { printf '%s\n' "$2" > "$CM/msg"; env LC_ALL="${3:-C}" "$1" "$CM/commit-msg.sh" "$CM/msg" >/dev/null 2>&1; echo $?; }
+DASH_OK=0
+if command -v dash >/dev/null 2>&1; then
+  if [ "$(cm_rc dash 'feat: add x')" = 0 ]; then DASH_OK=1; else echo "NOTE: dash cannot run the commit-msg hook on this runner (probe failed); skipping dash cases"; fi
+fi
+shell_usable() { [ "$1" != dash ] || [ "$DASH_OK" = 1 ]; }
+long72="feat: $(python3 -c 'print("a"*66)')"; long73="${long72}a"
+utf72="feat: $(python3 -c 'print("é"*66)')"; utf73="${utf72}é"
+for sh_ in sh bash dash; do
+  command -v "$sh_" >/dev/null || continue
+  shell_usable "$sh_" || continue
+  for m in 'feat: SSO login' 'fix: JWT parsing' 'docs: README' 'fix(api): UserService NPE' 'feat!: drop v1' 'build: Docker base image' 'chore: iOS build' 'feat: add x' 'Merge branch main' 'fixup! feat: x' "$long72" "$utf72"; do
+    [ "$(cm_rc "$sh_" "$m")" = 0 ] || { echo "FAIL ($sh_ commit-msg should accept): $m"; fail=1; }
+  done
+  for m in 'feat: Add x' 'fix: Fixed the bug' 'feat: add x.' 'wip' 'feat:x' "$long73" "$utf73"; do
+    [ "$(cm_rc "$sh_" "$m")" = 1 ] || { echo "FAIL ($sh_ commit-msg should reject): $m"; fail=1; }
+  done
+done
+for loc in C en_US.UTF-8 C.UTF-8; do
+  [ "$DASH_OK" = 1 ] || break
+  [ "$(cm_rc dash "$utf72" "$loc")" = 0 ] && [ "$(cm_rc dash "$utf73" "$loc")" = 1 ] || { echo "FAIL: UTF-8 character count wrong under LC_ALL=$loc"; fail=1; }
+done
+cm_run() { printf "$1" > "$CM/msg"; "$2" "$CM/commit-msg.sh" "$CM/msg" >/dev/null 2>&1; }
+for shell in sh bash dash; do
+  command -v "$shell" >/dev/null 2>&1 || continue
+  shell_usable "$shell" || continue
+  cm_run 'feat: add x\n' "$shell" || { echo "FAIL ($shell commit-msg): valid subject rejected"; fail=1; }
+  cm_run 'feat: add x.\n' "$shell" && { echo "FAIL ($shell commit-msg): trailing period accepted"; fail=1; }
+  cm_run 'feat: add x.\r\n' "$shell" && { echo "FAIL ($shell commit-msg): trailing period before CRLF accepted"; fail=1; }
+  cm_run 'feat: add x\r\n\r\nbody.\r\n' "$shell" || { echo "FAIL ($shell commit-msg): valid CRLF subject rejected"; fail=1; }
+  cm_run '# Please enter the message\nfeat: add x\n' "$shell" || { echo "FAIL ($shell commit-msg): leading comment line was read as the subject"; fail=1; }
+  cm_run '# comment\n\nfeat: add x.\n' "$shell" && { echo "FAIL ($shell commit-msg): bad subject after comment accepted"; fail=1; }
+  cm_run '\n\nfeat: Add x\n' "$shell" && { echo "FAIL ($shell commit-msg): capitalised summary after blank lines accepted"; fail=1; }
+  cm_run 'added stuff\n' "$shell" && { echo "FAIL ($shell commit-msg): missing prefix accepted"; fail=1; }
+  cm_run 'fixup! feat: add x\n' "$shell" || { echo "FAIL ($shell commit-msg): fixup! rejected"; fail=1; }
+done
+rm -rf "$CM"
+[ $fail -eq 0 ] && echo "commit-msg hook OK"
 
 # session-start: routing + stale-copy warning; remove-old-copies is a safe dry run / backup
 WF="$ROOT/plugins/ai-toolkit-workflow"
@@ -125,13 +198,13 @@ mkdir -p "$H1/.claude/skills/code-structure" "$H1/.claude/agents"; printf -- '--
 mkdir -p "$H1/.claude/skills/ci"; printf -- '---\nname: ci\ndescription: my own CI skill\n---\n' > "$H1/.claude/skills/ci/SKILL.md"
 mkdir -p "$H1/.claude/skills/my-own-skill"; echo "---" > "$H1/.claude/skills/my-own-skill/SKILL.md"
 out="$(HOME="$H1" CLAUDE_PLUGIN_ROOT="$WF" bash "$WF/hooks/session-start.sh" 2>"$SSERR")"; rc=$?
-{ [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "ai-toolkit workflow" && printf '%s' "$out" | grep -q "WARNING: 3 user-level skills/agents"; } || { echo "FAIL: session-start should print routing + warn about 3 stale copies (rc=$rc)"; fail=1; }
+{ [ $rc -eq 0 ] && grep -q "ai-toolkit workflow" <<<"$out" && grep -q "WARNING: 3 user-level skills/agents" <<<"$out"; } || { echo "FAIL: session-start should print routing + warn about 3 stale copies (rc=$rc)"; fail=1; }
 [ ! -s "$SSERR" ] || { echo "FAIL: session-start wrote to stderr"; fail=1; }
 out="$(HOME="$H2" bash "$WF/hooks/session-start.sh" 2>&1)"; rc=$?
-{ [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "ai-toolkit workflow" && ! printf '%s' "$out" | grep -q WARNING; } || { echo "FAIL: clean HOME must not warn (rc=$rc)"; fail=1; }
+{ [ $rc -eq 0 ] && grep -q "ai-toolkit workflow" <<<"$out" && ! grep -q WARNING <<<"$out"; } || { echo "FAIL: clean HOME must not warn (rc=$rc)"; fail=1; }
 out="$(env -u HOME bash "$WF/hooks/session-start.sh" 2>&1)"; [ $? -eq 0 ] || { echo "FAIL: session-start must survive unset HOME"; fail=1; }
 dry="$(HOME="$H1" bash "$WF/scripts/remove-old-copies.sh")"
-{ printf '%s' "$dry" | grep -q "found   skill code-structure  \[copy\]" && printf '%s' "$dry" | grep -q "found   agent code-review  \[copy\]" && printf '%s' "$dry" | grep -q "found   skill ci  \[custom?\]" && ! printf '%s' "$dry" | grep -q my-own-skill && [ -f "$H1/.claude/skills/code-structure/SKILL.md" ]; } || { echo "FAIL: dry run must list only shipped names and move nothing"; fail=1; }
+{ grep -q "found   skill code-structure  \[copy\]" <<<"$dry" && grep -q "found   agent code-review  \[copy\]" <<<"$dry" && grep -q "found   skill ci  \[custom?\]" <<<"$dry" && ! grep -q my-own-skill <<<"$dry" && [ -f "$H1/.claude/skills/code-structure/SKILL.md" ]; } || { echo "FAIL: dry run must list only shipped names and move nothing"; fail=1; }
 HOME="$H1" bash "$WF/scripts/remove-old-copies.sh" --apply >/dev/null
 { [ ! -e "$H1/.claude/skills/code-structure" ] && [ -f "$H1/.claude/skills/my-own-skill/SKILL.md" ] && [ -f "$H1/.claude/skills/ci/SKILL.md" ] && ls -d "$H1"/.claude/ai-toolkit-old-copies-backup-*/skills/code-structure >/dev/null 2>&1; } || { echo "FAIL: --apply must back up shipped copies only and leave user skills (incl. same-named custom ones) alone"; fail=1; }
 # a second run in the same second must not nest the new backup inside the first one

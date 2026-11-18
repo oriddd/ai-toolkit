@@ -1,0 +1,154 @@
+package {{basePackage}}.messaging;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.UUID;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
+
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.test")
+@Testcontainers
+class OutboxBrokerOutageIT {
+
+    private static final String TOPIC = "invoices";
+    private static final String GROUP = "orders";
+    private static final int PER_PHASE = 5;
+
+    @Container @ServiceConnection static PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @Container @ServiceConnection static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.9.1");
+
+    @MockitoBean private JwtDecoder jwtDecoder;
+    @MockitoSpyBean private IdempotentConsumer consumer;
+    @Autowired private OutboxRepository outbox;
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private KafkaTemplate<String, String> kafkaTemplate;
+
+    private void appendEvents(final int count) {
+        for (int i = 0; i < count; i++) {
+            final String id = UUID.randomUUID().toString();
+            outbox.save(new OutboxEntity("invoice", id, "InvoiceCreated", "{\"id\":\"" + id + "\"}", null, Instant.now()));
+        }
+    }
+
+    private int count(final String sql) {
+        return jdbc.queryForObject(sql, Integer.class);
+    }
+
+    private void pauseBroker() {
+        kafka.getDockerClient().pauseContainerCmd(kafka.getContainerId()).exec();
+    }
+
+    private void resumeBroker() {
+        kafka.getDockerClient().unpauseContainerCmd(kafka.getContainerId()).exec();
+    }
+
+    @Test
+    void relay_brokerPausedMidRelay_publishesEverythingAtLeastOnceAndTheConsumerAppliesEachEventOnce() throws Exception {
+        appendEvents(PER_PHASE);
+        await().atMost(Duration.ofSeconds(60)).until(() -> count("select count(*) from outbox where published_at is not null") == PER_PHASE);
+
+        pauseBroker();
+        appendEvents(PER_PHASE);
+        await().during(Duration.ofSeconds(8))
+                .atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> {
+                    assertThat(count("select count(*) from outbox where published_at is null")).isEqualTo(PER_PHASE);
+                    assertThat(count("select count(*) from outbox")).isEqualTo(2 * PER_PHASE);
+                });
+
+        resumeBroker();
+        await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
+            assertThat(count("select count(*) from outbox where published_at is null")).isZero();
+            assertThat(count("select count(*) from processed_events")).isEqualTo(2 * PER_PHASE);
+        });
+
+        final String redelivered = jdbc.queryForObject("select id::text from outbox order by created_at limit 1", String.class);
+        final String redeliveredPayload = jdbc.queryForObject("select payload from outbox where id = ?::uuid", String.class, redelivered);
+        final String aggregateId = jdbc.queryForObject("select aggregate_id from outbox where id = ?::uuid", String.class, redelivered);
+        final ProducerRecord<String, String> duplicate = new ProducerRecord<>(TOPIC, aggregateId, redeliveredPayload);
+        duplicate.headers().add("event-id", redelivered.getBytes(StandardCharsets.UTF_8));
+        kafkaTemplate.send(duplicate).get();
+
+        final Set<String> distinctEventIds = new HashSet<>();
+        final List<String> allDeliveries = new ArrayList<>();
+        try (KafkaConsumer<String, String> probe = probe()) {
+            probe.subscribe(List.of(TOPIC));
+            await().atMost(Duration.ofSeconds(60)).until(() -> {
+                for (ConsumerRecord<String, String> rec : probe.poll(Duration.ofMillis(500))) {
+                    final String eventId = new String(rec.headers().lastHeader("event-id").value(), StandardCharsets.UTF_8);
+                    distinctEventIds.add(eventId);
+                    allDeliveries.add(eventId);
+                }
+                return allDeliveries.size() >= 2 * PER_PHASE + 1;
+            });
+        }
+        assertThat(distinctEventIds).hasSize(2 * PER_PHASE);
+        assertThat(allDeliveries).hasSizeGreaterThan(distinctEventIds.size());
+
+        await().atMost(Duration.ofSeconds(60)).until(this::groupHasConsumedEverything);
+        assertThat(count("select count(*) from processed_events")).isEqualTo(2 * PER_PHASE);
+        verify(consumer, times(2 * PER_PHASE)).processEvent(any());
+        assertThat(count("select count(*) from outbox")).isEqualTo(2 * PER_PHASE);
+    }
+
+    private KafkaConsumer<String, String> probe() {
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "probe-" + UUID.randomUUID());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        return new KafkaConsumer<>(props);
+    }
+
+    private boolean groupHasConsumedEverything() throws Exception {
+        try (AdminClient admin = AdminClient.create(Map.<String, Object>of("bootstrap.servers", kafka.getBootstrapServers()));
+                KafkaConsumer<String, String> probe = probe()) {
+            final List<TopicPartition> partitions = probe.partitionsFor(TOPIC).stream()
+                    .map(info -> new TopicPartition(TOPIC, info.partition()))
+                    .toList();
+            final Map<TopicPartition, Long> ends = probe.endOffsets(partitions);
+            final Map<TopicPartition, OffsetAndMetadata> committed =
+                    admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get();
+            return ends.entrySet().stream().allMatch(e -> {
+                final OffsetAndMetadata offset = committed.get(e.getKey());
+                return offset != null && offset.offset() >= e.getValue();
+            });
+        }
+    }
+}

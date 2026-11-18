@@ -1,0 +1,65 @@
+package {{basePackage}}.monitor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.testconfig.ComponentTestConfiguration;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.context.ActiveProfiles;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureObservability
+@Import(ComponentTestConfiguration.class)
+@ActiveProfiles("component-test")
+class RequestMetricsComponentTest {
+
+    private static final String METRIC = "orders.invoices.requests";
+    private static final String KNOWN = "00000000-0000-0000-0000-000000000001";
+
+    @LocalServerPort private int port;
+    @Autowired private TestRestTemplate restTemplate;
+    @Autowired private MeterRegistry meterRegistry;
+
+    private String url(final String path) {
+        return "http://localhost:" + port + "{{contextPath}}" + path;
+    }
+
+    @Test
+    void get_meteredEndpoint_recordsTheDomainTimerWithCamelCaseTags() {
+        assertThat(restTemplate.getForEntity(url("{{apiPath}}/" + KNOWN + "?format=csv"), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        final Timer timer = meterRegistry.get(METRIC)
+                .tags("requestMethod", "GET", "responseStatus", "200", "clientId", "UNKNOWN", "format", "csv")
+                .timer();
+        assertThat(timer.count()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void get_failingRequest_isRecordedWithItsErrorStatus() {
+        restTemplate.getForEntity(url("{{apiPath}}/00000000-0000-0000-0000-000000000002"), String.class);
+
+        assertThat(meterRegistry.get(METRIC)
+                        .tags("requestMethod", "GET", "responseStatus", "404", "format", "UNKNOWN")
+                        .timer()
+                        .count())
+                .isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void get_unmeteredEndpointAndActuator_registerNothingUnderTheDomainName() {
+        restTemplate.getForEntity(url("/api/v1/nothing"), String.class);
+        restTemplate.getForEntity(url("/actuator/health"), String.class);
+
+        assertThat(meterRegistry.find(METRIC).tags("responseStatus", "200", "requestMethod", "POST").timer()).isNull();
+        assertThat(meterRegistry.find(METRIC).timers()).allSatisfy(t -> assertThat(t.getId().getTag("responseStatus")).isIn("200", "404"));
+    }
+}

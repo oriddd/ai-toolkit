@@ -46,6 +46,9 @@ code, `ai-toolkit-quality:code-hygiene`, Sonar, docs — and finish with its evi
 on a Gradle build use the project's wrapper equivalent (`./gradlew build`). Fix failures at the cause; never suppress or
 weaken a check to get green. Return the evidence table to your caller unchanged, so it can relay it instead of running
 the gate a second time.
+Without the `ai-toolkit-quality` plugin the gate and hygiene skills are unavailable: fall back to the non-negotiables of
+`ai-toolkit-java-quality:golden-path` as the checklist (each with the command run and its result), and state in the report
+that the completion gate is incomplete.
 
 ## Checklist before returning
 - [ ] METRIC_<NAME> constant added to MonitoringConstants.
@@ -54,5 +57,6 @@ the gate a second time.
 - [ ] recordMetrics() uses MetricsTimerHelper.
 - [ ] New parser returns sentinel (never null/"") on failure.
 - [ ] Unit tests: canHandle, recordMetrics, parser.
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

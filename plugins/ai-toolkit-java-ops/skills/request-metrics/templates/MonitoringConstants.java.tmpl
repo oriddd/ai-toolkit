@@ -1,0 +1,18 @@
+package {{basePackage}}.monitor;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class MonitoringConstants {
+    public static final String METRIC_TAG_REQUEST_METHOD = "requestMethod";
+    public static final String METRIC_TAG_RESPONSE_STATUS = "responseStatus";
+    public static final String METRIC_TAG_CLIENT_ID = "clientId";
+    public static final String METRIC_TAG_FORMAT = "format";
+
+    public static final String UNKNOWN = "UNKNOWN";
+    public static final String OTHER = "OTHER";
+    public static final String BASIC = "BASIC";
+
+    public static final String METRIC_INVOICE_REQUESTS = "orders.invoices.requests";
+}

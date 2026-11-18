@@ -1,0 +1,83 @@
+package {{basePackage}}.adapter.ratelimit.bucket4j;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.spi.ratelimit.RateLimitDecision;
+import io.github.bucket4j.TimeMeter;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+
+class Bucket4jRateLimiterTest {
+
+    private final FakeClock clock = new FakeClock();
+    private final Bucket4jRateLimiter limiter = new Bucket4jRateLimiter(3, Duration.ofMinutes(1), clock);
+
+    @Test
+    void tryConsume_withinCapacity_admitsEveryCall() {
+        for (int i = 0; i < 3; i++) {
+            assertThat(limiter.tryConsume("user:a").allowed()).isTrue();
+        }
+    }
+
+    @Test
+    void tryConsume_overCapacity_refusesWithTheWaitUntilTheNextRefill() {
+        for (int i = 0; i < 3; i++) {
+            limiter.tryConsume("user:a");
+        }
+
+        final RateLimitDecision refused = limiter.tryConsume("user:a");
+
+        assertThat(refused.allowed()).isFalse();
+        assertThat(refused.retryAfterSeconds()).isEqualTo(61);
+    }
+
+    @Test
+    void tryConsume_retryAfterShrinksAsTimePasses() {
+        for (int i = 0; i < 3; i++) {
+            limiter.tryConsume("user:a");
+        }
+        clock.advance(Duration.ofSeconds(40));
+
+        assertThat(limiter.tryConsume("user:a").retryAfterSeconds()).isEqualTo(21);
+    }
+
+    @Test
+    void tryConsume_afterTheRefillPeriod_admitsAgain() {
+        for (int i = 0; i < 4; i++) {
+            limiter.tryConsume("user:a");
+        }
+        clock.advance(Duration.ofMinutes(1));
+
+        assertThat(limiter.tryConsume("user:a").allowed()).isTrue();
+    }
+
+    @Test
+    void tryConsume_eachClientHasItsOwnBucket() {
+        for (int i = 0; i < 3; i++) {
+            limiter.tryConsume("user:a");
+        }
+
+        assertThat(limiter.tryConsume("user:a").allowed()).isFalse();
+        assertThat(limiter.tryConsume("user:b").allowed()).isTrue();
+        assertThat(limiter.tryConsume("ip:10.0.0.1").allowed()).isTrue();
+    }
+
+    static final class FakeClock implements TimeMeter {
+        private long nanos;
+
+        void advance(final Duration duration) {
+            nanos += duration.toNanos();
+        }
+
+        @Override
+        public long currentTimeNanos() {
+            return nanos;
+        }
+
+        @Override
+        public boolean isWallClockBased() {
+            return false;
+        }
+    }
+}

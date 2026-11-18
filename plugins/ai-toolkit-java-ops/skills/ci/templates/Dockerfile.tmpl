@@ -27,6 +27,6 @@ EXPOSE {{appPort}}
 
 # MaxRAMPercentage sizes the heap from the container memory limit (the JVM default is only 25 %).
 # MinRAMPercentage only applies to very small containers (< ~250 MB); it is not a minimum heap.
-ENV JAVA_OPTS="-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=512m -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -Dlog4j2.formatMsgNoLookups=true"
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]

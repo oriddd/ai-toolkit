@@ -49,7 +49,8 @@ the language's code-review agent once everything has landed.
 - Shared files (build manifest such as `pom.xml`/`pyproject.toml`/`package.json`, config, the error catalogue, the API contract) are edited only
   by the main thread — before the fan-out, or after it from the subagents' reported requests.
 - Never run two subagents that both build or test the project in the same working tree.
-  Subagents write code; the main thread runs the build.
+  Partial-scope subagents (test-writers, one unit of a fan-out) write code; the main thread runs the build. A builder
+  agent that owns the whole task runs the completion gate itself (`completion-gate` §6) — never two of those in one tree.
 - For risky or large parallel edits use `isolation: "worktree"`.
 
 ## 4. The brief

@@ -5,7 +5,7 @@ description: >
 tier: should
 applies_to: [rest, monolith]
 depends_on: [observability, external-client, pluggable-architecture]
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.1
 last_reviewed: 2026-11-15
@@ -42,6 +42,20 @@ resilience4j:
         limitRefreshPeriod: 1s
         timeoutDuration: 0
 ```
+
+```java
+@RateLimiter(name = "search-api", fallbackMethod = "throttled")
+public SearchResult search(final String query) throws TooManyRequestsException { … }
+
+private SearchResult throttled(final String query, final RequestNotPermitted e) throws TooManyRequestsException {
+    throw ExceptionMessages.rateLimitExceeded(1);   // wait ≈ limitRefreshPeriod, in seconds
+}
+```
+
+The aspect needs `resilience4j-spring-boot3` + `spring-boot-starter-aop` (`resilience-patterns`). The fallback keeps the checked
+domain exception: the caller sees `TooManyRequestsException` (429 + `Retry-After`) instead of the library's unchecked
+`RequestNotPermitted`. With `timeoutDuration: 0` the third call inside the period is refused at once and the
+next period admits calls again.
 
 ### 2b. Local Rate Limiting with Bucket4j
 
@@ -119,9 +133,41 @@ When running multiple instances, use **Redis + Bucket4j** to have a shared count
 Add a second `RateLimiterPort` adapter (`adapter/ratelimit/redis/`) selected by
 `platform.ratelimit.provider: redis`. It uses `com.bucket4j:bucket4j_jdk17-lettuce` (`${bucket4j.version}`, the same release as core) and a
 Lettuce-based `ProxyManager` (`LettuceBasedProxyManager`): `proxyManager.getProxy(clientKey, () -> configuration)`
-returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. Check the
-builder API of the Bucket4j version you pin — it changed across 8.x releases. Prove both adapters with one
-`RateLimiterPort` contract suite (`adapter-contract-tests`).
+returns a bucket whose state lives in Redis, with an expiration strategy so idle keys are removed. The Lettuce
+module does **not** pull Lettuce in: add `io.lettuce:lettuce-core` (managed by the Spring Boot BOM, or use
+`spring-boot-starter-data-redis`). Verified on Bucket4j 8.22.0 against Redis 7:
+
+```java
+public class RedisBucket4jRateLimiter implements RateLimiterPort {
+    private static final BucketConfiguration CONFIGURATION = BucketConfiguration.builder()
+            .addLimit(limit -> limit.capacity(10).refillIntervally(10, Duration.ofMinutes(1)))
+            .build();
+    private final LettuceBasedProxyManager<byte[]> proxyManager;
+
+    public RedisBucket4jRateLimiter(final RedisClient client) {
+        final StatefulRedisConnection<byte[], byte[]> connection = client.connect(ByteArrayCodec.INSTANCE);
+        this.proxyManager = LettuceBasedProxyManager.builderFor(connection)
+                .withExpirationStrategy(
+                        ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(2)))
+                .build();
+    }
+
+    @Override
+    public RateLimitDecision tryConsume(final String clientKey) {
+        final ConsumptionProbe probe = proxyManager.builder()
+                .build(clientKey.getBytes(UTF_8), () -> CONFIGURATION)
+                .tryConsumeAndReturnRemaining(1);
+        return new RateLimitDecision(probe.isConsumed(),
+                TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+    }
+}
+```
+
+Imports: `io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager`, `io.github.bucket4j.distributed.ExpirationAfterWriteStrategy`,
+`io.lettuce.core.RedisClient`, `io.lettuce.core.api.StatefulRedisConnection`, `io.lettuce.core.codec.ByteArrayCodec`. Two
+adapter instances on two `RedisClient`s (two pods) share one bucket: 20 calls split across them admit exactly 10.
+Prove both adapters with one `RateLimiterPort` contract suite (`adapter-contract-tests`); the Redis one runs against a
+Testcontainers `redis:7-alpine`.
 
 ## 4. Where to Limit?
 
@@ -140,6 +186,19 @@ then read `request.getRemoteAddr()`, never the header yourself.
 When a limit is reached:
 - Return **`429 Too Many Requests`**.
 - Include the **`Retry-After`** header (seconds or timestamp).
+
+## 6. Templates
+
+Rendered into a service and run (unit, component, JaCoCo, PIT) by `tools/render-java-proof.sh`; the Redis adapter runs against a
+`redis:7-alpine` Testcontainer in its `--with-it` step. Enable with `platform.ratelimit.enabled=true`
+(`provider: local|redis`, `capacity`, `refill-period`; defaults in [`RateLimitProperties`](./templates/RateLimitProperties.java.tmpl), package `config/` so that `adapter/` and `ratelimit/` stay cycle-free).
+
+- Port: [`RateLimiterPort`](./templates/RateLimiterPort.java.tmpl), [`RateLimitDecision`](./templates/RateLimitDecision.java.tmpl).
+- Local adapter (§2b): [`Bucket4jRateLimiter`](./templates/Bucket4jRateLimiter.java.tmpl) (Caffeine-bounded buckets, injectable `TimeMeter`); [`Bucket4jRateLimiterTest`](./templates/Bucket4jRateLimiterTest.java.tmpl) drives refill with a fake clock.
+- Filter (§2b): [`RateLimitFilter`](./templates/RateLimitFilter.java.tmpl) hands `TooManyRequestsException` to the advice, [`ClientKeyResolver`](./templates/ClientKeyResolver.java.tmpl) keys by principal, else remote address; registered by [`RateLimitConfig`](./templates/RateLimitConfig.java.tmpl) as a `FilterRegistrationBean` (after Spring Security, so the principal exists). [`RateLimitComponentTest`](./templates/RateLimitComponentTest.java.tmpl) proves 429 + `Retry-After` + the `ERR-TOO-MANY-REQUESTS` body through the real advice.
+- Client side (§2a, programmatic): [`OutboundRateLimiter`](./templates/OutboundRateLimiter.java.tmpl) wraps a Resilience4j `RateLimiter` and throws the domain 429 exception; the annotation form of §2a needs the aspect starter and is not shipped.
+- Redis (§3): [`RedisBucket4jRateLimiter`](./templates/RedisBucket4jRateLimiter.java.tmpl) + [`RedisRateLimitConfig`](./templates/RedisRateLimitConfig.java.tmpl) (`provider: redis`); [`RedisBucket4jRateLimiterIT`](./templates/RedisBucket4jRateLimiterIT.java.tmpl) shows two pods sharing one bucket.
+- Tests of the other classes: [`ClientKeyResolverTest`](./templates/ClientKeyResolverTest.java.tmpl), [`RateLimitFilterTest`](./templates/RateLimitFilterTest.java.tmpl), [`OutboundRateLimiterTest`](./templates/OutboundRateLimiterTest.java.tmpl).
 
 ## Do / Don't
 

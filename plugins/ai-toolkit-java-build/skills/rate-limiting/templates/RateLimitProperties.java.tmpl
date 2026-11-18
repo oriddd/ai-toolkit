@@ -1,0 +1,17 @@
+package {{basePackage}}.config;
+
+import java.time.Duration;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+@ConfigurationProperties(prefix = "platform.ratelimit")
+public record RateLimitProperties(
+        @DefaultValue("false") boolean enabled,
+        @DefaultValue("local") String provider,
+        @DefaultValue("10") long capacity,
+        @DefaultValue("1m") Duration refillPeriod,
+        @DefaultValue("redis://localhost:6379") String redisUri,
+        @DefaultValue Outbound outbound) {
+
+    public record Outbound(@DefaultValue("50") int limitForPeriod, @DefaultValue("1s") Duration limitRefreshPeriod) {}
+}

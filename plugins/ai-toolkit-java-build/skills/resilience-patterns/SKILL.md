@@ -23,8 +23,11 @@ they need `resilience4j-spring-boot3` **and** `spring-boot-starter-aop` on the c
 `resilience4j-micrometer` publishes `resilience4j_*` metrics for every instance automatically once Actuator +
 Micrometer are present.
 
-> **Boot 4 note:** the AOP starter is `spring-boot-starter-aspectj`; check the Resilience4j starter name for
-> Boot 4 before upgrading. Spring Framework 7 also ships native `@Retryable` and `@ConcurrencyLimit` in core —
+> **Boot 4 note:** the AOP starter is `spring-boot-starter-aspectj`, and the Resilience4j starter is
+> `io.github.resilience4j:resilience4j-spring-boot4` (2.4.0; `resilience4j-bom` does not manage it, so give the
+> `<version>`). `resilience4j-spring-boot3` fails application startup on Boot 4 (`IncompatibleSpringBootVersionException`).
+> The annotations, YAML keys and every snippet here are unchanged; only the auto-configuration packages move to
+> `io.github.resilience4j.springboot.*` (relevant for test slices that import them). Spring Framework 7 also ships native `@Retryable` and `@ConcurrencyLimit` in core —
 > pick one mechanism per service.
 
 ## 1. The Bulkhead Pattern
@@ -65,7 +68,14 @@ resilience4j:   # same single resilience4j: key as above
         waitDurationInOpenState: 10s
         failureRateThreshold: 50
         eventConsumerBufferSize: 10
+        ignoreExceptions:                    # a 4xx (the caller's fault) must not open the circuit; without this four 400s in a window do
+          - com.example.foo.exception.DependencyException   # {{basePackage}}.exception.DependencyException
 ```
+
+`UnavailableException` (5xx, timeout) is recorded as a failure by default and is what `Retry` is configured for
+(`external-client` §10, which has the `@CircuitBreaker` + `@Retry` + fallback code for checked domain exceptions). With
+the circuit OPEN the fallback receives `CallNotPermittedException` and maps it to `UnavailableException` without calling
+the dependency (503).
 
 - **OPEN**: Requests fail immediately with `CallNotPermittedException`.
 - **HALF_OPEN**: A limited number of probe requests are allowed through to see if the dependency has recovered.
@@ -80,6 +90,31 @@ Every network call **must** have a timeout.
   `@TimeLimiter` works **only on async return types** (`CompletionStage` / `CompletableFuture`); on a synchronous
   method every call throws `IllegalReturnTypeException` ("CompletionStage expected") — at call time, not at startup. For synchronous code, set connect and read timeouts on the HTTP client
   itself (`external-client` §6) and bound retries with a total time budget (`external-client` §10).
+
+For an async call that must not wait forever, combine `@TimeLimiter` with a thread-pool bulkhead and map every failure
+(timeout, `BulkheadFullException`, a runtime error) to the checked domain exception inside the fallback:
+
+```java
+@TimeLimiter(name = "bar", fallbackMethod = "fallback")
+@Bulkhead(name = "bar", type = Bulkhead.Type.THREADPOOL)
+public CompletableFuture<BarDto> fetch() {
+    return CompletableFuture.supplyAsync(this::callBar);
+}
+
+private CompletableFuture<BarDto> fallback(final Throwable t) {
+    return CompletableFuture.failedFuture(ExceptionMessages.dependencyUnavailable("bar", t));
+}
+```
+
+```yaml
+resilience4j:
+  timelimiter.instances.bar: { timeoutDuration: 2s, cancelRunningFuture: true }
+  thread-pool-bulkhead.instances.bar: { coreThreadPoolSize: 4, maxThreadPoolSize: 8, queueCapacity: 20 }
+```
+
+The caller gets an `ExecutionException` whose cause is the `UnavailableException`. Both aspects need their
+auto-configuration (`resilience4j-spring-boot3` provides it) and `spring-boot-starter-aop`; a slice test that imports
+only some Resilience4j auto-configurations silently skips the missing aspect.
 
 ## 4. The Fail-Fast Pattern
 

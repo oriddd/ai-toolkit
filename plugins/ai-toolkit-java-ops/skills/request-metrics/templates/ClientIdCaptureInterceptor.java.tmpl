@@ -1,0 +1,22 @@
+package {{basePackage}}.monitor;
+
+import {{basePackage}}.monitor.parser.ClientIdParser;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class ClientIdCaptureInterceptor implements HandlerInterceptor {
+
+    private final ClientIdParser clientIdParser;
+
+    @Override
+    public boolean preHandle(final HttpServletRequest request, final HttpServletResponse response, final Object handler) {
+        request.setAttribute(ClientIdParser.CLIENT_ID_ATTRIBUTE, clientIdParser.parseClientId(request));
+        return true;
+    }
+}

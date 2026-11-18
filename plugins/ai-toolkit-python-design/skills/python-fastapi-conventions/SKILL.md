@@ -32,6 +32,13 @@ src/my_service/
         └── health.py
 ```
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §1, §2, §7 | The complete `create_app` + lifespan, the `Depends` providers, the orders and health routers | Wiring the app or adding a provider or router | [references/app-wiring.md](./references/app-wiring.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.8", "pydantic-settings>=2.4"]
@@ -64,12 +71,14 @@ across requests. Tests swap providers with `app.dependency_overrides`.
 ```python
 def get_uow_factory(request: Request) -> Callable[[], UnitOfWork]:
     factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
-    return partial(SqlUnitOfWork, factory)          # `python-persistence`: a new session per unit of work
+    # `python-persistence`: a new session per unit of work
+    return partial(SqlUnitOfWork, factory)
 
 def get_create_order_operation(
     uow_factory: Annotated[Callable[[], UnitOfWork], Depends(get_uow_factory)],
 ) -> CreateOrderOperation:
-    return CreateOrderOperation(uow_factory)        # the operation opens `async with uow_factory() as uow`
+    # the operation opens `async with uow_factory() as uow`
+    return CreateOrderOperation(uow_factory)
 ```
 
 The provider is typed with the `UnitOfWork` Protocol (from `python-persistence`), so a test override can
@@ -99,7 +108,8 @@ class PageParams(BaseModel):
 @router.get("", response_model=Page[OrderResponse])
 async def list_orders(
     customer_id: str,
-    page: Annotated[PageParams, Query()],    # without Query() a model parameter is read from the request body
+    # without Query() a model parameter is read from the request body
+    page: Annotated[PageParams, Query()],
     operation: Annotated[ListOrdersOperation, Depends(get_list_orders_operation)],
 ) -> Page[OrderResponse]:
     return await operation.execute(customer_id, page)
@@ -129,7 +139,7 @@ async def start_export(
     job = await jobs.start(body)                       # job row + its event in one unit of work
     response.headers["Location"] = f"{router.prefix}/jobs/{job.id}"
     response.headers["Retry-After"] = "5"
-    return job                                         # {"id": ..., "status": "pending", "result_url": null}
+    return job   # {"id": ..., "status": "pending", "result_url": null}
 ```
 
 - `jobs.start` stores the job (`pending`) and an outbox event in the same unit of work (`python-messaging` §2); a
@@ -147,7 +157,8 @@ The session *factory* is the shared object; sessions and units of work are creat
 
 ```python
 def create_app(settings: AppSettings | None = None) -> FastAPI:
-    resolved = settings or AppSettings()        # production reads the environment; tests pass settings
+    # production reads the environment; tests pass settings
+    resolved = settings or AppSettings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -160,8 +171,10 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app = FastAPI(title="my-service", lifespan=lifespan)
     register_exception_handlers(app)
     app.add_middleware(MetricsMiddleware)           # `python-observability` §4
-    app.add_middleware(CorrelationIdMiddleware)     # added last = outermost: every log line has the ID
-    app.mount("/metrics", make_asgi_app())          # prometheus-client; keep it off the public ingress
+    # added last = outermost: every log line has the ID
+    app.add_middleware(CorrelationIdMiddleware)
+    # prometheus-client; keep it off the public ingress
+    app.mount("/metrics", make_asgi_app())
     app.include_router(health.router)               # /health/live and /health/ready
     app.include_router(orders.router)
     return app
@@ -179,7 +192,9 @@ Add `/health/live` (process is up, no I/O) and `/health/ready` (dependencies rea
 
 ```python
 @router.get("/ready")
-async def ready(engine: Annotated[AsyncEngine, Depends(get_engine)], response: Response) -> dict[str, str]:
+async def ready(
+    engine: Annotated[AsyncEngine, Depends(get_engine)], response: Response
+) -> dict[str, str]:
     try:
         async with asyncio.timeout(2), engine.connect() as conn:
             await conn.execute(text("SELECT 1"))

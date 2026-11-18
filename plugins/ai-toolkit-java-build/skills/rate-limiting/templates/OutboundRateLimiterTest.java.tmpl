@@ -1,0 +1,45 @@
+package {{basePackage}}.ratelimit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import {{basePackage}}.exception.TooManyRequestsException;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+
+class OutboundRateLimiterTest {
+
+    private static OutboundRateLimiter limiterOf(final int limit, final Duration period) {
+        final RateLimiterConfig config = RateLimiterConfig.custom()
+                .limitForPeriod(limit)
+                .limitRefreshPeriod(period)
+                .timeoutDuration(Duration.ZERO)
+                .build();
+        return new OutboundRateLimiter(RateLimiter.of("test", config));
+    }
+
+    @Test
+    void acquire_withinTheLimit_returns() {
+        final OutboundRateLimiter limiter = limiterOf(2, Duration.ofMinutes(10));
+
+        assertThatCode(() -> {
+                    limiter.acquire();
+                    limiter.acquire();
+                })
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acquire_overTheLimit_throwsTooManyRequestsWithTheRefreshPeriodAsWait() {
+        final OutboundRateLimiter limiter = limiterOf(2, Duration.ofSeconds(30));
+
+        assertThatCode(limiter::acquire).doesNotThrowAnyException();
+        assertThatCode(limiter::acquire).doesNotThrowAnyException();
+
+        assertThatThrownBy(limiter::acquire)
+                .isInstanceOfSatisfying(TooManyRequestsException.class, e -> assertThat(e.getRetryAfter()).contains(Duration.ofSeconds(30)));
+    }
+}

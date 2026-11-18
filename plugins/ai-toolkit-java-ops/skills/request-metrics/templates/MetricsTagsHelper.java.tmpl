@@ -1,0 +1,28 @@
+package {{basePackage}}.monitor;
+
+import {{basePackage}}.monitor.parser.ClientIdParser;
+import {{basePackage}}.monitor.parser.RequestMethodParser;
+import {{basePackage}}.monitor.parser.ResponseStatusParser;
+import io.micrometer.core.instrument.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class MetricsTagsHelper {
+
+    private final RequestMethodParser requestMethodParser;
+    private final ResponseStatusParser responseStatusParser;
+    private final ClientIdParser clientIdParser;
+
+    public Set<Tag> buildGenericTags(final HttpServletRequest request, final HttpServletResponse response) {
+        return Set.of(
+                Tag.of(MonitoringConstants.METRIC_TAG_REQUEST_METHOD, requestMethodParser.parseRequestMethod(request)),
+                Tag.of(MonitoringConstants.METRIC_TAG_RESPONSE_STATUS, responseStatusParser.parseResponseStatus(response)),
+                Tag.of(MonitoringConstants.METRIC_TAG_CLIENT_ID, clientIdParser.parseClientId(request)));
+    }
+}

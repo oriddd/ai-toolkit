@@ -72,6 +72,9 @@ code, `ai-toolkit-quality:code-hygiene`, Sonar, docs — and finish with its evi
 on a Gradle build use the project's wrapper equivalent (`./gradlew build`). Fix failures at the cause; never suppress or
 weaken a check to get green. Return the evidence table to your caller unchanged, so it can relay it instead of running
 the gate a second time.
+Without the `ai-toolkit-quality` plugin the gate and hygiene skills are unavailable: fall back to the non-negotiables of
+`ai-toolkit-java-quality:golden-path` as the checklist (each with the command run and its result), and state in the report
+that the completion gate is incomplete.
 
 ## Checklist before returning
 
@@ -85,6 +88,7 @@ the gate a second time.
 - [ ] `ValidationConfig` has scoped `@InitBinder("dtoName")` (Spring style).
 - [ ] Unit test: rule bean as POJO, validator with mocked ctx.
 - [ ] Component test: HTTP 400 + ProblemDetail body asserted.
-- [ ] `@MockitoBean` for the validator / rule bean added to affected `@WebMvcTest` tests (`ai-toolkit-java-build:input-validation`, testing reference); full `@SpringBootTest` component tests keep the real rule and get any doubles from `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`).
+- [ ] `@MockitoBean` for rule beans and downstream services in affected `@WebMvcTest` tests; `@Import` a registered `Validator`, never mock it (its `supports()` would return false and the request would get a 500) (`ai-toolkit-java-build:input-validation`, testing reference); full `@SpringBootTest` component tests keep the real rule and get any doubles from `ComponentTestConfiguration` (`ai-toolkit-java-quality:component-tests`).
+- [ ] Each decision cites the skill + section number.
 - [ ] CHANGELOG updated — only when no release bot owns it (`ai-toolkit-workflow:release-versioning`).
 - [ ] `ai-toolkit-quality:completion-gate` evidence table produced; nothing committed.

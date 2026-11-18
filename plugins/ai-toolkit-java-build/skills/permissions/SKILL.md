@@ -72,9 +72,7 @@ authorization back-end** — those are plug-points:
 
 ### 2. `CallerContext` (enum)
 
-```java
-public enum CallerContext { USER, SERVICE_ACCOUNT, EXTERNAL_SYSTEM, BASIC_AUTH }
-```
+Shipped: [`CallerContext.java.tmpl`](./templates/CallerContext.java.tmpl) (`USER`, `SERVICE_ACCOUNT`; add `EXTERNAL_SYSTEM` / `BASIC_AUTH` only if accepted).
 
 The set of values is **project-specific** — only include the ones the
 service actually accepts (Phase 1 #2).
@@ -90,7 +88,8 @@ public interface CallerContextResolver {
 }
 ```
 
-A default `SpringSecurityCallerContextResolver` reads
+Shipped: [`CallerContextResolver.java.tmpl`](./templates/CallerContextResolver.java.tmpl) and the default
+[`SpringSecurityCallerContextResolver.java.tmpl`](./templates/SpringSecurityCallerContextResolver.java.tmpl), which reads
 `SecurityContextHolder.getContext().getAuthentication()` and inspects the
 authorities to bucket the call into one of the enum values, and exposes the granted scopes. You can override this bean to read
 your own claim instead.
@@ -140,29 +139,7 @@ public class PermissionsHandler {
 
 ### 5a. `PermissionsRegistry` (Registry/Router)
 
-```java
-@Component
-public class PermissionsRegistry {
-    private final Map<CallerContext, PermissionsCheckStrategy> strategiesByContext;
-
-    // Spring injects ALL PermissionsCheckStrategy beans automatically
-    public PermissionsRegistry(final List<PermissionsCheckStrategy> strategies) {
-        final Map<CallerContext, PermissionsCheckStrategy> byContext = new EnumMap<>(CallerContext.class);
-        for (final PermissionsCheckStrategy strategy : strategies) {
-            for (final CallerContext context : strategy.supportedContexts()) {
-                if (byContext.putIfAbsent(context, strategy) != null) {
-                    throw new IllegalStateException("Two permission strategies support " + context);
-                }
-            }
-        }
-        this.strategiesByContext = Map.copyOf(byContext);
-    }
-
-    public Optional<PermissionsCheckStrategy> getStrategy(final CallerContext callerContext) {
-        return Optional.ofNullable(callerContext).map(strategiesByContext::get);
-    }
-}
-```
+Shipped: [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl); Spring injects all strategy beans as a `List`.
 
 The map is built once and a duplicate discriminator fails startup, so
 routing never depends on bean order.
@@ -204,7 +181,7 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: http://localhost:8081/real
 
 Tests set their own value (`component-tests` §3, `integration-tests`).
 
-Bind `permissions.*` with a `PermissionsProperties` `@ConfigurationProperties`
+Bind `permissions.*` with the shipped [`PermissionsProperties.java.tmpl`](./templates/PermissionsProperties.java.tmpl)
 record (`spring-boot-conventions` §1). Also add a `ConfigurationConstants`
 entry per property: the `permissions` prefix constant in
 `constant/ConfigurationConstants`, used in `@ConfigurationProperties(prefix = …)`.
@@ -218,9 +195,8 @@ with a factory method returning `ForbiddenException`:
 
 - `CALLER_CONTEXT_NOT_FOUND` → `callerContextNotFound()` (shipped)
 - `UNRECOGNIZED_CALLER_CONTEXT` ("Unrecognized caller context: {0}") → `unrecognizedCallerContext(ctx)` (shipped)
-- `CALLER_HAS_NO_PERMISSIONS` → add `callerHasNoPermissions(resourceId)`
-- `SCOPES_NOT_FOUND` → add `scopesNotFound()`
-- `SCOPE_NOT_ALLOWED` → add `scopeNotAllowed(scope)`
+- `CALLER_HAS_NO_PERMISSIONS` → `callerHasNoPermissions(resourceId)` (shipped; used by `ScopeBasedPermissionsCheck`)
+- `SCOPES_NOT_FOUND` / `SCOPE_NOT_ALLOWED` → add `scopesNotFound()` / `scopeNotAllowed(scope)` only if a strategy needs them
 
 ### 8a. Identity provider outage
 
@@ -277,8 +253,9 @@ new enum value – never modify the handler.
 ✅ Keep the `PermissionsHandler.handle(...)` call **inside the operation**,
 not the controller – the operation owns the use case.
 ✅ Keep the `CallerContextResolver` as the only place that reads
-`SecurityContextHolder` / token internals. Strategies depend on the resolver
-or on injected scope lists, not on the security framework directly.
+`SecurityContextHolder` / token internals **for authorization**. Strategies depend on the resolver
+or on injected scope lists, not on the security framework directly. The one other reader is `persistence`'s
+`SecurityAuditorAware` (audit subject only); both live in `permission/`, the only package that may read it (ArchUnit).
 ❌ Never short-circuit a context with a TODO; always provide an explicit
 strategy (even a documented no-op) so the dispatcher does not throw
 `UNRECOGNIZED_CALLER_CONTEXT`.
@@ -290,9 +267,15 @@ maps the exception to a status code.
 
 ## 11. Templates
 
+Copy each class with its `*Test.java.tmpl` (Jacoco per class and PIT apply, `unit-tests`); `SecurityConfig` is covered by the
+`component-tests` security slice test.
+
+- [`CallerContext`](./templates/CallerContext.java.tmpl), [`CallerContextResolver`](./templates/CallerContextResolver.java.tmpl), [`SpringSecurityCallerContextResolver`](./templates/SpringSecurityCallerContextResolver.java.tmpl), [`PermissionsProperties`](./templates/PermissionsProperties.java.tmpl) — context, resolver and config binding.
 - [`PermissionsHandler.java.tmpl`](./templates/PermissionsHandler.java.tmpl) — Central permission dispatcher.
 - [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl) — Routes a `CallerContext` to its strategy.
 - [`PermissionsCheckStrategy.java.tmpl`](./templates/PermissionsCheckStrategy.java.tmpl) — The strategy SPI.
+- [`ScopeBasedPermissionsCheck.java.tmpl`](./templates/ScopeBasedPermissionsCheck.java.tmpl) — `SERVICE_ACCOUNT` scope allow-list (package `permission.strategy`).
 - [`SecurityConfig.java.tmpl`](./templates/SecurityConfig.java.tmpl) — Spring Security baseline for the service.
 - [`ProblemDetailSecurityHandler.java.tmpl`](./templates/ProblemDetailSecurityHandler.java.tmpl) — 401 / 403 from the filter chain as ProblemDetail (`security-hardening` §10).
 - [`IdentityProviderUnavailableFilter.java.tmpl`](./templates/IdentityProviderUnavailableFilter.java.tmpl) — IdP unreachable → 503 problem+json (§8a).
+- Tests: [`PermissionsHandlerTest`](./templates/PermissionsHandlerTest.java.tmpl), [`PermissionsRegistryTest`](./templates/PermissionsRegistryTest.java.tmpl), [`ScopeBasedPermissionsCheckTest`](./templates/ScopeBasedPermissionsCheckTest.java.tmpl), [`SpringSecurityCallerContextResolverTest`](./templates/SpringSecurityCallerContextResolverTest.java.tmpl), [`ProblemDetailSecurityHandlerTest`](./templates/ProblemDetailSecurityHandlerTest.java.tmpl), [`IdentityProviderUnavailableFilterTest`](./templates/IdentityProviderUnavailableFilterTest.java.tmpl).

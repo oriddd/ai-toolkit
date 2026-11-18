@@ -135,6 +135,8 @@ Always pick a concrete provider (Caffeine for in-process, Redis for shared)
 public Foo findById(String id) { … }
 ```
 
+- The Caffeine setup below needs `spring-boot-starter-cache` (it brings `spring-context-support`, which holds
+  `CaffeineCacheManager`) and `com.github.ben-manes.caffeine:caffeine` (version managed by the Boot BOM).
 - **Every cache has a TTL** (guild #9), set per cache name — never one global spec that silently applies to new
   caches. Wire it in one `config/CachingConfig` (which also carries `@EnableCaching`), with the TTLs in a
   properties record:
@@ -163,6 +165,8 @@ class CachingConfig {
 }
 ```
 
+- **Verified** (Boot 3.5): the per-name TTL expires an entry, a missing `foo.cache.ttl` fails startup (`@Validated` +
+  `@NotEmpty`), and a self-invoked `@Cacheable` loads on every call.
 - **Self-invocation bypasses the cache.** `@Cacheable` works through a Spring proxy, so calling the annotated method
   from another method of the same class (`this.findById(id)`) never hits the cache. Put the cached method on a
   separate bean.

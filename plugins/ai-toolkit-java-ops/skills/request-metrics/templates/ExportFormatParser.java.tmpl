@@ -1,0 +1,21 @@
+package {{basePackage}}.monitor.parser;
+
+import {{basePackage}}.monitor.MonitoringConstants;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Locale;
+import java.util.Set;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ExportFormatParser {
+    private static final Set<String> KNOWN_FORMATS = Set.of("csv", "pdf", "xlsx");
+
+    public String parseExportFormat(final HttpServletRequest request) {
+        final String format = request.getParameter("format");
+        if (format == null || format.isBlank()) {
+            return MonitoringConstants.UNKNOWN;
+        }
+        final String normalised = format.toLowerCase(Locale.ROOT);
+        return KNOWN_FORMATS.contains(normalised) ? normalised : MonitoringConstants.OTHER;
+    }
+}

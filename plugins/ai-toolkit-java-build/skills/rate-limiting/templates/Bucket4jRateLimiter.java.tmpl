@@ -1,0 +1,44 @@
+package {{basePackage}}.adapter.ratelimit.bucket4j;
+
+import {{basePackage}}.spi.ratelimit.RateLimitDecision;
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.ConsumptionProbe;
+import io.github.bucket4j.TimeMeter;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+public class Bucket4jRateLimiter implements RateLimiterPort {
+    private static final long MAX_CLIENTS = 100_000;
+
+    private final long capacity;
+    private final Duration refillPeriod;
+    private final TimeMeter timeMeter;
+    private final Cache<String, Bucket> buckets;
+
+    public Bucket4jRateLimiter(final long capacity, final Duration refillPeriod, final TimeMeter timeMeter) {
+        this.capacity = capacity;
+        this.refillPeriod = refillPeriod;
+        this.timeMeter = timeMeter;
+        this.buckets = Caffeine.newBuilder()
+                .expireAfterAccess(refillPeriod.multipliedBy(2))
+                .maximumSize(MAX_CLIENTS)
+                .build();
+    }
+
+    @Override
+    public RateLimitDecision tryConsume(final String clientKey) {
+        final Bucket bucket = buckets.get(clientKey, key -> newBucket());
+        final ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+        return new RateLimitDecision(probe.isConsumed(), TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
+    }
+
+    private Bucket newBucket() {
+        return Bucket.builder()
+                .withCustomTimePrecision(timeMeter)
+                .addLimit(limit -> limit.capacity(capacity).refillIntervally(capacity, refillPeriod))
+                .build();
+    }
+}

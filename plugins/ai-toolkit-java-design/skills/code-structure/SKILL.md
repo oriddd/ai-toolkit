@@ -205,7 +205,7 @@ Each layer in the hierarchy has a specific, focused responsibility:
   `service/`, `repository/`, and `analyzer/`. A scheduler that queries a
   client directly, builds its own query strings, or re-implements analysis
   logic is a duplication smell → move the logic into `repository/` or
-  `analyzer/` and inject it.
+  `analyzer/` and inject it. Exempt: the `messaging` outbox relay.
 - **Models** are immutable where possible (records, or `@lombok.Value` — never Spring's `@Value`).
 - Cross-cutting concerns (`permission`, `monitor`, `renderer`, `analyzer`)
   live in their own packages and are wired via Spring DI.
@@ -235,7 +235,7 @@ Sections below keep their numbers but live in `references/` so this file stays s
 
 ## 5. Cross-cutting conventions
 
-- **Logging:** `@Slf4j` – never `System.out`. Use
+- **Logging:** `@Slf4j` (or `@Log4j2` when the repo already uses Log4j2) – never `System.out`. Use
   `log.debug` for happy-path detail, `log.warn` for recoverable, `log.error`
   for unexpected with the exception as the **last** argument (not
   concatenated). Never log secrets or URLs with credentials.

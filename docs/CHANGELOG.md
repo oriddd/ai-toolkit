@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Draft plugin versions (2026-11-18)
+
+- Python and React Native plugins (phase and meta) are `1.1.0`. They were `0.x` after being `1.0.0` at the marketplace restructure, so installs made at `1.0.0` never saw an update; the experimental status stays in each plugin description.
+- Scheduler rule: the `messaging` outbox relay is an infrastructure poller and is exempt from `project-types` "never mix project types", quality-review 9e and the `code-structure` scheduler rule. Outbox relay: `lockAtMostFor` must stay above `batch × send timeout`; the guarantee is at-least-once with idempotent consumers. `static-analysis` `checkstyle.xml` now enforces F21 (complexity 10), F26 (NCSS 500) and F27 (fan-out 25) at warning severity.
+- Fact-check fixes: `spring-boot-conventions` dates the `PageImpl` warning (Spring Data 3.1) and the `serialization-mode` property (Boot 3.4+); `observability` names the Boot 4 OTLP endpoint key; `health-indicator` states how placeholders render; `docs/README.md` counts 48 quality-review items; `prepare-for-publish.sh` matches attribution case-insensitively and for more AI tools.
+
+### Proportionality and review-round budget (2026-11-18)
+
+- `code-hygiene` (quality 1.6.0) gains a Proportionality section: state the requirements and the confirmed deployed topology, trace every new class, config key and chart value to a requirement, treat a diff far larger than the feature as a design smell to raise before adding more, keep broker/cache/cluster settings internal to the app or a chart helper, question an optional mechanism instead of patching its symptoms, and budget one review plus one fix pass per request. `completion-gate` check 1 (Scope) and the failure rules point to it.
+
+### Java executable proofs and last fixes (2026-11-18)
+
+- `tools/render-java-proof.sh` now also renders and runs: data-privacy (AES-GCM converter, blind index, last-4 masking, retention, erasure), security-hardening (CORS, headers/HSTS, SSRF allow-list), the request-metrics Filter/Recorder/Parser stack, a graceful-shutdown test with a real in-flight request, Bucket4j and Resilience4j rate limiting (Redis adapter with `--with-it`), the external-client OAuth2 integration test (revoked token evicted and replayed once), a Kafka broker-outage integration test for the outbox relay, and `ProductionSecurityChainTest` (real security chain, 8 cases) in the default run. Last green run: 322 unit and component tests, 15 integration tests, JaCoCo 99.9% line / 96.2% branch, PIT 97%.
+- `GlobalExceptionHandler` validation handlers are tagged with their tests: all eight combinations of the three strip tags pass `mvn verify`.
+- `openapi-first-codegen`: optional parameters must be `@Nullable` in overrides.
+- Java agents depend on `ai-toolkit-quality` and say what is missing without it.
+- `tools/test-hooks.sh` no longer passes large commands through argv (Windows) and skips dash cases when dash cannot run the hook.
+- ArchUnit caught an `adapter`/`ratelimit` package cycle: `RateLimitProperties` moved to `config`.
+- Restored original rules: quality-review thresholds and `when<Condition>_<Then>()`, hidden-side-effect rule, last-4 masking.
+
+### Independent full-scan fixes (2026-11-17)
+
+- Cross-skill proofs: new maintainer tools `tools/render-java-proof.sh`, `tools/render-python-proof.sh` and `tools/render-rn-proof.sh` render every skill's templates/snippets into one fresh service or app and run the full gate (Java: Spotless, Error Prone + NullAway, SpotBugs, Checkstyle, JaCoCo per-class gate, PIT, ArchUnit, component and Testcontainers tests; Python: ruff, mypy strict, import-linter, unit coverage gate, Postgres/Redis/Kafka integration tests, docker build; React Native: tsc, ESLint boundaries, jest coverage gate, expo export, prebuild, Maestro syntax). They are maintainer pre-release checks, not CI (they need Docker or npm access).
+- Java templates added so the skills compose into a green build: unit tests for every shipped logic class, `CallerContext` and resolver, `CachePort`/`CacheKey`, ShedLock config and migration, `SecurityTest`; wiring-only `*Config` classes are excluded from JaCoCo/PIT explicitly; `ComponentTestConfiguration` keeps `Propagation.MANDATORY` working with its no-op transaction manager; `spotless:apply` before the first verify is called out.
+- Python: complete tested reference modules (fakes, `Order`, ORM rows, integration conftest), `__init__.py` test layout, 3.12-compatible `except (A, B) as exc`, fake-based unit tests for worker, relay and scheduler so the unit coverage gate passes.
+- React Native: `fakeServices` compiles verbatim, sign-up and sign-in screens with consistent testIDs, e2e flows sign in through the UI, template-strip, `babel.config.js` and `jest.setup.ts` steps, `expo-secure-store` adapter code.
+- Neutral: the commit guard scopes value options per subcommand (`git tag -s` now asks), treats `--continue` as commit-creating, asks on `reflog expire`, `gc --prune`, `worktree remove`, `remote add` and `config` writes; `prepare-for-publish.sh` attribution check no longer false-passes and unreachable local objects are a WARN; commit-msg hook handles CRLF and comment lines; `check-versions.sh` notes a missing release tag.
+
+- Java: component-test security recipe is now a tested `SecurityTest` template; `ComponentTestConfiguration` ships the no-op `PlatformTransactionManager`; shipped exception classes, `ExceptionMessages` and `GlobalExceptionHandler` have skeleton tests, so a fresh skeleton passes `mvn verify` with JaCoCo and PIT. New tested health-indicator templates, outbox relay/marker/writer templates, RabbitMQ reference, field-encryption reference and Redis-backed Bucket4j adapter.
+- Java fixes found by executing: `RestClient` no longer follows redirects silently (a 302 is a `DependencyException`; this was the PIT "did not pass without mutation" cause); a revoked OAuth2 token is evicted and replayed once; security-hardening properties are registered; the circuit breaker ignores `DependencyException`; stale names and constructor/logging styles aligned with `code-structure`.
+- Verified on Boot 4.1.2: Resilience4j (`resilience4j-spring-boot4`), Bucket4j, outbound OAuth2, Kafka outbox on Flyway/Postgres, openapi-generator under the full gates.
+- Python: Alembic `%` password crash fixed, snippets pass the skills' own ruff/mypy settings, defined `SigningKeySource`, Colima and BuildKit prerequisites, generated Alembic files pass the ruff gate. Added caching, scheduled jobs, PII/GDPR and circuit-breaker guidance (inside existing skills) and ran the Kafka worker and a uvicorn SIGTERM drain.
+- React Native: 401 refresh-then-sign-out is wired end to end across state-and-data and security; Sentry snippet passes lint; jest helper stops query/mutation gc timers; added consent and account deletion, iOS privacy manifest and deep-link server setup; prebuild output checked against `app.config.ts`.
+- Neutral: commit-msg lint accepts acronyms and identifiers and counts UTF-8 correctly; `update-context` prints the full updated files again; guard covers `find -exec git commit`, `twine upload`, `uv publish`; `parallel-delegation` and `completion-gate` agree; `release-versioning` states release-please's real `perf` behaviour and the config to change it; `check-versions.sh` notes an unbumped marketplace version.
+
 ### Restored original conventions (2026-11-16)
 
 - Domain exceptions are checked again (`BaseDomainException extends Exception`), as in the user-tested originals. `GlobalExceptionHandler` maps both checked and unchecked exceptions (domain handler plus a catch-all 500). Checked exceptions do not roll back `@Transactional` by default, so every `@Transactional` carries `rollbackFor = Exception.class`, enforced by `ArchitectureTest`. New `exception-handling/references/checked-exceptions.md`.

@@ -1,0 +1,11 @@
+package {{basePackage}}.privacy;
+
+import org.jspecify.annotations.Nullable;
+
+public record UserProfile(String id, @Mask String email, @Mask @Nullable String phoneNumber) {
+
+    @Override
+    public String toString() {
+        return "UserProfile[id=" + id + "]";
+    }
+}

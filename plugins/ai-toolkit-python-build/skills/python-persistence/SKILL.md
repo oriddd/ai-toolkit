@@ -40,6 +40,14 @@ alembic.ini                          # repo root; script_location = my_service:a
 (`python-ci` §3); `%(here)s/src/my_service/alembic` fails there with "Path doesn't exist". `alembic init`
 writes the source path: change it once after `alembic init -t async src/my_service/alembic`.
 
+## Reference map
+Load only the file you need.
+
+| Section | Topic | Load when | File |
+| --- | --- | --- | --- |
+| §7 | Cache-aside behind a `Cache` port: Redis adapter, TTL with jitter, invalidation, fail-open, Redis container tests | Caching reads | [references/caching.md](./references/caching.md) |
+| §1 to §5 | Complete `orm.py` (orders, outbox, processed messages), SQL repository, unit of work, Alembic `env.py` and `post_write_hooks` | Creating the persistence package | [references/sql-adapter.md](./references/sql-adapter.md) |
+
 ## Dependencies
 ```toml
 dependencies = ["sqlalchemy[asyncio]>=2.0.30", "asyncpg>=0.29", "alembic>=1.13"]
@@ -197,24 +205,51 @@ The integration suite runs `upgrade head` on an empty database (its `engine` fix
 for drift and a downgrade-to-base / upgrade-to-head round trip (tests, see `python-integration-tests` §3), so the
 CI integration job covers all three.
 
-Generated scripts must pass the same lint gate as the code. Let Alembic run ruff on every new revision
-(uncomment and adapt the `[post_write_hooks]` section of `alembic.ini`):
+Generated scripts must pass the same lint gate as the code: the stock template writes
+`from typing import Sequence, Union` and `Union[str, None]` (UP035, UP007) and unsorted imports (I001).
+Replace the commented `[post_write_hooks]` section of `alembic.ini` so Alembic runs ruff on every new revision:
 
 ```ini
 [post_write_hooks]
 hooks = ruff_fix, ruff_format
-ruff_fix.type = exec
-ruff_fix.executable = %(here)s/.venv/bin/ruff
+ruff_fix.type = module
+ruff_fix.module = ruff
 ruff_fix.options = check --fix REVISION_SCRIPT_FILENAME
-ruff_format.type = exec
-ruff_format.executable = %(here)s/.venv/bin/ruff
+ruff_format.type = module
+ruff_format.module = ruff
 ruff_format.options = format REVISION_SCRIPT_FILENAME
 ```
+
+The `module` runner uses the interpreter that runs Alembic, so run `uv run alembic revision --autogenerate ...`
+(ruff is in the dev group; no hard-coded `.venv/bin/ruff` path). The revision it writes passes `ruff check` and
+`ruff format --check` unchanged.
+
+Files written once by a generator are not covered by the hook; fix them when you create the project:
+- `alembic init -t async src/my_service/alembic` writes an `env.py` with unsorted imports (I001):
+  run `uv run ruff check --fix src/my_service/alembic && uv run ruff format src/my_service/alembic` once.
+- `uv init --package` writes `__init__.py` with a `main()` that calls `print` (T201) and a `[project.scripts]`
+  entry for it: empty the file and delete that entry. A service is started by uvicorn (or `my-service-worker`),
+  not by that stub. Never add a `T201` ignore: `print` in a service is a defect (`python-observability`).
 
 ## 6. Querying rules
 - Always bound lists (`limit`); paginate by keyset for large tables.
 - Avoid N+1: `selectinload` / `joinedload` chosen explicitly in the repository method that needs them.
 - Use `select()` statements; no raw SQL strings with interpolation (parameters only).
+
+## 7. Caching reads
+Cache only reads that are hot, expensive and tolerant of a short staleness, and only after measuring. The cache is a
+port (`Cache` Protocol: `get`, `set` with a TTL, `delete`) with a Redis adapter; use cases call `CacheAside[T]`
+(`get_or_load(key, loader)`, `invalidate(key)`) around the unit of work they already have:
+
+```python
+async def execute(self, order_id: UUID) -> OrderResponse:
+    # on a miss it loads, then stores with a TTL
+    return await self._cache.get_or_load(str(order_id), lambda: self._load(order_id))
+# writers: commit first, then self._cache.invalidate(str(order_id))
+```
+Every entry has a jittered TTL; invalidate after the commit, never before; a Redis outage falls back to the database
+(fail open); failures such as "not found" are never cached; keys are opaque ids, never PII. Code and tests (a real
+Redis container, expiry, unreachable server) are in `references/caching.md`.
 
 ## Do / Don't
 - ✅ Map ORM rows to domain objects inside the repository.
@@ -224,6 +259,7 @@ ruff_format.options = format REVISION_SCRIPT_FILENAME
 - ❌ `session.commit()` inside a repository, or sessions stored in globals.
 - ❌ Lazy loading across the async boundary (`MissingGreenlet`); relationships accessed after the session closes.
 - ❌ Editing an applied migration; use a new one.
+- ❌ A cache without a TTL, invalidation before the commit, or a Redis error that fails the request.
 
 ## Cross-references
 - `python-code-structure` — repositories as an injected port.

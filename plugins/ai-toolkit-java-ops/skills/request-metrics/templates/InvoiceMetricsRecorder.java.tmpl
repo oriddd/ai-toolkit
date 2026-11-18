@@ -1,0 +1,36 @@
+package {{basePackage}}.monitor.recorder;
+
+import {{basePackage}}.monitor.MetricsTimerHelper;
+import {{basePackage}}.monitor.MonitoringConstants;
+import {{basePackage}}.monitor.parser.ExportFormatParser;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.concurrent.TimeUnit;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@Slf4j
+public class InvoiceMetricsRecorder implements MetricsRecorder {
+
+    private final MetricsTimerHelper metricsTimerHelper;
+    private final ExportFormatParser exportFormatParser;
+
+    @Override
+    public String getSupportedMetricName() {
+        return MonitoringConstants.METRIC_INVOICE_REQUESTS;
+    }
+
+    @Override
+    public void recordMetrics(final long durationMs, final HttpServletRequest request, final HttpServletResponse response) {
+        final Tag formatTag = Tag.of(MonitoringConstants.METRIC_TAG_FORMAT, exportFormatParser.parseExportFormat(request));
+        final Timer timer = metricsTimerHelper.buildTimerWithExtraTags(getSupportedMetricName(), request, response, formatTag);
+        timer.record(durationMs, TimeUnit.MILLISECONDS);
+        log.debug("Recorded metric '{}' in {}ms", getSupportedMetricName(), durationMs);
+    }
+}

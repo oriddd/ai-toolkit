@@ -1,0 +1,26 @@
+package {{basePackage}}.monitor.recorder;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
+
+@Component
+public class MetricsRecorderRegistry {
+
+    private final Map<String, MetricsRecorder> recordersByMetricName;
+
+    public MetricsRecorderRegistry(final List<MetricsRecorder> metricsRecorders) {
+        this.recordersByMetricName = metricsRecorders.stream()
+                .collect(Collectors.toUnmodifiableMap(MetricsRecorder::getSupportedMetricName, Function.identity(), (first, second) -> {
+                    throw new IllegalStateException("Two recorders for metric '" + first.getSupportedMetricName() + "': "
+                            + first.getClass().getName() + ", " + second.getClass().getName());
+                }));
+    }
+
+    public Optional<MetricsRecorder> getRecorder(final String metricName) {
+        return Optional.ofNullable(recordersByMetricName.get(metricName));
+    }
+}

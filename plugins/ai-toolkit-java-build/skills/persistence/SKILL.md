@@ -35,9 +35,9 @@ src/main/resources/
 <!-- Flyway 10+ (Boot 3.5) ships database support as modules: without this, Postgres migrations fail at startup -->
 <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
 <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
-<!-- generates the typed metamodel (Invoice_) used by Specifications; versions come from the Boot BOM -->
+<!-- typed metamodel (Invoice_) for Specifications; versions from the Boot BOM -->
 <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-jpamodelgen</artifactId><scope>provided</scope></dependency>
-<!-- @Nullable on the BaseEntity template (NullAway convention of static-analysis); not managed by the Boot 3.5 BOM -->
+<!-- @Nullable on BaseEntity (NullAway, static-analysis); not in the Boot 3.5 BOM -->
 <dependency><groupId>org.jspecify</groupId><artifactId>jspecify</artifactId><version>1.0.0</version></dependency>
 ```
 
@@ -112,13 +112,13 @@ Rules:
   so tests can fix the value; Hibernate's `@UuidGenerator` is an option if
   your Hibernate version offers a v7 style (check before relying on it).
 - **Every entity extends `BaseEntity`** (template) — never repeat the
-  version and audit columns per entity.
+  version and audit columns per entity. The messaging `OutboxEntity` is the exception: a technical row with its own
+  `version` / `created_at` and a `UUID.randomUUID()` id (the relay orders by `created_at`).
 - **`equals` / `hashCode` are id-based**: `equals` compares a non-null `id`,
   `hashCode` returns a constant per class. Read the other side through
   `getId()`, never `other.id`: on a Hibernate lazy proxy the field is `null`
   and only the getter returns the id. Never use Lombok `@Data` /
-  `@EqualsAndHashCode` on entities (they touch lazy fields and change the
-  hash after persist).
+  `@EqualsAndHashCode` on entities (they touch lazy fields).
 - **The JPA no-arg constructor is written by hand**, `protected`, with
   `@SuppressWarnings("NullAway.Init")` — not Lombok `@NoArgsConstructor`:
   NullAway (`static-analysis`) rejects a constructor that leaves non-null
@@ -135,14 +135,12 @@ Rules:
 - **JPA auditing** (`@EnableJpaAuditing` + `AuditorAware<String>`) fills
   `createdAt/Updated/By` automatically. The `AuditorAware` bean
   (`SecurityAuditorAware` template) lives in `permission/`, the only package
-  that reads `SecurityContextHolder`; `AuditConfig` in `config/` only enables
-  auditing. It records an opaque subject id, falls back to `"system"` only
+  that may read `SecurityContextHolder` (ArchUnit rule). There it is the second reader beside the `permissions`
+  `CallerContextResolver` and reads only the audit subject; `AuditConfig` in `config/` only enables auditing. It records an opaque subject id, falls back to `"system"` only
   outside an HTTP request (schedulers, consumers), and returns empty for an
-  unauthenticated request. Without Spring Security (create-repo auth = no) it does not compile: use `SystemAuditorAware` instead. `AuditConfig` carries `@Profile("!component-test")`:
-  component tests that exclude the DataSource / JPA auto-configuration would
-  otherwise fail at startup (`JPA metamodel must not be empty`); remove it if
-  your component tests run against a real database. A default-profile test cannot use this guard, so it
-  needs a real database too (`ApplicationContextIT`, `component-tests` §3b).
+  unauthenticated request. Without Spring Security (create-repo auth = no) it does not compile: use `SystemAuditorAware` instead. `AuditConfig` carries `@Profile("!component-test")` (component tests exclude JPA; `@EnableJpaAuditing` then fails with
+  `JPA metamodel must not be empty`); remove it if they use a real database. A default-profile test needs a real
+  database instead (`ApplicationContextIT`, `component-tests` §3b).
 - **Soft delete** with `@SQLRestriction("deleted_at is null")` (Hibernate 6.3+; `@Where` is deprecated) and an `@SQLDelete` that sets `deleted_at`,
   if hard-delete is forbidden by domain rules; otherwise hard-delete.
   A soft-deleted row still holds its PII: on a right-to-be-forgotten request
@@ -261,24 +259,19 @@ Rules:
   `rollbackFor = Exception.class`; the `ArchitectureTest` template fails the build when one does not. Never catch and
   swallow a failure inside the boundary. Programmatic transactions (`TransactionTemplate`) do not roll back on a checked
   exception either: catch it, call `status.setRollbackOnly()` and rethrow after `execute`.
-- Never call a `@Transactional` method from another method of the same
-  class — Spring proxying does not intercept it.
+- Never call a `@Transactional` method from another method of the same class (the proxy is bypassed).
 - A transaction never spans a network call to another service.
 
 ## 5. Anti-patterns to flag
 
-❌ Bidirectional `@OneToMany` on an aggregate that has > 100 children
-   (loads the whole list on access).
+❌ Bidirectional `@OneToMany` on an aggregate with > 100 children.
 ❌ `cascade = ALL` across aggregate boundaries.
 ❌ `FetchType.EAGER` — always `LAZY`. Fetch what you need with a
    `Specification` or `EntityGraph`. `@ManyToOne` / `@OneToOne` default to
    EAGER, so write `fetch = FetchType.LAZY` on them explicitly.
-❌ `findAll()` returning `List<T>` in production code.
-❌ DTO ↔ Entity confusion — never serialize an entity as a JSON response,
-   always map to a record DTO first (use MapStruct).
-❌ N + 1 queries — caught by Hibernate's `org.hibernate.SQL` logger in tests
-   or via the [datasource-proxy](https://github.com/jdbc-observations/datasource-proxy)
-   spy in integration tests.
+❌ Unpaged `findAll()` in production code.
+❌ Serializing an entity as a JSON response — map to a record DTO first (MapStruct).
+❌ N + 1 queries — spot them with the `org.hibernate.SQL` logger or a datasource-proxy spy.
 
 ## Reference map — load only the part you are working on
 
@@ -293,3 +286,4 @@ Rules:
 - [`SecurityAuditorAware.java.tmpl`](./templates/SecurityAuditorAware.java.tmpl) — The `AuditorAware` bean (in `permission/`).
 - [`SystemAuditorAware.java.tmpl`](./templates/SystemAuditorAware.java.tmpl) — Replaces `SecurityAuditorAware` when the service has no Spring Security (auth = no).
 - [`ExampleSpecifications.java.tmpl`](./templates/ExampleSpecifications.java.tmpl) — Reference implementation for Specification pattern.
+- Tests, copied with their class (`AuditConfig` is wiring-only): `BaseEntityTest`, `SecurityAuditorAwareTest`, `SystemAuditorAwareTest`, `ExampleSpecificationsTest` in `templates/`.

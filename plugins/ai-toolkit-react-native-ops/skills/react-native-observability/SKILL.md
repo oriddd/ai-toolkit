@@ -83,26 +83,25 @@ variables once in `shared/config/processEnv.d.ts`:
 // shared/services/observability/initSentry.ts
 export const navigationIntegration = Sentry.reactNavigationIntegration();   // screen-load spans, section 6
 
-export function initSentry(env: AppEnv, app: AppInfo | null) {
+export function initSentry(env: AppEnv, app: AppInfo | null, crashReportsAllowed: () => boolean) {
   Sentry.init({
     dsn: env.sentryDsn,                       // public identifier, see react-native-security
     environment: env.name,
     ...(app && { release: `${app.appId}@${app.version}+${app.buildNumber}`, dist: app.buildNumber }),
     enabled: !__DEV__,
-    sendDefaultPii: false,                    // no IP, cookies or user details attached automatically; never true
     tracesSampleRate: env.name === 'production' ? 0.1 : 1.0,
     enableAutoPerformanceTracing: true,
     integrations: [navigationIntegration],
-    beforeSend: scrubEvent,                   // section 2
-    beforeSendTransaction: scrubEvent,
-    beforeBreadcrumb: scrubBreadcrumb,
+    beforeSend: (event) => (crashReportsAllowed() ? scrubEvent(event) : null),     // scrub (section 2), and drop without consent
+    beforeSendTransaction: (event) => (crashReportsAllowed() ? scrubEvent(event) : null),
+    beforeBreadcrumb: (crumb) => (crashReportsAllowed() ? scrubBreadcrumb(crumb) : null),
   });
 }
 ```
 
 ```tsx
 // src/app/_layout.tsx (Expo Router): init at module load, register the router's navigation container once
-initSentry(env, readAppInfo());
+initSentry(env, readAppInfo(), () => consent.current().crashReports);   // consent loaded first, see references/consent-and-data-deletion.md
 function RootLayout() {
   const navigationRef = useNavigationContainerRef();     // expo-router
   useEffect(() => { navigationIntegration.registerNavigationContainer(navigationRef); }, [navigationRef]);
@@ -116,9 +115,10 @@ React Navigation apps call `initSentry` in `App.tsx`, export `Sentry.wrap(App)`,
 The release string is the one the Sentry Expo plugin and `sentry-cli` upload source maps for
 (`<applicationId>@<version>+<buildNumber>`, `dist` = build number), so stack traces resolve (section 7).
 
-On `@sentry/react-native` 8.28 (Expo SDK 58) `no-deprecated` reports `sendDefaultPii` through a typings bug (the core
-option it inherits is deprecated for `dataCollection`, which the React Native options do not accept); 8.34 fixed it.
-There, delete the line rather than disable the rule: `false` is the default.
+`sendDefaultPii` is deliberately not set: `false` is the default (no IP, cookies or user details attached automatically),
+and on `@sentry/react-native` ~8.28 (Expo SDK 58) writing it fails `no-deprecated` through a typings bug (fixed in 8.34).
+Never set it to `true`. The snippet above is the one rendered into a SDK 58 app: `tsc`, `eslint --max-warnings 0`,
+`prettier --check` and its jest test pass.
 
 ## 2. PII scrubbing
 
@@ -206,8 +206,8 @@ The catalogue lives in `shared/`, which cannot import feature types such as `Ord
 `string` here.
 
 Events are a typed union, so names and properties are compile-checked and reviewable in one file. Call
-`useAnalytics().track(...)` from hooks or handlers, never in render. Respect consent: the provider no-ops
-until consent is granted. Tests inject `FakeAnalytics` and assert `events` outcomes.
+`useAnalytics().track(...)` from hooks or handlers, never in render. Respect consent: the provider is wrapped in `createConsentedAnalytics`, which no-ops until consent is granted
+(`references/consent-and-data-deletion.md`). Tests inject `FakeAnalytics` and assert `events` outcomes.
 
 ## 6. Performance
 
@@ -222,6 +222,17 @@ Upload source maps and native symbols on every release build (the Sentry Expo/RN
 `sentry-cli` in `react-native-ci`) using the same `release` and `dist` as `Sentry.init`, otherwise stack
 traces are unreadable. Track crash-free sessions/users per release and halt a staged rollout when they dip
 below the agreed threshold.
+
+## 8. Consent and data deletion
+
+Consent state gates Sentry, analytics and push registration, a withdrawal takes effect at once, and the app offers an in-app
+account deletion request. Code, rules and tests: `references/consent-and-data-deletion.md`.
+
+## References
+
+| Topic | Load when | File |
+| --- | --- | --- |
+| Consent store, gating Sentry / analytics / push, account deletion flow, data-subject rules | the app serves EU or California users, collects analytics or push tokens, or has accounts | [consent-and-data-deletion.md](./references/consent-and-data-deletion.md) |
 
 ## Do / Don't
 

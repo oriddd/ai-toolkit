@@ -1,0 +1,35 @@
+package {{basePackage}}.permission.strategy;
+
+import {{basePackage}}.exception.ForbiddenException;
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import {{basePackage}}.permission.CallerContext;
+import {{basePackage}}.permission.CallerContextResolver;
+import {{basePackage}}.permission.PermissionsCheckStrategy;
+import {{basePackage}}.permission.PermissionsProperties;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+/** SERVICE_ACCOUNT callers pass when they hold at least one scope of the configured allow-list. */
+@Component
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+public class ScopeBasedPermissionsCheck implements PermissionsCheckStrategy {
+
+    private final CallerContextResolver callerContextResolver;
+    private final PermissionsProperties properties;
+
+    @Override
+    public void verifyPermissions(final String resourceId) throws ForbiddenException {
+        final boolean allowed =
+                callerContextResolver.grantedScopes().stream().anyMatch(properties.allowedScopes()::contains);
+        if (!allowed) {
+            throw ExceptionMessages.callerHasNoPermissions(resourceId);
+        }
+    }
+
+    @Override
+    public List<CallerContext> supportedContexts() {
+        return List.of(CallerContext.SERVICE_ACCOUNT);
+    }
+}

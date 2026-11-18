@@ -1,0 +1,53 @@
+package {{basePackage}}.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
+
+class IdentityProviderUnavailableFilterTest {
+
+    private final ProblemDetailSecurityHandler problemHandler = mock(ProblemDetailSecurityHandler.class);
+    private final FilterChain chain = mock(FilterChain.class);
+    private final IdentityProviderUnavailableFilter filter = new IdentityProviderUnavailableFilter(problemHandler);
+    private final MockHttpServletRequest request = new MockHttpServletRequest();
+    private final MockHttpServletResponse response = new MockHttpServletResponse();
+
+    @Test
+    void doFilter_chainSucceeds_passesThroughUntouched() throws Exception {
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verifyNoInteractions(problemHandler);
+    }
+
+    @Test
+    void doFilter_decoderCannotInitialise_answersWithTheServiceUnavailableProblem() throws Exception {
+        final JwtDecoderInitializationException failure = new JwtDecoderInitializationException("down", new RuntimeException());
+        doThrow(failure).when(chain).doFilter(request, response);
+
+        filter.doFilter(request, response, chain);
+
+        verify(problemHandler).identityProviderUnavailable(response, failure);
+    }
+
+    @Test
+    void doFilter_otherFailure_isNotSwallowed() throws Exception {
+        doThrow(new ServletException("boom")).when(chain).doFilter(any(), any());
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
+
+        verifyNoInteractions(problemHandler);
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+}

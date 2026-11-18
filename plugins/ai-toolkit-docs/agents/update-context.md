@@ -90,9 +90,8 @@ For each file you touch:
 - Appended under ### Features: `- auth: add JWT refresh-token rotation`
 ```
 
-Return only this list (path + one-line summary per file), followed by the line
-`Run: bash context/validate-context.sh` when you touched `context/` — do not paste
-the full content of changed files; the caller reads the diff and runs the validator.
+Then show the full updated content of each changed file (the caller may ask for the list only; then return just the
+list). When you touched `context/`, end with the line `Run: bash context/validate-context.sh`.
 
 ## Non-negotiables
 

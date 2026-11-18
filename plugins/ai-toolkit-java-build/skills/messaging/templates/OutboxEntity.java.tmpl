@@ -37,6 +37,7 @@ public class OutboxEntity {
     public String getEventType()     { return eventType; }
     public String getPayload()       { return payload; }
     public @Nullable String getTraceparent()  { return traceparent; }
+    public Instant getCreatedAt()    { return createdAt; }
     public @Nullable Instant getPublishedAt() { return publishedAt; }
     public void markPublished(Instant publishedAt) { this.publishedAt = publishedAt; }
 }

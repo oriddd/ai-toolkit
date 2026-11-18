@@ -1,0 +1,35 @@
+package {{basePackage}}.monitor.parser;
+
+import {{basePackage}}.monitor.MonitoringConstants;
+import jakarta.servlet.http.HttpServletRequest;
+import java.security.Principal;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Component;
+
+@Component
+@Slf4j
+public class ClientIdParser {
+    public static final String CLIENT_ID_ATTRIBUTE = ClientIdParser.class.getName() + ".clientId";
+    private static final String AZP = "azp";
+
+    public String parseClientId(final @Nullable HttpServletRequest request) {
+        if (request != null && request.getAttribute(CLIENT_ID_ATTRIBUTE) instanceof String captured) {
+            return captured;
+        }
+        try {
+            final Principal principal = request == null ? null : request.getUserPrincipal();
+            if (principal instanceof JwtAuthenticationToken jwt && jwt.getTokenAttributes().get(AZP) != null) {
+                return String.valueOf(jwt.getTokenAttributes().get(AZP));
+            }
+            if (principal instanceof UsernamePasswordAuthenticationToken) {
+                return MonitoringConstants.BASIC;
+            }
+        } catch (final RuntimeException e) {
+            log.debug("Failed to extract clientId for metrics tag", e);
+        }
+        return MonitoringConstants.UNKNOWN;
+    }
+}

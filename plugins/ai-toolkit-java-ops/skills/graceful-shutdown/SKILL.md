@@ -6,7 +6,7 @@ description: >
 tier: must
 applies_to: [rest, event, scheduler, monolith]
 depends_on: []
-ships_templates: false
+ships_templates: true
 hitl: false
 version: 1.0
 last_reviewed: 2026-11-11
@@ -148,95 +148,29 @@ probe failed — that is why the `preStop` sleep exists. On `SIGTERM` Spring clo
 a second line of defence for anything that still routes by readiness. **Liveness** stays `UP` so K8s doesn't restart
 the pod mid-drain.
 
-## Component test — settings, readiness and an in-flight request
+## Component test — settings, readiness and a slow in-flight request
 
-Guild rule #17 asks for this test. It runs under the `component-test` profile with `ComponentTestConfiguration`
-(`component-tests`), like every component test — a bare `@SpringBootTest` needs every `${VAR}` without a default
-(e.g. `JWT_ISSUER_URI` from `permissions`) and a real database. The settings check uses the cached test context. The
-two shutdown checks never close that context (the test framework still needs it after each test method, and a closed
-one fails them with "ApplicationContext … is not active"); each starts its **own** application with
-`SpringApplicationBuilder`, closes it (the same path `SIGTERM` takes) and asserts that readiness went to
-`REFUSING_TRAFFIC` and that a request already in flight still completes. Latches, not `Thread.sleep`, order the steps:
+Guild rule #17 asks for this test; the executed version is
+[`GracefulShutdownComponentTest.java.tmpl`](./templates/GracefulShutdownComponentTest.java.tmpl), which
+`tools/render-java-proof.sh` renders into a service and runs in its default gate. It runs under the `component-test`
+profile with `ComponentTestConfiguration` (`component-tests`), like every component test — a bare `@SpringBootTest` needs
+every `${VAR}` without a default (e.g. `JWT_ISSUER_URI` from `permissions`) and a real database. The settings check uses
+the cached test context. The two shutdown checks never close that context (the test framework still needs it after each
+test method, and a closed one fails them with "ApplicationContext … is not active"); each starts its **own** application
+with `SpringApplicationBuilder` on a random port and closes it (the same path `SIGTERM` takes):
 
-```java
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(ComponentTestConfiguration.class)
-@ActiveProfiles("component-test")
-class GracefulShutdownComponentTest {
+- `close_readiness_becomesRefusingTraffic`: readiness goes `ACCEPTING_TRAFFIC` to `REFUSING_TRAFFIC`.
+- `close_slowInFlightRequest_completesWith200WhileNewRequestsAreRefused`: a request that really takes 3 s is in flight
+  (a latch marks that it started), the context is closed on another thread, a **new** request is refused (connection
+  refused once the connector stops accepting) while the slow one is still running, and the slow one then completes with
+  `200` after at least 3 s, so the drain provably waited for it.
 
-    @Autowired private Environment environment;
-
-    @RestController
-    static class SlowTestController {
-        private final CountDownLatch requestStarted = new CountDownLatch(1);
-        private final CountDownLatch releaseRequest = new CountDownLatch(1);
-
-        @GetMapping("/test/slow")
-        String slow() throws InterruptedException {   // in flight until the test releases it
-            requestStarted.countDown();
-            return releaseRequest.await(10, TimeUnit.SECONDS) ? "done" : "released by timeout";
-        }
-    }
-
-    @Test
-    void config_shutdownSettings_areGracefulWithPhaseTimeout() {
-        assertThat(environment.getProperty("server.shutdown", "graceful")).isEqualTo("graceful");  // 3.4+ default
-        assertThat(environment.getProperty("spring.lifecycle.timeout-per-shutdown-phase")).isNotBlank();
-    }
-
-    @Test
-    void close_readiness_becomesRefusingTraffic() {
-        final ConfigurableApplicationContext app = startApp(event -> { });
-        final ApplicationAvailability availability = app.getBean(ApplicationAvailability.class);
-        assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.ACCEPTING_TRAFFIC);
-
-        app.close();         // what SIGTERM triggers
-
-        assertThat(availability.getReadinessState()).isEqualTo(ReadinessState.REFUSING_TRAFFIC);
-    }
-
-    @Test
-    void close_inFlightRequest_completesWith200() throws Exception {
-        final CountDownLatch shutdownStarted = new CountDownLatch(1);
-        final ConfigurableApplicationContext app = startApp(event -> {
-            if (event instanceof AvailabilityChangeEvent<?> change && change.getState() == ReadinessState.REFUSING_TRAFFIC) {
-                shutdownStarted.countDown();
-            }
-        });
-        final SlowTestController controller = app.getBean(SlowTestController.class);
-        final int port = Objects.requireNonNull(((WebServerApplicationContext) app).getWebServer()).getPort();
-        final String contextPath = app.getEnvironment().getProperty("server.servlet.context-path", "");
-        final CompletableFuture<HttpResponse<String>> inFlight = HttpClient.newHttpClient().sendAsync(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + contextPath + "/test/slow")).build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(controller.requestStarted.await(10, TimeUnit.SECONDS)).isTrue();
-
-        final CompletableFuture<Void> shutdown = CompletableFuture.runAsync(app::close);   // what SIGTERM triggers
-        assertThat(shutdownStarted.await(10, TimeUnit.SECONDS)).isTrue();
-        controller.releaseRequest.countDown();
-
-        final HttpResponse<String> response = inFlight.get(10, TimeUnit.SECONDS);
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isEqualTo("done");
-        shutdown.get(30, TimeUnit.SECONDS);
-    }
-
-    /** A dedicated application per shutdown test: closing it leaves the cached test context untouched. */
-    private static ConfigurableApplicationContext startApp(final ApplicationListener<ApplicationEvent> listener) {
-        return new SpringApplicationBuilder(<Application>.class, ComponentTestConfiguration.class, SlowTestController.class)
-                .profiles("component-test")
-                .properties("server.port=0")
-                .listeners(listener)
-                .run();
-    }
-}
-```
-
-`<Application>` is the service's `@SpringBootApplication` class. If the service secures every path, permit `/test/**`
-in the component-test security configuration or send a test token. Keep it in the component-test suite (it starts two
-extra applications, a few seconds). On embedded Tomcat an in-flight request also completes with
-`server.shutdown: immediate` (Tomcat waits for running requests when it stops), so the settings test is what guards
-the property; the in-flight test proves the drain path end to end.
+Copy it with its application class (the template's `applicationClassName` placeholder). If the service secures
+every path, permit `/test/**` in the component-test security configuration or send a test token. Keep it in the
+component-test suite (it starts two extra applications, a few seconds). On embedded Tomcat an in-flight request also
+completes with `server.shutdown: immediate` (Tomcat waits for running requests when it stops), so the settings test is
+what guards the property; the slow in-flight test proves the drain path end to end. It closes the Spring context, which
+is what `SIGTERM` triggers; a forked-JVM `SIGTERM` and the Kubernetes `preStop` timing are not covered by it.
 
 ## Smoke test (load test during rolling update)
 

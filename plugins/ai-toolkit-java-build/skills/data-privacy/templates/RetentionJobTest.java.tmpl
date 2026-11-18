@@ -1,0 +1,27 @@
+package {{basePackage}}.privacy;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.Test;
+
+class RetentionJobTest {
+
+    private static final Instant NOW = Instant.parse("2026-01-20T00:00:00Z");
+
+    @Test
+    void run_purgesEverythingOlderThanTheConfiguredRetention() {
+        final RetentionPurger purger = mock(RetentionPurger.class);
+        when(purger.purge(Instant.parse("2026-01-06T00:00:00Z"))).thenReturn(new RetentionPurger.PurgeResult(1, 2));
+        final RetentionJob job = new RetentionJob(purger, new RetentionProperties(Duration.ofDays(14)), Clock.fixed(NOW, ZoneOffset.UTC));
+
+        job.run();
+
+        verify(purger).purge(Instant.parse("2026-01-06T00:00:00Z"));
+    }
+}

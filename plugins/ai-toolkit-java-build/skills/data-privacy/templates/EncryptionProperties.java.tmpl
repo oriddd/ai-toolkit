@@ -1,0 +1,7 @@
+package {{basePackage}}.privacy;
+
+import java.util.Map;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix = "privacy.encryption")
+public record EncryptionProperties(int currentVersion, Map<Integer, String> keys, String blindIndexKey) {}

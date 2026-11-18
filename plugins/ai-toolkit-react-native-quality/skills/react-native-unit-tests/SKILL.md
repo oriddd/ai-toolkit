@@ -32,8 +32,11 @@ src/
 └── test/
     ├── renderWithProviders.tsx            # fresh QueryClient + fake services
     ├── builders.ts                        # anOrderDto(), anOrder()
+    ├── queryClients.ts                    # tracked(), clearTrackedClients()
     ├── fakes/FakeSecureStore.ts  FakeKeyValueStorage.ts  FakeAnalytics.ts
-    └── msw/server.ts  handlers.ts
+    ├── mocks/sentry.ts  secureStore.ts    # module mocks for jest.setup.ts
+    ├── integration/sessionExpiry.test.tsx # section 3a
+    └── msw/server.ts
 jest.config.js  jest.setup.ts
 ```
 
@@ -109,14 +112,7 @@ Prefer `getByRole`, `getByText`, `getByLabelText`; use `getByTestId` only when n
 ```tsx
 // test/msw/server.ts
 export const server = setupServer();
-// jest.setup.ts: native modules are mocked here, once (section 4)
-jest.mock('@react-native-community/netinfo', () =>
-  jest.requireActual<object>('@react-native-community/netinfo/jest/netinfo-mock.js'));
-jest.mock('react-native-keychain', () => jest.requireActual<object>('./src/test/mocks/keychain'));  // Map-backed
-jest.mock('@sentry/react-native', () => jest.requireActual<object>('./src/test/mocks/sentry'));     // jest.fn() stubs
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+// jest.setup.ts starts and stops `server` and mocks the native modules once (references/test-harness.md)
 
 // useOrders.test.tsx
 it('returns orders from the API', async () => {
@@ -134,19 +130,34 @@ it('exposes a retryable NetworkError when offline', async () => {
 
 ```tsx
 // test/renderWithProviders.tsx
+import type { PropsWithChildren } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { anonymousSession, createHttpClient } from '@shared/api-client/httpClient';
+import { createConsentStore } from '@shared/consent/consent';
+import { ServicesProvider, type Services } from '@shared/services/ServicesContext';
+import { FakeAnalytics } from './fakes/FakeAnalytics';
+import { FakeKeyValueStorage } from './fakes/FakeKeyValueStorage';
+import { FakeSecureStore } from './fakes/FakeSecureStore';
+import { tracked } from './queryClients';
+
 const noop = () => undefined;
-export const fakeServices = (): Services => ({
-  http: createHttpClient('https://api.test', anonymousSession),              // real client; MSW answers
-  storage: new FakeKeyValueStorage(),                                          // Map-backed fakes
-  logger: { debug: noop, info: noop, warn: noop, error: noop },
-  errorReporter: { report: noop },
-  analytics: new FakeAnalytics(),
-});
+
+// every member of `Services` (react-native-code-structure §6): a missing one is a tsc error
+export const fakeServices = (): Services => {
+  const storage = new FakeKeyValueStorage();
+  return {
+    http: createHttpClient('https://api.test', anonymousSession),   // real client; MSW answers
+    storage,
+    secure: new FakeSecureStore(),                                   // Map-backed fakes
+    consent: createConsentStore(storage),                            // the real store over the fake storage
+    logger: { debug: noop, info: noop, warn: noop, error: noop },
+    errorReporter: { report: noop },
+    analytics: new FakeAnalytics(),
+  };
+};
 
 export const testProviders = (services: Services = fakeServices()) => {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { gcTime: Infinity } },
-  });
+  const client = tracked(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return ({ children }: PropsWithChildren) => (
     <ServicesProvider value={services}>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -155,10 +166,21 @@ export const testProviders = (services: Services = fakeServices()) => {
 };
 ```
 
-Each call builds a new `QueryClient`, so tests share no cache; `gcTime: Infinity` on queries **and** mutations stops cache
-timers from keeping Jest alive (with the mutation default of 5 minutes, `npx jest <file>` of any test that runs a
-mutation hangs, and the full run prints "A worker process has failed to exit gracefully"). Never render the app's real
-`QueryProvider` in a test for the same reason: test its policy through `createQueryClient` (`react-native-state-and-data` §7).
+Each call builds a new `QueryClient`, so tests share no cache. Every client a test creates goes through `tracked`
+(`test/queryClients.ts`, [references/test-harness.md](./references/test-harness.md)): it sets `gcTime: Infinity` on queries **and**
+mutations and clears the client after each test. Without it a 5-minute garbage-collection timer per query or mutation keeps
+the worker alive: `npx jest src/bootstrap` never returns and the full run prints "A worker process has failed to exit
+gracefully". Use `tracked(createQueryClient(...))` for the app's own client factory too (`react-native-state-and-data` §7),
+and never render the real `QueryProvider` in a test (it owns a client you cannot clear): test its policy through
+`createQueryClient` and `createAppQueryClient`.
+
+## 3a. A 401 ends the session
+
+The session-expiry chain of `react-native-security` §1b and `react-native-state-and-data` §7 is proved end to end with the
+real api-client, the real `createAuthSession`, a fake `SecureStore`, MSW and `renderRouter` over the real `RootNavigator`:
+a 401 survives one failed refresh, the tokens and the cache are cleared, and the router lands on `/sign-in`; the twin has the
+refresh succeed and the user stays. Code: [references/session-expiry-test.md](./references/session-expiry-test.md). It lives in
+`src/test/integration/` because it crosses the `routes`, `bootstrap` and feature layers that `eslint-plugin-boundaries` keeps apart.
 
 ## 3b. Screens behind Expo Router routes
 
@@ -195,10 +217,11 @@ timeout) in another file, or call `jest.useRealTimers()` first.
 Inject in-memory fakes for the interfaces (`SecureStore`, `Analytics`, `Logger`) via the services
 provider. A fake has real behaviour (a `Map`), so tests assert outcomes (`await store.get('token')`), not
 that a method was called. Reserve `jest.fn()` for callback props. Mock native modules only in `jest.setup.ts`
-(section 3): NetInfo with the mock it ships, `react-native-keychain` / `expo-secure-store` with a small `Map`-backed
-module in `src/test/mocks/`, and `@sentry/react-native` with `jest.fn()` stubs for `init`, `captureException`,
+(`react-native-code-structure`, `references/expo-template-setup.md` §3; the fakes and mock modules are in
+[references/test-harness.md](./references/test-harness.md)): NetInfo with the mock it ships, `expo-secure-store` /
+`react-native-keychain` with a small `Map`-backed module in `src/test/mocks/`, and `@sentry/react-native` with `jest.fn()` stubs for `init`, `captureException`,
 `addBreadcrumb`, `setUser` and an identity `wrap` (importing the real SDK starts a timer that keeps Jest alive).
-A test of the real adapter (`KeychainSecureStore`, `SentryErrorReporter`) runs against that module mock.
+A test of the real adapter (`createExpoSecureStore`, `SentryErrorReporter`) runs against that module mock.
 
 ## 5. Positive, negative, edge
 
@@ -207,8 +230,11 @@ A test of the real adapter (`KeychainSecureStore`, `SentryErrorReporter`) runs a
 | `signupSchema` | valid form passes | missing `@` rejected | 12-char password boundary, trimmed whitespace |
 | `mapHttpError` | 404 -> `NotFoundError`; known problem `code` wins over status | 418 -> `UNKNOWN` | 500 and 503 are retryable; non-JSON body |
 | api-client / `createAuthSession` | 401 -> one refresh, retried with the new token | rejected refresh -> `UnauthorizedError` | two concurrent 401s share one refresh; timeout -> `NetworkError` |
+| `SignupScreen` / `SignInScreen` | valid form submits; sign-in stores tokens and signs the session in | invalid form sends nothing; a 422 field error appears in the form | unmapped server code shows `vm.serverRejected` |
 | `OrdersListScreen` | renders items | shows `ErrorState` on failure | empty list shows empty state |
-| `createQueryClient` | retries a 5xx twice, reports it once | 404 not retried, not reported | offline not reported |
+| `createQueryClient` | retries a 5xx twice, reports it once; a 401 calls `onUnauthorized(client)` | 404 not retried, not reported | offline not reported; 401 from a mutation too |
+| Session expiry (3a) | refresh succeeds: stays signed in | refresh rejected: signed out, cache cleared, redirected | the retry carries the rotated token |
+| Consent and deletion | granted consent forwards events | withdrawn consent drops them; failed deletion keeps the session | corrupt stored consent falls back to none |
 | `scrubEvent` / `scrubBreadcrumb` | keeps `user.id`, url path | drops email, token, query string | user without id |
 | `parseEnv` | valid build config | `http://` api url throws | missing value throws |
 | Navigation | `renderRouter`: pressing a card opens `/orders/[id]` | invalid route param shows not-found | (React Navigation: `AppProviders` + root navigator render the first screen) |

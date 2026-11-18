@@ -253,9 +253,12 @@ only — never a `client.cache` package. For a business downstream (catalogue,
 payments …) put the same classes in `client/<dep>/` and make `<Dep>Client`
 public with domain-named methods.
 
+- [`CachePort.java.tmpl`](./templates/CachePort.java.tmpl), [`CacheKey.java.tmpl`](./templates/CacheKey.java.tmpl) — The port and its DTO (target `spi/cache/`); the adapter below does not compile without them.
 - [`CacheClientConfig.java.tmpl`](./templates/CacheClientConfig.java.tmpl) — Vendor configuration: `RestClient` from Boot's builder, request-factory builder and settings with per-dependency timeouts, creates the `CachePort` bean when `platform.cache.provider=http`.
 - [`HttpCacheProperties.java.tmpl`](./templates/HttpCacheProperties.java.tmpl) — `@ConfigurationProperties` record (`platform.cache.http.*`).
 - [`CacheClient.java.tmpl`](./templates/CacheClient.java.tmpl) — Thin transport: 404 → miss, 5xx/timeout → `UnavailableException`, other non-2xx → `DependencyException`.
 - [`CacheEntryResponse.java.tmpl`](./templates/CacheEntryResponse.java.tmpl) — Remote DTO.
 - [`CacheEntryConverter.java.tmpl`](./templates/CacheEntryConverter.java.tmpl) — Translation between the remote DTO and port values.
 - [`HttpCacheAdapter.java.tmpl`](./templates/HttpCacheAdapter.java.tmpl) — The `CachePort` implementation.
+- Tests, copied with their class: [`CacheClientTest`](./templates/CacheClientTest.java.tmpl) (`MockRestServiceServer`: hit, miss, 5xx, 4xx, redirect, connection failure), [`HttpCacheAdapterTest`](./templates/HttpCacheAdapterTest.java.tmpl), [`CacheEntryConverterTest`](./templates/CacheEntryConverterTest.java.tmpl), [`CacheKeyTest`](./templates/CacheKeyTest.java.tmpl). `CacheClientConfig` is wiring-only (`unit-tests`).
+- OAuth2 client credentials (§6b): [`ReportsClient`](./templates/ReportsClient.java.tmpl) (replay once on 401, token failure → `UnavailableException`), [`ReportsRestClientConfig`](./templates/ReportsRestClientConfig.java.tmpl), [`ReportsProperties`](./templates/ReportsProperties.java.tmpl), [`ReportResponse`](./templates/ReportResponse.java.tmpl); tests [`ReportsClientTest`](./templates/ReportsClientTest.java.tmpl) and [`ReportsClientOAuth2IT`](./templates/ReportsClientOAuth2IT.java.tmpl) (stub token endpoint + stub API: token fetched once and cached, revoked token evicted and replayed once, token refusal → `UnavailableException`).

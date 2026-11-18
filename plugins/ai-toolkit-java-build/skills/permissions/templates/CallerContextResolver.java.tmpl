@@ -1,0 +1,13 @@
+package {{basePackage}}.permission;
+
+import java.util.Set;
+import org.jspecify.annotations.Nullable;
+
+public interface CallerContextResolver {
+
+    /** Context of the current request's principal, or null when there is none (the handler answers 403). */
+    @Nullable CallerContext resolve();
+
+    /** The principal's OAuth2 scopes with the {@code SCOPE_} prefix stripped; empty if none. */
+    Set<String> grantedScopes();
+}

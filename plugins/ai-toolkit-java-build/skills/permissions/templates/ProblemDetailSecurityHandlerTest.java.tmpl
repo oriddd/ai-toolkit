@@ -1,0 +1,76 @@
+package {{basePackage}}.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.exception.constants.ExceptionMessages;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
+
+class ProblemDetailSecurityHandlerTest {
+
+    private final ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final ProblemDetailSecurityHandler handler = new ProblemDetailSecurityHandler(objectMapper, meterRegistry);
+    private final MockHttpServletRequest request = new MockHttpServletRequest();
+    private final MockHttpServletResponse response = new MockHttpServletResponse();
+
+    private JsonNode body() throws Exception {
+        return objectMapper.readTree(response.getContentAsString());
+    }
+
+    private double failures(final String reason) {
+        return meterRegistry.counter("security.auth.failure", "reason", reason).count();
+    }
+
+    @Test
+    void commence_badCredentials_answers401ProblemJsonWithBearerChallenge() throws Exception {
+        handler.commence(request, response, new BadCredentialsException("secret internal detail"));
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentType()).isEqualTo("application/problem+json");
+        assertThat(response.getHeader("WWW-Authenticate")).startsWith("Bearer");
+        assertThat(body().get("errorCode").asText()).isEqualTo(ExceptionMessages.ERR_UNAUTHORIZED);
+        assertThat(response.getContentAsString()).doesNotContain("secret internal detail");
+        assertThat(failures("unauthenticated")).isEqualTo(1.0);
+    }
+
+    @Test
+    void commence_identityProviderFailure_answers503WithRetryAfterInsteadOf401() throws Exception {
+        handler.commence(request, response, new AuthenticationServiceException("jwks fetch failed"));
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("30");
+        assertThat(body().get("errorCode").asText()).isEqualTo(ExceptionMessages.ERR_UNAVAILABLE);
+        assertThat(body().get("detail").asText()).contains("identity provider");
+        assertThat(failures("identity_provider_unavailable")).isEqualTo(1.0);
+        assertThat(failures("unauthenticated")).isZero();
+    }
+
+    @Test
+    void handle_accessDenied_answers403ProblemJson() throws Exception {
+        handler.handle(request, response, new AccessDeniedException("no"));
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentType()).isEqualTo("application/problem+json");
+        assertThat(body().get("errorCode").asText()).isEqualTo(ExceptionMessages.ERR_FORBIDDEN);
+        assertThat(failures("access_denied")).isEqualTo(1.0);
+    }
+
+    @Test
+    void identityProviderUnavailable_decoderInitialisationFailure_answers503() throws Exception {
+        handler.identityProviderUnavailable(response, new JwtDecoderInitializationException("down", new RuntimeException()));
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("30");
+        assertThat(body().get("status").asInt()).isEqualTo(503);
+    }
+}

@@ -54,7 +54,11 @@ text_re='(^|[^[:alnum:]_.-])(git|gh)[[:space:]].*(commit|push|tag|stash|rebase|m
 words=()
 in_list() { local x="$1"; shift; local y; for y in "$@"; do [ "$x" = "$y" ] && return 0; done; return 1; }
 base() { local b="${1##*/}"; b="${b##*\\}"; case "$b" in *.exe|*.EXE) b="${b%????}" ;; esac; printf '%s' "$b"; }
-value_opt() { in_list "$1" -m --message -F --file -C -c -t --template --author --date --fixup --squash --cleanup --trailer -o --push-option --repo --exec -s --strategy -X --strategy-option --onto; }
+value_opt() { # option, subcommand: -s/-x/-f only take a value for some subcommands
+  in_list "$1" -m --message -F --file -C -c -t --template --author --date --fixup --squash --cleanup --trailer -o --push-option --repo --exec --strategy -X --strategy-option --onto && return 0
+  case "$1:$2" in -s:merge|-s:rebase|-s:pull|-x:rebase|-f:config) return 0 ;; esac
+  return 1
+}
 
 check_git() { # words after "git"
   local a=("$@") i=0 sub rest f p
@@ -67,12 +71,12 @@ check_git() { # words after "git"
     if [ $paths -ge 1 ]; then paths=2; break; fi
     if [ $skip -eq 1 ]; then skip=0; continue; fi
     [ "$p" = "--" ] && { paths=1; continue; }
-    case "$p" in -*) flags+=("$p"); value_opt "$p" && skip=1 ;; *) pos+=("$p") ;; esac
+    case "$p" in -*) flags+=("$p"); value_opt "$p" "$sub" && skip=1 ;; *) pos+=("$p") ;; esac
   done
   [ $paths -eq 2 ] || paths=0
   case "$sub" in
     commit|push|rebase|cherry-pick|merge|am|revert|commit-tree|update-ref|filter-branch|filter-repo|send-email|fast-import)
-      if [ ${#rest[@]} -eq 1 ] && in_list "${rest[0]}" --abort --continue --skip --quit --show-current-patch -h --help; then return 1; fi
+      if [ ${#rest[@]} -eq 1 ] && in_list "${rest[0]}" --abort --skip --quit --show-current-patch -h --help; then return 1; fi
       for f in "${flags[@]}"; do
         [ "$sub" = commit ] && [ "$f" = --dry-run ] && return 1
         [ "$sub" = push ] && in_list "$f" --dry-run -n && return 1
@@ -111,6 +115,16 @@ check_git() { # words after "git"
       for f in "${flags[@]}"; do in_list "$f" -h --help --dry-run && return 1; [[ "$f" =~ ^-[A-Za-z]*n[A-Za-z]*$ ]] && return 1; done
       return 0 ;;
     pull) for f in "${flags[@]}"; do case "$f" in -r|--rebase|--rebase=true|--rebase=merges|--rebase=interactive) return 0 ;; esac; done; return 1 ;;
+    reflog) in_list "${rest[0]:-}" expire delete && return 0; return 1 ;;
+    gc) for f in "${flags[@]}"; do case "$f" in --prune|--prune=*) return 0 ;; esac; done; return 1 ;;
+    worktree) in_list "${rest[0]:-}" remove prune && return 0; return 1 ;;
+    remote) in_list "${rest[0]:-}" add remove rm rename set-url prune && return 0; return 1 ;;
+    config)
+      for f in "${flags[@]}"; do in_list "$f" --add --unset --unset-all --replace-all --rename-section --remove-section -e --edit --set && return 0; done
+      for f in "${flags[@]}"; do in_list "$f" --get --get-all --get-regexp --get-urlmatch -l --list --show-origin --show-scope --name-only -h --help --get-color --get-colorbool && return 1; done
+      in_list "${rest[0]:-}" list get && return 1
+      in_list "${rest[0]:-}" set unset edit rename-section remove-section && return 0
+      [ ${#pos[@]} -ge 2 ] && return 0; return 1 ;;
     svn) in_list "${rest[0]:-}" dcommit rebase commit-diff set-tree && return 0; return 1 ;;
     subtree) in_list "${pos[0]:-}" add merge pull push && return 0; return 1 ;;
     submodule)
@@ -178,7 +192,7 @@ check_statement() { # $1 depth, words in global array "words"
   if in_list "$prog" sudo command env nohup exec builtin xargs nice ionice timeout stdbuf doas watch; then
     for ((j = i + 1; j < ${#ws[@]} && j < i + 9; j++)); do
       w="$(base "${ws[j]}")"
-      if in_list "$w" git gh npm yarn pnpm bun mvn mvnw mvn.cmd mvnw.cmd gradle gradlew gradlew.bat twine poetry cargo uv sh bash zsh dash ksh; then i=$j; prog="$w"; break; fi
+      if in_list "$w" git gh npm yarn pnpm bun mvn mvnw mvn.cmd mvnw.cmd gradle gradlew gradlew.bat twine poetry cargo uv find python python3 sh bash zsh dash ksh; then i=$j; prog="$w"; break; fi
       case "${ws[j]}" in *' '*) fb_risky "${ws[j]}" $((depth + 1)) && return 0 ;; esac
     done
   fi
@@ -216,7 +230,17 @@ check_statement() { # $1 depth, words in global array "words"
         esac
       done ;;
     twine) [ "${args[0]:-}" = upload ] && return 0 ;;
-    poetry|cargo|uv|hatch|flit|pdm) [ "${args[0]:-}" = publish ] && return 0 ;;
+    find|fd|fdfind|gfind)
+      for ((j = 0; j < ${#args[@]}; j++)); do
+        case "${args[j]}" in -exec|-execdir|-ok|-okdir|-x|--exec|-X|--exec-batch) fb_risky "$(printf "%q " "${args[@]:j+1}")" $((depth + 1)) && return 0 ;; esac
+      done ;;
+    python|python[0-9]*|py|pypy|pypy[0-9]*|uvx|pipx|pipenv|rye)
+      for ((j = 0; j + 1 < ${#args[@]}; j++)); do
+        case "${args[j]} ${args[j+1]}" in "twine upload"|"poetry publish"|"uv publish"|"flit publish"|"hatch publish"|"pdm publish") return 0 ;; esac
+      done ;;
+    poetry|cargo|uv|hatch|flit|pdm)
+      [ "${args[0]:-}" = publish ] && return 0
+      for ((j = 0; j + 1 < ${#args[@]}; j++)); do [ "${args[j]} ${args[j+1]}" = "twine upload" ] && return 0; done ;;
     sh|bash|zsh|dash|ksh|fish)
       local seen=0 plain=0
       for w in "${args[@]}"; do

@@ -1,0 +1,78 @@
+package {{basePackage}}.adapter.ratelimit.redis;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import {{basePackage}}.spi.ratelimit.RateLimiterPort;
+import io.lettuce.core.RedisClient;
+import java.time.Duration;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+@Testcontainers
+class RedisBucket4jRateLimiterIT {
+
+    @Container
+    static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+
+    private static RedisClient podA;
+    private static RedisClient podB;
+
+    private RateLimiterPort limiterA;
+    private RateLimiterPort limiterB;
+
+    @BeforeAll
+    static void connect() {
+        final String uri = "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379);
+        podA = RedisClient.create(uri);
+        podB = RedisClient.create(uri);
+    }
+
+    @AfterAll
+    static void disconnect() {
+        podA.shutdown();
+        podB.shutdown();
+    }
+
+    @BeforeEach
+    void setUp() {
+        limiterA = new RedisBucket4jRateLimiter(podA, 10, Duration.ofMinutes(1));
+        limiterB = new RedisBucket4jRateLimiter(podB, 10, Duration.ofMinutes(1));
+    }
+
+    @Test
+    void tryConsume_twoPodsSharingOneClient_admitExactlyTheCapacityBetweenThem() {
+        final String client = "user:" + UUID.randomUUID();
+        final AtomicInteger admitted = new AtomicInteger();
+
+        for (int i = 0; i < 10; i++) {
+            if (limiterA.tryConsume(client).allowed()) {
+                admitted.incrementAndGet();
+            }
+            if (limiterB.tryConsume(client).allowed()) {
+                admitted.incrementAndGet();
+            }
+        }
+
+        assertThat(admitted).hasValue(10);
+        assertThat(limiterA.tryConsume(client).allowed()).isFalse();
+        assertThat(limiterB.tryConsume(client).retryAfterSeconds()).isBetween(1L, 61L);
+    }
+
+    @Test
+    void tryConsume_anotherClient_hasItsOwnBucket() {
+        for (int i = 0; i < 10; i++) {
+            limiterA.tryConsume("user:greedy");
+        }
+
+        assertThat(limiterA.tryConsume("user:greedy").allowed()).isFalse();
+        assertThat(limiterB.tryConsume("user:polite-" + UUID.randomUUID()).allowed()).isTrue();
+    }
+}

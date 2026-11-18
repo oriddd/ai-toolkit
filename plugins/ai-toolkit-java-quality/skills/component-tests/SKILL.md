@@ -49,6 +49,10 @@ src/test/resources/
 
 ### 1. `ComponentTestConfiguration`
 
+Target: `src/test/java/<basePackage>/testconfig/ComponentTestConfiguration.java`. Every `@SpringBootTest` of the
+`component-test` profile imports it with `@Import(ComponentTestConfiguration.class)`; without it, services with
+persistence or auth have no transaction manager and no permissive security chain.
+
 A `@TestConfiguration` annotated with `@Profile("component-test")` that:
 
 - Disables real security (only when the service uses Spring Security —
@@ -60,7 +64,9 @@ A `@TestConfiguration` annotated with `@Profile("component-test")` that:
   any-request chains make Spring Security 6 fail at startup, or let the
   production chain win.
 - Provides a `@Primary TestRestTemplate` with extended connect/read timeouts
-  when the operation under test is slow (file conversion, ML inference, …).
+  when the operation under test is slow (file conversion, ML inference, …). It has **no root URI**, so every
+  `*ComponentTest` (the readiness-group one included) calls absolute URLs: `http://localhost:` + `@LocalServerPort` +
+  context path + path. A relative `"/actuator/…"` fails with `URI is not absolute`.
 - Provides `@Primary` mocks for every collaborator that touches the network
   or filesystem (e.g. `PermissionsHandler`, HTTP clients, blob-store / file-store clients).
   A client class that carries Resilience4j annotations (`@CircuitBreaker(fallbackMethod = …)`) is proxied even as a
@@ -104,6 +110,9 @@ public class NoHeavyStartupTestConfig {
 Import it alongside `ComponentTestConfiguration` via `@Import({…, …})`.
 (`@MockitoBean` would also replace the bean definition so the real bean is
 never created, but it belongs in slice tests — see the decision matrix below.)
+
+A test that asserts metrics (`/actuator/prometheus`, a `MeterRegistry` meter) adds `@AutoConfigureObservability`:
+Boot turns the metrics exporters off in every `@SpringBootTest`, so the endpoint answers `404` without it.
 
 ### 2. Test class skeleton
 
@@ -170,7 +179,7 @@ the canonical template.
 
 Keep the database out of the component-test context: exclude the DataSource / JPA / Flyway auto-configuration in
 `application-component-test.yaml` (all six Boot 3.5 and Boot 4 names), replace every repository with a deterministic
-mock or fake in `ComponentTestConfiguration`, register a no-op transaction manager, and switch Kafka listeners off.
+mock or fake in `ComponentTestConfiguration`, keep the template's `[persistence]` block (the no-op transaction manager), and switch Kafka listeners off.
 `AuditConfig` is `@Profile("!component-test")`. A **default-profile** context test (`ApplicationContextTest`, auth = yes)
 cannot use that guard: with persistence it is a Testcontainers-backed `ApplicationContextIT`. Full recipe:
 [`references/persistence.md`](./references/persistence.md) (load only when the service has persistence).
@@ -294,4 +303,6 @@ test (`integration-tests`), never part of `mvn test`.
 ## 4. Templates
 
 - [`ComponentTest.java.tmpl`](./templates/ComponentTest.java.tmpl) — Ready-to-fill component test skeleton.
-- [`ComponentTestConfiguration.java.tmpl`](./templates/ComponentTestConfiguration.java.tmpl) — Standard test configuration for component tests.
+- [`ComponentTestConfiguration.java.tmpl`](./templates/ComponentTestConfiguration.java.tmpl) — Standard test configuration for component tests. Optional parts are tagged: `[security]` (Spring Security: the permissive chain) and `[persistence]` (the no-op transaction manager); for each tag the service lacks, delete the tagged lines and the `[tag:begin]` … `[tag:end]` block (the `exception-handling` §3a `sed` recipe).
+- [`SecurityTest.java.tmpl`](./templates/SecurityTest.java.tmpl) — The `@WebMvcTest` security slice test (no token 401, JWT 200, unknown path 403), see [`references/security-slice-test.md`](./references/security-slice-test.md).
+- [`ProductionSecurityChainTest.java.tmpl`](./templates/ProductionSecurityChainTest.java.tmpl) — The production chain slice test with the real permissions stack (401, 200, wrong scope 403, unknown path 403, actuator locked, IdP-down 503), see [`references/security-slice-test.md`](./references/security-slice-test.md).

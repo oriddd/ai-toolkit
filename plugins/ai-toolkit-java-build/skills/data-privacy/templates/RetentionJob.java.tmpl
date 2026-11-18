@@ -1,0 +1,28 @@
+package {{basePackage}}.privacy;
+
+import java.time.Clock;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+@Component
+@Profile("!component-test")
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@Slf4j
+public class RetentionJob {
+
+    private final RetentionPurger purger;
+    private final RetentionProperties props;
+    private final Clock clock;
+
+    @Scheduled(cron = "${privacy.retention.cron:0 0 3 * * *}")
+    @SchedulerLock(name = "privacy-retention", lockAtMostFor = "PT10M")
+    public void run() {
+        final RetentionPurger.PurgeResult result = purger.purge(clock.instant().minus(props.outbox()));
+        log.info("Retention purge removed {} outbox rows and {} processed events", result.outboxRows(), result.processedEvents());
+    }
+}

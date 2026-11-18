@@ -1,0 +1,46 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
+
+class RetentionPurgerTest {
+
+    private static final Instant CUTOFF = Instant.parse("2026-01-02T03:04:05Z");
+
+    private final JdbcClient jdbc = mock(JdbcClient.class);
+    private final StatementSpec outboxDelete = mock(StatementSpec.class);
+    private final StatementSpec processedDelete = mock(StatementSpec.class);
+    private final RetentionPurger purger = new RetentionPurger(jdbc);
+
+    @Test
+    void purge_deletesPublishedOutboxRowsAndProcessedEventsBeforeTheCutoffAndCountsThem() {
+        when(jdbc.sql(org.mockito.ArgumentMatchers.contains("FROM outbox"))).thenReturn(outboxDelete);
+        when(jdbc.sql(org.mockito.ArgumentMatchers.contains("FROM processed_events"))).thenReturn(processedDelete);
+        when(outboxDelete.param(anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(outboxDelete);
+        when(processedDelete.param(anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(processedDelete);
+        when(outboxDelete.update()).thenReturn(3);
+        when(processedDelete.update()).thenReturn(5);
+
+        final RetentionPurger.PurgeResult result = purger.purge(CUTOFF);
+
+        assertThat(result).isEqualTo(new RetentionPurger.PurgeResult(3, 5));
+        final OffsetDateTime expected = OffsetDateTime.ofInstant(CUTOFF, ZoneOffset.UTC);
+        final InOrder order = inOrder(outboxDelete, processedDelete);
+        order.verify(outboxDelete).param("cutoff", expected);
+        order.verify(processedDelete).param("cutoff", expected);
+        verify(jdbc).sql("DELETE FROM outbox WHERE published_at IS NOT NULL AND published_at < :cutoff");
+        verify(jdbc).sql("DELETE FROM processed_events WHERE processed_at < :cutoff");
+    }
+}

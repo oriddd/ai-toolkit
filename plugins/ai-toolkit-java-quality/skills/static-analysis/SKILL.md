@@ -17,6 +17,11 @@ last_reviewed: 2026-11-15
 These tools complement the `quality-review` checklist by failing the build
 on objective violations.
 
+> **Run `mvn spotless:apply` once on every freshly rendered template set, before the first `mvn verify`.** The templates are
+> not pre-formatted and `sortPom` reorders the generated `pom.xml`, so `spotless:check` fails otherwise. Then
+> `mvn verify` runs every gate below plus the Jacoco per-class and PIT gates (`unit-tests`); `*Config` wiring classes are the
+> one named exclusion there.
+
 ## Stack
 
 | Tool | What it catches | Configured how |
@@ -25,7 +30,7 @@ on objective violations.
 | **SpotBugs** + FindSecBugs | Bug patterns (null deref, resource leak, EI_EXPOSE_REP, SQLi, XSS) | Maven plugin, threshold Medium; fail on any HIGH and any MEDIUM not in the baseline |
 | **Error-Prone** | Compile-time bug patterns from Google (NPE, mutable enum, missing override, …) | `-XepExcludedPaths` skips generated sources (`-XepDisableWarningsInGeneratedCode` only silences warnings) |
 | **NullAway** | Null-safety: every reference is annotated `@Nullable` or assumed non-null | Annotated packages only |
-| **Checkstyle** | Team-specific rules: method length, file length, parameter count (`quality-review` F22–F24) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
+| **Checkstyle** | Team-specific rules: method length, file length, parameter count, complexity, fan-out, NCSS (`quality-review` F21–F24, F26, F27) | `maven-checkstyle-plugin` + checked-in `checkstyle.xml` |
 | **PMD** (optional) | Method/class size, complexity (overlaps with `quality-review`) | Often dropped in favour of SpotBugs + Sonar |
 | **Sonar** (optional) | Aggregated quality dashboard, hotspots | CI step that uploads to SonarCloud / SonarQube |
 
@@ -126,7 +131,7 @@ on objective violations.
         <configLocation>checkstyle.xml</configLocation>
         <consoleOutput>true</consoleOutput>
         <failOnViolation>true</failOnViolation>
-        <violationSeverity>error</violationSeverity>   <!-- warnings (F22, F24) are printed, errors (F23 ceiling) fail -->
+        <violationSeverity>error</violationSeverity>   <!-- warnings (F22, F24) are printed, errors (F23) fail -->
       </configuration>
       <executions><execution><phase>validate</phase><goals><goal>check</goal></goals></execution></executions>
     </plugin>
@@ -134,10 +139,10 @@ on objective violations.
 </build>
 ```
 
-Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F22–F24
+Minimal checked-in `checkstyle.xml` enforcing the `quality-review` F21–F24, F26 and F27
 thresholds (add team-specific modules below these). The severities match
-quality-review: F22 and F24 are **WARN** there, so Checkstyle reports them
-without failing the build; only the F23 **hard ceiling** (300 lines) is an
+quality-review: all of them except F23 are **WARN** there, so Checkstyle reports them
+without failing the build; only the F23 limit (300 lines) is an
 error. The plugin configuration above uses `<violationSeverity>error</violationSeverity>`,
 so warnings are printed but do not break the build:
 
@@ -147,7 +152,7 @@ so warnings are printed but do not break the build:
     "https://checkstyle.org/dtds/configuration_1_3.dtd">
 <module name="Checker">
   <property name="severity" value="warning"/>
-  <!-- F23 class length: hard ceiling 300 breaks the build (the 200 target is checked in quality-review) -->
+  <!-- F23 class length: 300 breaks the build -->
   <module name="FileLength">
     <property name="max" value="300"/>
     <property name="severity" value="error"/>
@@ -163,6 +168,18 @@ so warnings are printed but do not break the build:
       <property name="max" value="4"/>
       <property name="ignoreOverriddenMethods" value="true"/>
       <property name="tokens" value="METHOD_DEF"/>
+    </module>
+    <!-- F21 cyclomatic complexity (WARN) -->
+    <module name="CyclomaticComplexity">
+      <property name="max" value="10"/>
+    </module>
+    <!-- F27 class fan-out (WARN) -->
+    <module name="ClassFanOutComplexity">
+      <property name="max" value="25"/>
+    </module>
+    <!-- F26 NCSS per file (WARN) -->
+    <module name="JavaNCSS">
+      <property name="fileMaximum" value="500"/>
     </module>
   </module>
 </module>
@@ -240,7 +257,7 @@ build fails with `IllegalAccessError`:
 | --- | --- |
 | Spotless | Any difference |
 | SpotBugs | Any HIGH; any MEDIUM not in the `spotbugs-exclude.xml` baseline (HIGH findings are never baselined) |
-| Checkstyle | Any `error`-severity violation (the F23 hard ceiling); F22 / F24 are printed as warnings, matching `quality-review` |
+| Checkstyle | Any `error`-severity violation (F23); F22 / F24 are printed as warnings, matching `quality-review` |
 | Error-Prone / NullAway | Any violation (at `ERROR` there is no baseline) |
 | Sonar | Quality Gate failure (default "Sonar way", on new code: reliability, security and maintainability rating A, all security hotspots reviewed, coverage ≥ 80 %, duplicated lines ≤ 3 %) |
 

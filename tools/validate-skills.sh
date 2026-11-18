@@ -22,7 +22,7 @@ python3 "$ROOT/tools/build-indexes.py" --check || docs_stale=1
 DOCS_STALE="$docs_stale" python3 - "$ROOT" <<'PY'
 import os, re, sys, glob
 
-root = sys.argv[1]
+root = os.path.normpath(sys.argv[1])
 errors = []
 warnings = []
 

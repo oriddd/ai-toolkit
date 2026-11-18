@@ -1,0 +1,63 @@
+package {{basePackage}}.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.Base64;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class PropertiesFieldKeyProviderTest {
+
+    private static final String KEY_1 = Base64.getEncoder().encodeToString(new byte[32]);
+    private static final String KEY_2 = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32});
+
+    private final PropertiesFieldKeyProvider provider =
+            new PropertiesFieldKeyProvider(new EncryptionProperties(2, Map.of(1, KEY_1, 2, KEY_2), KEY_1));
+
+    @Test
+    void currentVersion_returnsTheConfiguredVersion() {
+        assertThat(provider.currentVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void key_knownVersions_returnTheirOwnAes256Key() {
+        assertThat(provider.key(1).getEncoded()).hasSize(32).containsOnly(0);
+        assertThat(provider.key(2).getEncoded()[0]).isEqualTo((byte) 1);
+        assertThat(provider.key(2).getAlgorithm()).isEqualTo("AES");
+    }
+
+    @Test
+    void blindIndexKey_returnsTheBlindIndexKey() {
+        assertThat(provider.blindIndexKey().getEncoded()).hasSize(32);
+    }
+
+    @Test
+    void key_unknownVersion_failsNamingTheVersion() {
+        assertThatThrownBy(() -> provider.key(3)).isInstanceOf(IllegalStateException.class).hasMessageContaining("version 3");
+    }
+
+    @Test
+    void constructor_keyOfTheWrongSize_failsAtStartup() {
+        final String shortKey = Base64.getEncoder().encodeToString(new byte[16]);
+
+        assertThatThrownBy(() -> new PropertiesFieldKeyProvider(new EncryptionProperties(1, Map.of(1, shortKey), KEY_1)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("privacy.encryption.keys.1");
+    }
+
+    @Test
+    void constructor_currentVersionWithoutKey_failsAtStartup() {
+        assertThatThrownBy(() -> new PropertiesFieldKeyProvider(new EncryptionProperties(3, Map.of(1, KEY_1), KEY_1)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void constructor_blindIndexKeyOfTheWrongSize_failsAtStartup() {
+        final String shortKey = Base64.getEncoder().encodeToString(new byte[8]);
+
+        assertThatThrownBy(() -> new PropertiesFieldKeyProvider(new EncryptionProperties(1, Map.of(1, KEY_1), shortKey)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("blind-index-key");
+    }
+}

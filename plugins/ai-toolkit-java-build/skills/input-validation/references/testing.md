@@ -34,15 +34,13 @@ class ProductEditabilityRuleTest {
 Drive the validator directly, without Spring context:
 
 ```java
-class EditableProductIdValidatorTest {
-    private final ProductLookupService lookup = mock(ProductLookupService.class);
-    private final ProductEditabilityRule rule  = mock(ProductEditabilityRule.class);
+class ValidProductIdValidatorTest {
+    private final ProductIdFormatRule rule = mock(ProductIdFormatRule.class);
     private final ConstraintValidatorContext ctx = mock(ConstraintValidatorContext.class);
     private final HibernateConstraintValidatorContext hibernateCtx = mock(HibernateConstraintValidatorContext.class);
     private final ConstraintViolationBuilder builder = mock(ConstraintViolationBuilder.class);
 
-    private final EditableProductIdValidator validator =
-            new EditableProductIdValidator(lookup, rule);
+    private final ValidProductIdValidator validator = new ValidProductIdValidator(rule);
 
     @BeforeEach void setUp() {
         when(ctx.buildConstraintViolationWithTemplate(any())).thenReturn(builder);
@@ -57,25 +55,16 @@ class EditableProductIdValidatorTest {
     }
 
     @Test
-    void isValid_productTypeNotEditable_returnsFalseWithProductIdParameter() {
-        when(lookup.getProductType("id1")).thenReturn("TypeA");
-        when(rule.isEditable("TypeA")).thenReturn(false);
-        assertThat(validator.isValid("id1", ctx)).isFalse();
-        verify(hibernateCtx).addMessageParameter("productId", "id1");
+    void isValid_malformedId_returnsFalseWithProductIdParameter() {
+        when(rule.isWellFormed("bad_id")).thenReturn(false);
+        assertThat(validator.isValid("bad_id", ctx)).isFalse();
+        verify(hibernateCtx).addMessageParameter("productId", "bad_id");
     }
 
     @Test
-    void isValid_unknownProduct_returnsFalseLikeNotEditable() {   // same answer: no existence leak
-        when(lookup.getProductType("id1")).thenReturn(null);
-        assertThat(validator.isValid("id1", ctx)).isFalse();
-        verify(hibernateCtx).addMessageParameter("productId", "id1");
-    }
-
-    @Test
-    void isValid_productTypeEditable_returnsTrue() {
-        when(lookup.getProductType("id1")).thenReturn("TypeA");
-        when(rule.isEditable("TypeA")).thenReturn(true);
-        assertThat(validator.isValid("id1", ctx)).isTrue();
+    void isValid_wellFormedId_returnsTrue() {
+        when(rule.isWellFormed("prod-1")).thenReturn(true);
+        assertThat(validator.isValid("prod-1", ctx)).isTrue();
         verifyNoInteractions(ctx);
     }
 }
@@ -104,21 +93,19 @@ plain `@Component`s or your `@Configuration` classes. So:
 class ProductControllerValidationTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean JwtDecoder jwtDecoder;                      // .with(jwt()) below never calls it
-    @MockitoBean ProductEditabilityRule editabilityRule;     // rule bean used by the validator
-    @MockitoBean ProductLookupService productLookupService;  // lookup used by the validator
+    @MockitoBean ProductIdFormatRule productIdFormatRule;    // rule bean used by the validator
     @MockitoBean UpdateProductOperation updateProductOperation;  // the controller's own collaborator
 
     @Test
-    void update_uneditableProductType_returns400WithViolation() throws Exception {
-        when(productLookupService.getProductType("prod-1")).thenReturn("TypeA");
-        when(editabilityRule.isEditable("TypeA")).thenReturn(false);
-        mockMvc.perform(patch("/api/v1/products/prod-1")
+    void update_malformedProductId_returns400WithViolation() throws Exception {
+        when(productIdFormatRule.isWellFormed("bad_id")).thenReturn(false);
+        mockMvc.perform(patch("/api/v1/products/bad_id")
                        .with(jwt())
                        .contentType(APPLICATION_JSON)
                        .content("{\"name\":\"New name\"}"))           // valid body: only the path rule fails
                .andExpect(status().isBadRequest())
                .andExpect(jsonPath("$.status").value(400))
-               .andExpect(jsonPath("$.errors[0].message").value("Product 'prod-1' is not editable"));
+               .andExpect(jsonPath("$.errors[0].message").value("Product id 'bad_id' is malformed"));
         verifyNoInteractions(updateProductOperation);
     }
 }
