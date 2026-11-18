@@ -59,7 +59,7 @@ monitor/
 │   └── <Domain>Parser.java         # one per additional domain tag (format, orderType, …)
 └── recorder/
     ├── MetricsRecorder.java         # interface: recordMetrics + getSupportedMetricName + canHandle
-    ├── MetricsRecorderRegistry.java # injects List<MetricsRecorder>, routes by metric name
+    ├── MetricsRecorderRegistry.java # injects List<MetricsRecorder>, routes by canHandle(metricName)
     └── <UseCase>MetricsRecorder.java  # one per business use case that needs a metric
 ```
 

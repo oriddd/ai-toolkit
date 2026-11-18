@@ -217,7 +217,7 @@ do not load them all.
 ❌ Never return a "default" / silent empty value from a fallback — throw a
    domain exception so the `@RestControllerAdvice` maps it to `503`.
 ❌ Never share one `RestClient` / `WebClient` bean across two external dependencies.
-❌ Never return a bare `null` from a parser or facade — an absent value is `Optional` (§7).
+❌ Never return `null` from a parser or facade method that is not annotated `@Nullable` (§7).
 ❌ An unnamed `RestClient` / `WebClient` `@Bean` injected by type — the second
    dependency makes injection ambiguous or silently wires the wrong base URL.
 ❌ Never keep repository/analyzer/scheduler code under `client/<dep>/`

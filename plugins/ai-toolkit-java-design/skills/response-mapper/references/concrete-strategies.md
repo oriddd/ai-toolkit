@@ -19,7 +19,8 @@ public class V1UserMapperStrategy implements MapperStrategy<User, UserV1DTO> {
     }
 
     @Override
-    public UserV1DTO map(final User user) {
+    public @Nullable UserV1DTO map(final @Nullable User user) {
+        if (user == null) return null;
         return new UserV1DTO(user.getId(), user.getFullName());     // V1 flattened name
     }
 }
@@ -40,7 +41,8 @@ public class V2UserMapperStrategy implements MapperStrategy<User, UserV2DTO> {
     }
 
     @Override
-    public UserV2DTO map(final User user) {
+    public @Nullable UserV2DTO map(final @Nullable User user) {
+        if (user == null) return null;
         return new UserV2DTO(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail());
     }
 }
@@ -61,7 +63,8 @@ public class V3UserMapperStrategy implements MapperStrategy<User, UserV3DTO> {
     }
 
     @Override
-    public UserV3DTO map(final User user) {
+    public @Nullable UserV3DTO map(final @Nullable User user) {
+        if (user == null) return null;
         return new UserV3DTO(
                 user.getId(),
                 user.getFirstName(),

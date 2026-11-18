@@ -16,6 +16,7 @@ are what those tests cover and what a new strategy's test must cover. Required c
 For each concrete strategy, cover:
 
 - `supportedContexts()` returns the expected list.
+- `canHandle(ctx)` is `true` only for the declared contexts and `false` for `null`.
 - `verifyPermissions(...)` happy path.
 - Every thrown-exception branch (missing authorities, scope not allowed,
   authorization source returns "no access", etc.).

@@ -18,7 +18,6 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -85,11 +84,12 @@ class MetricsStackTest {
     }
 
     @Test
-    void registry_routesByMetricNameAndMissingNamesAreEmpty() {
+    void registry_routesByCanHandleAndMissingNamesAreNull() {
         final MetricsRecorderRegistry registry = new MetricsRecorderRegistry(List.of(recorder));
 
-        assertThat(registry.getRecorder("orders.invoices.requests")).containsSame(recorder);
-        assertThat(registry.getRecorder("unknown")).isEqualTo(Optional.empty());
+        assertThat(registry.getRecorder("orders.invoices.requests")).isSameAs(recorder);
+        assertThat(registry.getRecorder("unknown")).isNull();
+        assertThat(registry.getRecorder(null)).isNull();
     }
 
     @Test

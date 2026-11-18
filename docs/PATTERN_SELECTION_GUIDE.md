@@ -40,13 +40,12 @@ The documentation said "use external-client pattern for external services" witho
 
 ### Operation Layer Decision
 
-The controller holds no logic and delegates to exactly **one** collaborator (guild rule #3,
-`code-structure`): a `*Service` when the use case is a single service call, an `*Operation`
-as soon as it orchestrates several. Scale decides how much structure lives behind it.
+The controller holds no logic and delegates to exactly **one** `*Operation` (guild rule #3,
+`code-structure`). Scale decides how much structure lives behind it.
 
 | Complexity | Pattern | LOC Threshold | Use When |
 |------------|---------|---------------|----------|
-| **Trivial** | Controller → one Service (no Operation) | Service <100 LOC | 1 service call, nothing to orchestrate |
+| **Trivial** | Controller → thin Operation → one Service | Operation <50 LOC | 1 service call, nothing to orchestrate |
 | **Simple** | Controller → Operation → Services (Operation calls the services directly) | Operation <100 LOC | 2-4 service calls, straightforward sequence |
 | **Medium** | Operation + extracted helper services | Operation ~150 LOC | 5-7 service calls, some conditionals |
 | **Complex** | Operation + dedicated domain services (`@Transactional` stays on the services, guild #7) | Operation >150 LOC | 8+ calls, transactions, multi-step business logic |
@@ -157,7 +156,7 @@ public List<Result> search(String term, boolean caseSensitive) {
 3. Are there multi-step transactions spanning multiple repositories?
 
 **Decision** (the controller delegates to one `*Operation` when the use case orchestrates, otherwise to one `*Service`):
-- 1 service call → the controller calls that one Service (no Operation)
+- 1 service call → a thin Operation over that one Service
 - 2-4 simple service calls → one Operation calls the services directly (no extra orchestration layer)
 - 5+ steps OR complex orchestration → split the Operation's work into focused helper / domain services
 

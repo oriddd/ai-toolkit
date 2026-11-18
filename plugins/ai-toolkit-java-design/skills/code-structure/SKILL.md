@@ -85,8 +85,8 @@ controller ──► operation ──► service ──► repository ──► 
                  scheduler ──► service / repository / analyzer  (never client directly)
 ```
 
-The controller skips `operation/` and calls exactly one `*Service` when the use
-case orchestrates nothing (guild rule 3, see §1c).
+Every controller method calls exactly one `Operation` (guild rule 3, see §1c); a use case that
+orchestrates nothing gets a thin Operation over one `*Service`.
 
 ## 1b. The LEGO Bricks Principle (Foundational)
 
@@ -182,10 +182,8 @@ detailed examples of testable vs. non-testable code.
 
 Each layer in the hierarchy has a specific, focused responsibility:
 
-- **Controllers** only translate HTTP ⇄ DTO and delegate to **exactly one**
-  entry bean: an `Operation` when the use case orchestrates (permission check,
-  several services, response assembly), otherwise a single `*Service` call
-  (guild rule 3; see `pattern-selection` for the scale decision).
+- **Controllers** only translate HTTP ⇄ DTO and delegate to **one** `Operation`
+  (guild rule 3; see `pattern-selection` for how much structure lives behind it).
 - **Operations** orchestrate a single use case: permission check → service calls →
   response assembly. No HTTP types here.
 - **Services** are stateless beans encapsulating one domain capability.

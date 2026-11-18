@@ -32,8 +32,10 @@ public class PermissionsHandler {
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();                 // 403
         }
-        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx)
-                .orElseThrow(() -> ExceptionMessages.unrecognizedCallerContext(ctx));   // 403
+        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
+        if (strategy == null) {
+            throw ExceptionMessages.unrecognizedCallerContext(ctx);          // 403
+        }
         strategy.verifyPermissions(resourceId);
     }
 }
@@ -75,11 +77,13 @@ public class MetricsFilter extends OncePerRequestFilter {
 
     private void record(final HttpServletRequest request, final HttpServletResponse response, final long startNanos) {
         final long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-        metricNameResolver.resolve(request)
-                .flatMap(metricsRecorderRegistry::getRecorder)
-                .ifPresentOrElse(
-                        recorder -> recorder.recordMetrics(durationMs, request, response),
-                        () -> log.warn("No metrics recorder for URI {}", request.getRequestURI()));
+        final String metricName = metricNameResolver.resolve(request);
+        final MetricsRecorder recorder = metricsRecorderRegistry.getRecorder(metricName);
+        if (recorder == null) {
+            log.warn("No metrics recorder for URI {}", request.getRequestURI());
+            return;
+        }
+        recorder.recordMetrics(durationMs, request, response);
     }
 
     /** Runs the action once the async request is complete (also after a timeout or an error). */
@@ -102,7 +106,7 @@ client id is still tagged.
 
 **Rules:**
 - ✅ Reads request/context and returns a discriminator (String, Enum, etc.)
-- ✅ Returns `Optional.empty()` when no match (Handler/Filter logs warning) — never `null`. Exception: a resolver that
+- ✅ Returns `null` when no match (Handler/Filter logs warning), declared `@Nullable`. Exception: a resolver that
   parses client HTTP input (`LayoutResolver`, `ApiVersionResolver`) throws the 4xx domain exception for an unknown
   value, because the client sent something invalid (`response-layout`: 400, `response-mapper`: 404 / 406)
 - ✅ When the discriminator comes from an ordered rule list (URI patterns), the first match wins, so the list is
@@ -122,16 +126,17 @@ client id is still tagged.
 public class MetricNameResolver {
     private final MonitoringConfig monitoringConfig;
 
-    public Optional<String> resolve(final HttpServletRequest request) {
+    public @Nullable String resolve(final @Nullable HttpServletRequest request) {
         if (request == null || request.getRequestURI() == null) {
-            return Optional.empty();
+            return null;
         }
         // the patterns are written without server.servlet.context-path
         final String uri = request.getRequestURI().substring(request.getContextPath().length());
         return monitoringConfig.patternToMetricName().stream()      // ordered list: most specific pattern first
                 .filter(entry -> entry.getKey().matcher(uri).matches())
                 .map(Map.Entry::getValue)
-                .findFirst();
+                .findFirst()
+                .orElse(null);
     }
 }
 ```
@@ -142,38 +147,44 @@ public class MetricNameResolver {
 
 **Rules:**
 - ✅ Injects `List<Strategy>` via constructor — Spring auto-discovers all implementations
-- ✅ Indexes the strategies by their discriminator (`getSupported<X>()`) once, in the constructor
-- ✅ **Fails at startup** (`IllegalStateException`) when two strategies claim the same discriminator — otherwise
-  routing would depend on bean order
-- ✅ Returns `Optional.empty()` when no strategy matches — never `null`
+- ✅ Routes by calling `canHandle(discriminator)` on each strategy and returning the first that accepts
+- ✅ **Fails at startup** (`IllegalStateException`) when two strategies declare the same discriminator
+  (`getSupported<X>()`) — otherwise `findFirst()` would depend on bean order
+- ✅ Returns `null` when no strategy matches, declared `@Nullable` (`org.jspecify.annotations.Nullable`)
 - ✅ **Never** contains if/else or switch on strategy type
 - ✅ Is a `@Component`
 
 ```java
 @Component
 public class MetricsRecorderRegistry {
-    private final Map<String, MetricsRecorder> recordersByMetricName;
+    private final List<MetricsRecorder> metricsRecorders;
 
     public MetricsRecorderRegistry(final List<MetricsRecorder> metricsRecorders) {
-        this.recordersByMetricName = metricsRecorders.stream()
-                .collect(Collectors.toUnmodifiableMap(
-                        MetricsRecorder::getSupportedMetricName,
-                        Function.identity(),
-                        (first, second) -> {
-                            throw new IllegalStateException("Two recorders for metric '"
-                                    + first.getSupportedMetricName() + "': "
-                                    + first.getClass().getName() + ", " + second.getClass().getName());
-                        }));
+        final Map<String, MetricsRecorder> declared = new HashMap<>();
+        for (final MetricsRecorder recorder : metricsRecorders) {
+            final MetricsRecorder first = declared.putIfAbsent(recorder.getSupportedMetricName(), recorder);
+            if (first != null) {
+                throw new IllegalStateException("Two recorders for metric '"
+                        + recorder.getSupportedMetricName() + "': "
+                        + first.getClass().getName() + ", " + recorder.getClass().getName());
+            }
+        }
+        this.metricsRecorders = List.copyOf(metricsRecorders);
     }
 
-    public Optional<MetricsRecorder> getRecorder(final String metricName) {
-        return Optional.ofNullable(metricName).map(recordersByMetricName::get);
+    public @Nullable MetricsRecorder getRecorder(final @Nullable String metricName) {
+        return metricsRecorders.stream()
+                .filter(r -> r.canHandle(metricName))
+                .findFirst()
+                .orElse(null);
     }
 }
 ```
 
 When one strategy serves several discriminator values (the `permissions` strategies return
-`List<CallerContext> supportedContexts()`), index every value the same way and fail on any value claimed twice.
+`List<CallerContext> supportedContexts()`), check every declared value the same way and fail on any value declared
+twice. The check reads the declared values only: a strategy that overrides `canHandle` with its own logic can overlap
+another one unseen, so override it only to add composite matching.
 
 ### 4. **Strategy Interface** — The Contract
 
@@ -181,11 +192,12 @@ When one strategy serves several discriminator values (the `permissions` strateg
 
 **Rules:**
 - ✅ Defines the core behavior method (e.g., `recordMetrics`, `verifyPermissions`, `map`)
-- ✅ Declares its discriminator with **one** contract: `getSupported<X>()` returning the single value it serves
+- ✅ Declares its discriminator: `getSupported<X>()` returning the single value it serves
   (`getSupportedMetricName()`, `getSupportedLayoutType()`, `getSupportedVersion()`), or `supported<X>s()` returning a
-  collection when one strategy serves several values (`supportedContexts()` in `permissions`). The Registry indexes on it.
-- ✅ Provides a default `canHandle(discriminator)` derived from that method — for tests and simple lookups; never
-  override it with different logic
+  collection when one strategy serves several values (`supportedContexts()` in `permissions`)
+- ✅ Defines `canHandle(discriminator)` — used by the Registry for routing
+- ✅ Provides a default `canHandle` implementation derived from the declared discriminator, so a strategy only
+  declares it
 - ✅ Is an `interface` (not an abstract class unless shared state is needed)
 
 ```java
@@ -209,7 +221,7 @@ public interface MetricsRecorder {
 **Rules:**
 - ✅ Each strategy is a `@Component`
 - ✅ Implements the Strategy interface
-- ✅ Returns its discriminator value via `getSupported<X>()` (or `supported<X>s()` for several values, see §4)
+- ✅ Returns its discriminator value via `getSupported<X>()` (or `supported<X>s()` for several values) and inherits `canHandle`, see §4
 - ✅ **Never** references other strategies directly
 - ✅ Delegates tag/data extraction to Parsers, not inline
 

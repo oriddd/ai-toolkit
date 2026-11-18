@@ -26,7 +26,7 @@ permission/
 ├── CallerContextResolver.java               # Resolver: read the current principal and return a CallerContext
 ├── PermissionsCheckStrategy.java            # Strategy interface: defines the contract
 ├── PermissionsHandler.java                  # Handler: orchestrates resolver → registry → strategy
-├── PermissionsRegistry.java                 # Registry: routes CallerContext → strategy (List injection)
+├── PermissionsRegistry.java                 # Registry: routes CallerContext → strategy by canHandle (List injection)
 └── strategy/
     ├── ScopeBasedPermissionsCheck.java      # Strategy: SERVICE_ACCOUNT_CONTEXT → OAuth2 scope allow-list
     ├── ResourcePermissionsCheck.java        # Strategy: USER_CONTEXT → query an authorization source per resource
@@ -110,6 +110,10 @@ Default bucketing (adjust to your identity provider and record it in an ADR):
 public interface PermissionsCheckStrategy {
     void verifyPermissions(final String resourceId) throws ForbiddenException;
     List<CallerContext> supportedContexts();
+
+    default boolean canHandle(final @Nullable CallerContext callerContext) {
+        return callerContext != null && supportedContexts().contains(callerContext);
+    }
 }
 ```
 
@@ -130,9 +134,11 @@ public class PermissionsHandler {
         if (ctx == null) {
             throw ExceptionMessages.callerContextNotFound();          // ForbiddenException → 403
         }
-        permissionsRegistry.getStrategy(ctx)
-                .orElseThrow(() -> ExceptionMessages.unrecognizedCallerContext(ctx))   // ForbiddenException → 403
-                .verifyPermissions(resourceId);
+        final PermissionsCheckStrategy strategy = permissionsRegistry.getStrategy(ctx);
+        if (strategy == null) {
+            throw ExceptionMessages.unrecognizedCallerContext(ctx);   // ForbiddenException → 403
+        }
+        strategy.verifyPermissions(resourceId);
     }
 }
 ```
@@ -141,8 +147,8 @@ public class PermissionsHandler {
 
 Shipped: [`PermissionsRegistry.java.tmpl`](./templates/PermissionsRegistry.java.tmpl); Spring injects all strategy beans as a `List`.
 
-The map is built once and a duplicate discriminator fails startup, so
-routing never depends on bean order.
+`getStrategy` routes by `canHandle(ctx)` and returns `null` (`@Nullable`) when none accepts it (the handler answers
+403); a context declared by two strategies fails startup, so the first match never depends on bean order.
 
 ### 6. Concrete strategies (generate only the ones the developer selected)
 

@@ -55,8 +55,7 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 ### 2. **Jakarta ConstraintValidator** — Field/Parameter Validation
 - Implements `ConstraintValidator<Annotation, Type>`
-- Is **not** a `@Component`: Spring's `SpringConstraintValidatorFactory` creates it through the context, so
-  constructor injection works; one instance is cached per constraint and shared across threads
+- Is a `@Component` (Spring auto-wires dependencies)
 - Captures annotation attributes in `initialize()`
 - Returns `true` (valid) or `false` + violation (invalid)
 - Delegates domain logic to `rule/` beans
@@ -64,14 +63,16 @@ Both wire into Spring MVC's validation pipeline → HTTP 400 via `@RestControlle
 
 **Key Pattern:**
 ```java
+@Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class EditableProductIdValidator 
         implements ConstraintValidator<EditableProductId, String> {
     private final ProductEditabilityRule rule;  // domain logic bean
+    private String messageTemplate;
 
     @Override
     public void initialize(final EditableProductId annotation) {
-        // capture annotation attributes here
+        this.messageTemplate = annotation.message();
     }
 
     @Override

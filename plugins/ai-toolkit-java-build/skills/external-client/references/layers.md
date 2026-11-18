@@ -15,22 +15,28 @@ public class FooService {
     private final FooCoreService fooCoreService;
     private final FooResponseParser fooResponseParser;
 
-    /** Returns the type string of the product, or empty if no product matches. */
-    public Optional<String> getProductType(final String productId, final CallerContext callerContext)
+    /** Returns the type string of the product, or null if blank / not found. */
+    public @Nullable String getProductType(final String productId, final CallerContext callerContext)
             throws UnavailableException, DependencyException {
-        Assert.hasText(productId, "productId must not be blank");   // validated at the API boundary; reaching here blank is a bug
+        if (productId == null || productId.isBlank()) {
+            log.error("Cannot determine product type for blank productId");
+            return null;
+        }
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).build();
-        return fooCoreService.fetchSingleProduct(filters, callerContext, FooConstants.FIELDS_TYPE_ONLY)
-                .flatMap(fooResponseParser::parseProductType);
+        final FooProductDto product = fooCoreService.fetchSingleProduct(
+                filters, callerContext, FooConstants.FIELDS_TYPE_ONLY);
+        return fooResponseParser.parseProductType(product);
     }
 
     /** Returns true iff at least one product matches the given id + type. */
     public boolean existsByIdAndType(final String productId, final String productType,
                                      final CallerContext callerContext)
             throws UnavailableException, DependencyException {
-        Assert.hasText(productId, "productId must not be blank");
-        Assert.hasText(productType, "productType must not be blank");
+        if (productId == null || productId.isBlank() || productType == null || productType.isBlank()) {
+            log.error("productId and productType must not be blank");
+            return false;
+        }
         final Map<String, Object> filters = new FooFilterMapBuilder()
                 .withProductId(productId).withProductType(productType).build();
         return fooCoreService.doProductsExist(filters, callerContext);
@@ -42,10 +48,8 @@ Rules:
 - `*FilterMapBuilder` is the **one** plain instantiated object (`new`); every other layer class
   (`*Service`, `*CoreService`, `*Client`, `*RequestBuilder`, `*ResponseParser`, `*ResponseVerifier`) is a
   Spring bean.
-- Inputs are validated at the API boundary (`input-validation`). The facade only asserts the contract
-  (`Assert.hasText` → `IllegalArgumentException`, a logged 500 because it is a bug) and **never** returns a
-  silent sentinel (`null` / `false`) for a bad input; let `CoreService` stay guard-free. "Not found" is an
-  `Optional` (§7), never a bare `null`.
+- Guard blank/null inputs here and return a safe sentinel (`null` / `false`) **with a log.error**; let
+  `CoreService` stay guard-free. A "not found" is a `null` from a `@Nullable` method (§7).
 - Method names use domain vocabulary (`getProductType`, `isOrderOpen`) — never
   HTTP vocabulary (`post`, `get`, `search`).
 
@@ -101,7 +105,7 @@ public class FooCoreService {
     private final FooResponseVerifier fooResponseVerifier;
     private final FooResponseParser fooResponseParser;
 
-    public Optional<FooProductDto> fetchSingleProduct(final Map<String, Object> filters,
+    public @Nullable FooProductDto fetchSingleProduct(final Map<String, Object> filters,
                                                       final CallerContext callerContext,
                                                       final List<String> fields)
             throws UnavailableException, DependencyException {

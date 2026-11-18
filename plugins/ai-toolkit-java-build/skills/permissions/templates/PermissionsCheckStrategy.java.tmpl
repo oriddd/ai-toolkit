@@ -2,6 +2,7 @@ package {{basePackage}}.permission;
 
 import {{basePackage}}.exception.ForbiddenException;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 public interface PermissionsCheckStrategy {
 
@@ -12,4 +13,8 @@ public interface PermissionsCheckStrategy {
     void verifyPermissions(final String resourceId) throws ForbiddenException;
 
     List<CallerContext> supportedContexts();
+
+    default boolean canHandle(final @Nullable CallerContext callerContext) {
+        return callerContext != null && supportedContexts().contains(callerContext);
+    }
 }

@@ -9,7 +9,7 @@ Part of the [`external-client`](../SKILL.md) skill. Section numbers are stable; 
 - **`*RequestBuilderTest`** — pure unit; every overload, every branch in
   filter assembly.
 - **`*ResponseVerifierTest`** — null response, empty hit list, non-empty hit list.
-- **`*ResponseParserTest`** — null doc, missing nested field, found nested field.
+- **`*ResponseParserTest`** — null doc and no products (`null` + logged), missing nested field (`null`), found nested field.
 - **`*ClientTest`** — bind `MockRestServiceServer` to a `RestClient.Builder` and pass `builder.build()` to the
   `*Client` constructor (a `WebClient` client: `MockWebServer` or `exchangeFunction(...)`): assert URI/body/headers
   built; assert domain exception thrown on 4xx/5xx (`DependencyException` / `UnavailableException`), on a timeout
@@ -34,7 +34,8 @@ void search_serviceUnavailable_throwsUnavailableException() {
 ```
 - **Retry test** (§10) — two 503s then a 200 → the downstream is called 3 times; a 400 → once.
 - **`*ServiceTest`** — mock `CoreService`; assert domain-language methods
-  reject blank inputs with `IllegalArgumentException` and call core methods correctly.
+  return the sentinel (`null` / `false`) for blank inputs without calling the core service, return `null` when the
+  core finds nothing, and call core methods correctly.
 
 For component tests, provide a test double of the `*Service` (not the
 transport) through the shared `ComponentTestConfiguration` — tests drive domain semantics,

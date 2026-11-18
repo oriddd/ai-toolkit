@@ -105,7 +105,7 @@ MORE = {
             "My Spring Boot 3 PaymentService has a growing if/else on paymentType (CARD, PAYPAL, BANK_TRANSFER) and a new "
             "type arrives every quarter. Restructure it so adding a type never touches the dispatching code." + TAIL,
             [("strategy-interface", r"interface\s+\w*Strategy"), ("registry", r"class\s+\w*Registry"),
-             ("injected-list", r"List<\s*\w*Strategy\s*>"), ("keyed-lookup", r"Map<\s*PaymentType|EnumMap"),
+             ("injected-list", r"List<\s*\w*Strategy\s*>"), ("can-handle", r"canHandle"),
              ("component-strategies", r"@Component[\s\S]*implements\s+\w*Strategy")]),
         "domain-modeling": (
             "Model the Order aggregate for our Spring Boot service: order lines, a total in Money, an OrderPlaced domain "

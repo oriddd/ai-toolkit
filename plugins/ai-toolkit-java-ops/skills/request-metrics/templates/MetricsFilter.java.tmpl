@@ -1,6 +1,7 @@
 package {{basePackage}}.monitor;
 
 import {{basePackage}}.monitor.parser.MetricNameResolver;
+import {{basePackage}}.monitor.recorder.MetricsRecorder;
 import {{basePackage}}.monitor.recorder.MetricsRecorderRegistry;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
@@ -56,13 +57,16 @@ public class MetricsFilter extends OncePerRequestFilter {
     private void record(final HttpServletRequest request, final HttpServletResponse response, final long startNanos) {
         try {
             final long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-            metricNameResolver
-                    .resolve(request)
-                    .ifPresent(metricName -> metricsRecorderRegistry
-                            .getRecorder(metricName)
-                            .ifPresentOrElse(
-                                    recorder -> recorder.recordMetrics(durationMs, request, response),
-                                    () -> log.warn("No recorder found for metric '{}'", metricName)));
+            final String metricName = metricNameResolver.resolve(request);
+            if (metricName == null) {
+                return;
+            }
+            final MetricsRecorder recorder = metricsRecorderRegistry.getRecorder(metricName);
+            if (recorder == null) {
+                log.warn("No recorder found for metric '{}'", metricName);
+                return;
+            }
+            recorder.recordMetrics(durationMs, request, response);
         } catch (final RuntimeException e) {
             log.error("Failed to record metrics for URI {}", request.getRequestURI(), e);
         }

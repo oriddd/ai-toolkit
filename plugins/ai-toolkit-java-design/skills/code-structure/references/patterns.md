@@ -10,13 +10,13 @@ Part of the [`code-structure`](../SKILL.md) skill. Section numbers and headings 
 When the same operation has **multiple interchangeable implementations** chosen
 at runtime, use this pattern (the contract is `strategy-registry-pattern` — `components.md` §3–§4):
 
-1. **`<X>Strategy`** – interface with the business method plus **one** discriminator method, `getSupported<X>()`
-   (or `supported<X>s()` when a strategy serves several values); a default `canHandle(...)` derived from it exists
-   for tests and is never overridden with other logic
+1. **`<X>Strategy`** – interface with the business method, **one** discriminator method, `getSupported<X>()`
+   (or `supported<X>s()` when a strategy serves several values), and a default `canHandle(...)` derived from it that
+   the Registry uses for routing; override it only for composite matching
 2. **Concrete strategies** – `@Component` classes implementing the interface
-3. **`<X>Registry`** – `@Component` that receives `List<<X>Strategy>` via constructor injection, indexes it by the
-   discriminator once in the constructor, **fails at startup** when two strategies claim the same value (routing
-   must never depend on bean order), and returns `Optional`
+3. **`<X>Registry`** – `@Component` that receives `List<<X>Strategy>` via constructor injection, **fails at startup**
+   when two strategies declare the same value (routing must never depend on bean order), routes with `canHandle`
+   and returns `null` when nothing matches
 4. **`<X>Handler`** – orchestrator that resolves context, calls registry, executes strategy
 
 **Reference skills:**
@@ -29,20 +29,22 @@ at runtime, use this pattern (the contract is `strategy-registry-pattern` — `c
 ```java
 @Component
 public class XyzRegistry {
-    private final Map<XyzType, XyzStrategy> strategiesByType;
+    private final List<XyzStrategy> strategies;
 
     public XyzRegistry(final List<XyzStrategy> strategies) {
-        this.strategiesByType = strategies.stream().collect(Collectors.toUnmodifiableMap(
-                XyzStrategy::getSupportedType,
-                Function.identity(),
-                (first, second) -> {
-                    throw new IllegalStateException("Two XyzStrategy beans for " + first.getSupportedType()
-                            + ": " + first.getClass().getName() + ", " + second.getClass().getName());
-                }));
+        final Map<XyzType, XyzStrategy> declared = new HashMap<>();
+        for (final XyzStrategy strategy : strategies) {
+            final XyzStrategy first = declared.putIfAbsent(strategy.getSupportedType(), strategy);
+            if (first != null) {
+                throw new IllegalStateException("Two XyzStrategy beans for " + strategy.getSupportedType()
+                        + ": " + first.getClass().getName() + ", " + strategy.getClass().getName());
+            }
+        }
+        this.strategies = List.copyOf(strategies);
     }
 
-    public Optional<XyzStrategy> find(final XyzType type) {
-        return Optional.ofNullable(strategiesByType.get(type));
+    public @Nullable XyzStrategy find(final XyzType type) {
+        return strategies.stream().filter(s -> s.canHandle(type)).findFirst().orElse(null);
     }
 }
 
@@ -54,9 +56,11 @@ public class XyzHandler {
 
     public Result handle(final Input in) throws BaseDomainException {
         final XyzType type = xyzTypeResolver.resolve(in);
-        return xyzRegistry.find(type)
-                .orElseThrow(() -> ExceptionMessages.unsupportedXyz(type))   // a factory in the catalogue (exception-handling)
-                .execute(in);
+        final XyzStrategy strategy = xyzRegistry.find(type);
+        if (strategy == null) {
+            throw ExceptionMessages.unsupportedXyz(type);   // a factory in the catalogue (exception-handling)
+        }
+        return strategy.execute(in);
     }
 }
 ```
@@ -105,10 +109,8 @@ Rules:
 
 ## 4. Pattern C — Operation / Service split
 
-Each public REST endpoint that orchestrates a use case (permission check,
-several services, response assembly) maps to exactly one class in
-`operation/`; an endpoint that orchestrates nothing calls exactly one
-`*Service` instead (guild rule 3, SKILL §1c):
+Each public REST endpoint maps to exactly one class in `operation/`
+(guild rule 3, SKILL §1c):
 
 ```java
 @Component
